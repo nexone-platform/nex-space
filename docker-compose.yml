@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  nexspace-web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: nexspace-web
+    restart: always
+    ports:
+      - "8087:80"
+    depends_on:
+      - nexspace-game
+      - nexspace-api
+
+  nexspace-game:
+    build:
+      context: .
+      dockerfile: apps/game-server/Dockerfile
+    container_name: nexspace-game
+    restart: always
+    environment:
+      - PORT=2567
+      - LIVEKIT_URL=${LIVEKIT_URL:-}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:-}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:-}
+    ports:
+      - "2567:2567"
+
+  nexspace-api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: nexspace-api
+    restart: always
+    environment:
+      - PORT=3001
+      - DATABASE_URL=file:./prod.db
+    ports:
+      - "3001:3001"
+    volumes:
+      - nexspace-api-data:/app/apps/api/prisma
+
+volumes:
+  nexspace-api-data:
