@@ -1,0 +1,22 @@
+{
+  "group_id": null,
+  "objects": [
+    {
+      "id": "020c5955-af27-4bf9-9728-0cc9e52d26df",
+      "name": null,
+      "prompt": "A pixel art TILE SHEET for a 2D top-down virtual-office game.  VIEW (most important): STRICT flat orthographic TOP-DOWN view, bird's-eye, camera pointing straight down at 90 degrees \u2014 exactly like Gather Town maps and Stardew Valley ground tiles. Every tile is a flat square seen from directly above.  DO NOT (must avoid): isometric, isometric projection, diamond or diagonal grid, 3D perspective, perspective tilt, vanishing point, angled or tilted camera, a drawn 3D room, or drop-shadowed room boxes.  CONTENT: arrange these as separate flat sprites on a clean grid, each in its own cell with even spacing, all on a solid flat magenta (#FF00FF) background: - 3 floor tiles (32x32, seamless): wood plank, cream tile, gray carpet \u2014 top-down. - Wall pieces (32x32) shown from above as thin strips with a few px of front face:   straight-horizontal, straight-vertical, outer-corner, inner-corner, T-junction. - Furniture seen from straight above: office desk with monitor, office chair,   potted plant, rug.  STYLE: 32x32 pixel tiles, crisp clean pixels (no anti-aliasing, no blur). Limited warm palette: cream floors, white + teal walls, warm wood furniture, soft green plants, peach accents. Light source from TOP-LEFT. Selective 1px dark outlines, 2-3 shades per color, minimal dithering, readable.",
+      "size": {
+        "width": 32,
+        "height": 32
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    }
+  ],
+  "export_version": "1.0",
+  "export_date": "2026-07-27T05:02:57.810927"
+}

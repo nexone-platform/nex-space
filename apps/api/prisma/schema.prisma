@@ -1,0 +1,40 @@
+// Dev uses SQLite (zero-setup, runnable now). For production switch to PostgreSQL:
+//   provider = "postgresql"   and   DATABASE_URL="postgresql://user:pass@host:5432/nexspace"
+// Fields are portable (JSON stored as String) so no schema rewrite is needed.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  name         String
+  passwordHash String
+  avatar       String? // JSON string: { avatarId, skin, hair, top, ... }
+  createdAt    DateTime   @default(now())
+  sessions     Session[]
+  maps         SavedMap[]
+}
+
+model Session {
+  token     String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+model SavedMap {
+  id        String   @id @default(cuid())
+  name      String
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  data      String // Tiled/JSON map data as string
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

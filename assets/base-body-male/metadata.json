@@ -1,0 +1,119 @@
+{
+  "group_id": null,
+  "states": [
+    {
+      "character": {
+        "id": "474e9328-1cc5-4257-bf03-812778c48370",
+        "name": "base-body-male",
+        "prompt": "A plain pixel-art human BASE BODY for a paper-doll avatar creator. VIEW: front-facing, standing straight, arms slightly out, feet apart. BODY: BALD, neutral skin, plain underwear only. CANVAS: 48x64, character centered, FEET touching the bottom edge, HEAD at top ~8px, torso mid, legs lower third \u2014 remember these regions, all clothing will align to them. STYLE: pixel art, warm skin palette, 1px dark outline, 2-3 shades, light from top-left, crisp pixels, no anti-aliasing, transparent background.",
+        "size": {
+          "width": 80,
+          "height": 80
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "low top-down",
+        "created_at": "2026-07-30T08:04:03.418677+00:00"
+      },
+      "folder": "base-body-male",
+      "frames": {
+        "rotations": {
+          "south": "base-body-male/rotations/south.png",
+          "south-east": "base-body-male/rotations/south-east.png",
+          "east": "base-body-male/rotations/east.png",
+          "north-east": "base-body-male/rotations/north-east.png",
+          "north": "base-body-male/rotations/north.png",
+          "north-west": "base-body-male/rotations/north-west.png",
+          "west": "base-body-male/rotations/west.png",
+          "south-west": "base-body-male/rotations/south-west.png"
+        },
+        "animations": {
+          "Walking": {
+            "east": [
+              "base-body-male/animations/Walking/east/frame_000.png",
+              "base-body-male/animations/Walking/east/frame_001.png",
+              "base-body-male/animations/Walking/east/frame_002.png",
+              "base-body-male/animations/Walking/east/frame_003.png",
+              "base-body-male/animations/Walking/east/frame_004.png",
+              "base-body-male/animations/Walking/east/frame_005.png",
+              "base-body-male/animations/Walking/east/frame_006.png",
+              "base-body-male/animations/Walking/east/frame_007.png"
+            ],
+            "north": [
+              "base-body-male/animations/Walking/north/frame_000.png",
+              "base-body-male/animations/Walking/north/frame_001.png",
+              "base-body-male/animations/Walking/north/frame_002.png",
+              "base-body-male/animations/Walking/north/frame_003.png",
+              "base-body-male/animations/Walking/north/frame_004.png",
+              "base-body-male/animations/Walking/north/frame_005.png",
+              "base-body-male/animations/Walking/north/frame_006.png",
+              "base-body-male/animations/Walking/north/frame_007.png"
+            ],
+            "south-east": [
+              "base-body-male/animations/Walking/south-east/frame_000.png",
+              "base-body-male/animations/Walking/south-east/frame_001.png",
+              "base-body-male/animations/Walking/south-east/frame_002.png",
+              "base-body-male/animations/Walking/south-east/frame_003.png",
+              "base-body-male/animations/Walking/south-east/frame_004.png",
+              "base-body-male/animations/Walking/south-east/frame_005.png",
+              "base-body-male/animations/Walking/south-east/frame_006.png",
+              "base-body-male/animations/Walking/south-east/frame_007.png"
+            ],
+            "south-west": [
+              "base-body-male/animations/Walking/south-west/frame_000.png",
+              "base-body-male/animations/Walking/south-west/frame_001.png",
+              "base-body-male/animations/Walking/south-west/frame_002.png",
+              "base-body-male/animations/Walking/south-west/frame_003.png",
+              "base-body-male/animations/Walking/south-west/frame_004.png",
+              "base-body-male/animations/Walking/south-west/frame_005.png",
+              "base-body-male/animations/Walking/south-west/frame_006.png",
+              "base-body-male/animations/Walking/south-west/frame_007.png"
+            ],
+            "west": [
+              "base-body-male/animations/Walking/west/frame_000.png",
+              "base-body-male/animations/Walking/west/frame_001.png",
+              "base-body-male/animations/Walking/west/frame_002.png",
+              "base-body-male/animations/Walking/west/frame_003.png",
+              "base-body-male/animations/Walking/west/frame_004.png",
+              "base-body-male/animations/Walking/west/frame_005.png",
+              "base-body-male/animations/Walking/west/frame_006.png",
+              "base-body-male/animations/Walking/west/frame_007.png"
+            ],
+            "south": [
+              "base-body-male/animations/Walking/south/frame_000.png",
+              "base-body-male/animations/Walking/south/frame_001.png",
+              "base-body-male/animations/Walking/south/frame_002.png",
+              "base-body-male/animations/Walking/south/frame_003.png",
+              "base-body-male/animations/Walking/south/frame_004.png",
+              "base-body-male/animations/Walking/south/frame_005.png",
+              "base-body-male/animations/Walking/south/frame_006.png",
+              "base-body-male/animations/Walking/south/frame_007.png"
+            ],
+            "north-east": [
+              "base-body-male/animations/Walking/north-east/frame_000.png",
+              "base-body-male/animations/Walking/north-east/frame_001.png",
+              "base-body-male/animations/Walking/north-east/frame_002.png",
+              "base-body-male/animations/Walking/north-east/frame_003.png",
+              "base-body-male/animations/Walking/north-east/frame_004.png",
+              "base-body-male/animations/Walking/north-east/frame_005.png",
+              "base-body-male/animations/Walking/north-east/frame_006.png",
+              "base-body-male/animations/Walking/north-east/frame_007.png"
+            ],
+            "north-west": [
+              "base-body-male/animations/Walking/north-west/frame_000.png",
+              "base-body-male/animations/Walking/north-west/frame_001.png",
+              "base-body-male/animations/Walking/north-west/frame_002.png",
+              "base-body-male/animations/Walking/north-west/frame_003.png",
+              "base-body-male/animations/Walking/north-west/frame_004.png",
+              "base-body-male/animations/Walking/north-west/frame_005.png",
+              "base-body-male/animations/Walking/north-west/frame_006.png",
+              "base-body-male/animations/Walking/north-west/frame_007.png"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "export_version": "3.1",
+  "export_date": "2026-07-30T08:36:40.172049"
+}

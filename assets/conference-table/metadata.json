@@ -1,0 +1,634 @@
+{
+  "objects": [
+    {
+      "id": "0f758167-ef8e-4aed-82cf-60a09669e943",
+      "name": "base",
+      "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+      "size": {
+        "width": 64,
+        "height": 64
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "263038ec-f549-4c9b-8bea-fa9ff4ad758b",
+      "name": "base",
+      "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+      "size": {
+        "width": 64,
+        "height": 64
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "7c19f247-e0fd-4695-8384-2ac77ce54ebe",
+      "name": "base",
+      "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+      "size": {
+        "width": 64,
+        "height": 64
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "edec1c19-fa8a-48ef-a06e-43bef3a19daa",
+      "name": "base",
+      "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+      "size": {
+        "width": 64,
+        "height": 64
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "2504db13-3000-40c9-b31b-d3e1d260755a",
+      "name": "base",
+      "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+      "size": {
+        "width": 64,
+        "height": 64
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "360d815d-9b87-470b-bc5d-a9dbb959f3ba",
+      "name": "base",
+      "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+      "size": {
+        "width": 64,
+        "height": 64
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "4bf5db1d-8590-4b41-97d3-ada28a2b3596",
+      "name": "base",
+      "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+      "size": {
+        "width": 64,
+        "height": 64
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "2114adab-91ec-44e9-af29-f575ca28bc8c",
+      "name": "base",
+      "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+      "size": {
+        "width": 64,
+        "height": 64
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "01daefea-a023-40dd-9dc1-51269a69335f",
+      "name": "base",
+      "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+      "size": {
+        "width": 64,
+        "height": 64
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "90d36fc4-53a6-4a63-a23e-d1a499447ce4",
+      "name": "base",
+      "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+      "size": {
+        "width": 64,
+        "height": 64
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "4fd939da-6f8a-4816-a6a5-9061a4e0beaf",
+      "name": "base",
+      "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+      "size": {
+        "width": 64,
+        "height": 64
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "2aa9195a-b5ac-4417-8956-4cc917cf0cbd",
+      "name": "base",
+      "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+      "size": {
+        "width": 64,
+        "height": 64
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "402e6d74-30be-4ce0-811b-0bb942d562d9",
+      "name": "base",
+      "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+      "size": {
+        "width": 64,
+        "height": 64
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "0aaf0e2b-15a5-43d7-a307-aa170b7e7eb5",
+      "name": "base",
+      "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+      "size": {
+        "width": 64,
+        "height": 64
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "6a7ae928-bb1c-4567-819b-db5746550a99",
+      "name": "base",
+      "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+      "size": {
+        "width": 64,
+        "height": 64
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "9a2a546a-5f64-488b-b8a4-b886a6497aed",
+      "name": "base",
+      "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+      "size": {
+        "width": 64,
+        "height": 64
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "e384c2f5-9bc3-4690-8202-af1ac1fbe2b5",
+      "name": "base",
+      "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+      "size": {
+        "width": 68,
+        "height": 68
+      },
+      "directions": 8,
+      "view": "low top-down",
+      "rotations": {
+        "south": "rotations/south.png",
+        "south-east": "rotations/south-east.png",
+        "east": "rotations/east.png",
+        "north-east": "rotations/north-east.png",
+        "north": "rotations/north.png",
+        "north-west": "rotations/north-west.png",
+        "west": "rotations/west.png",
+        "south-west": "rotations/south-west.png"
+      },
+      "animations": {}
+    }
+  ],
+  "groups": [
+    {
+      "group_id": "fea9e4a1-c42e-4c98-8d0d-7fd95956a6ca",
+      "folder": "objects/a_large_modern_executive_confe",
+      "objects": [
+        {
+          "id": "0f758167-ef8e-4aed-82cf-60a09669e943",
+          "name": "base",
+          "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+          "size": {
+            "width": 64,
+            "height": 64
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": "02b4a08f-2a79-4447-a217-b0e84e42279e",
+      "folder": "objects/a_large_modern_executive_confe_2",
+      "objects": [
+        {
+          "id": "263038ec-f549-4c9b-8bea-fa9ff4ad758b",
+          "name": "base",
+          "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+          "size": {
+            "width": 64,
+            "height": 64
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": "0bd4732f-c601-4671-874d-f4347367c3bd",
+      "folder": "objects/a_large_modern_executive_confe_3",
+      "objects": [
+        {
+          "id": "7c19f247-e0fd-4695-8384-2ac77ce54ebe",
+          "name": "base",
+          "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+          "size": {
+            "width": 64,
+            "height": 64
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": "0f911bca-a38f-4428-acbd-b407d5c71cea",
+      "folder": "objects/a_large_modern_executive_confe_4",
+      "objects": [
+        {
+          "id": "edec1c19-fa8a-48ef-a06e-43bef3a19daa",
+          "name": "base",
+          "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+          "size": {
+            "width": 64,
+            "height": 64
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": "17bc1d51-c809-409d-a245-4311d41d7e6e",
+      "folder": "objects/a_large_modern_executive_confe_5",
+      "objects": [
+        {
+          "id": "2504db13-3000-40c9-b31b-d3e1d260755a",
+          "name": "base",
+          "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+          "size": {
+            "width": 64,
+            "height": 64
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": "29174006-2676-46ad-a048-b9f5f40f9a2a",
+      "folder": "objects/a_large_modern_executive_confe_6",
+      "objects": [
+        {
+          "id": "360d815d-9b87-470b-bc5d-a9dbb959f3ba",
+          "name": "base",
+          "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+          "size": {
+            "width": 64,
+            "height": 64
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": "32b50b4d-0a9c-45a0-811f-ee25ed359e5d",
+      "folder": "objects/a_large_modern_executive_confe_7",
+      "objects": [
+        {
+          "id": "4bf5db1d-8590-4b41-97d3-ada28a2b3596",
+          "name": "base",
+          "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+          "size": {
+            "width": 64,
+            "height": 64
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": "3f52678e-e63e-4194-8861-a735186156ad",
+      "folder": "objects/a_large_modern_executive_confe_8",
+      "objects": [
+        {
+          "id": "2114adab-91ec-44e9-af29-f575ca28bc8c",
+          "name": "base",
+          "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+          "size": {
+            "width": 64,
+            "height": 64
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": "8185cb55-5865-400d-814f-729db3d957a9",
+      "folder": "objects/a_large_modern_executive_confe_9",
+      "objects": [
+        {
+          "id": "01daefea-a023-40dd-9dc1-51269a69335f",
+          "name": "base",
+          "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+          "size": {
+            "width": 64,
+            "height": 64
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": "91d7bb85-a0f5-49dd-a51a-a4e5a8ec0ba1",
+      "folder": "objects/a_large_modern_executive_confe_10",
+      "objects": [
+        {
+          "id": "90d36fc4-53a6-4a63-a23e-d1a499447ce4",
+          "name": "base",
+          "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+          "size": {
+            "width": 64,
+            "height": 64
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": "9754d14f-56df-47e5-b58e-563cc97d130b",
+      "folder": "objects/a_large_modern_executive_confe_11",
+      "objects": [
+        {
+          "id": "4fd939da-6f8a-4816-a6a5-9061a4e0beaf",
+          "name": "base",
+          "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+          "size": {
+            "width": 64,
+            "height": 64
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": "9d501581-b8c3-42ba-9f7c-499a7ca710a1",
+      "folder": "objects/a_large_modern_executive_confe_12",
+      "objects": [
+        {
+          "id": "2aa9195a-b5ac-4417-8956-4cc917cf0cbd",
+          "name": "base",
+          "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+          "size": {
+            "width": 64,
+            "height": 64
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": "b1d20afe-a4c2-4b5d-a9be-a155fa1ee5bd",
+      "folder": "objects/a_large_modern_executive_confe_13",
+      "objects": [
+        {
+          "id": "402e6d74-30be-4ce0-811b-0bb942d562d9",
+          "name": "base",
+          "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+          "size": {
+            "width": 64,
+            "height": 64
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": "b63ea3b9-6d51-4115-b161-b8a9a65a048d",
+      "folder": "objects/a_large_modern_executive_confe_14",
+      "objects": [
+        {
+          "id": "0aaf0e2b-15a5-43d7-a307-aa170b7e7eb5",
+          "name": "base",
+          "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+          "size": {
+            "width": 64,
+            "height": 64
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": "c591d8e5-c52e-4eb1-b5cb-5b72e24e61a3",
+      "folder": "objects/a_large_modern_executive_confe_15",
+      "objects": [
+        {
+          "id": "6a7ae928-bb1c-4567-819b-db5746550a99",
+          "name": "base",
+          "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+          "size": {
+            "width": 64,
+            "height": 64
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": "fae9eb3d-a45a-49e4-a7f7-868d63ba3f0e",
+      "folder": "objects/a_large_modern_executive_confe_16",
+      "objects": [
+        {
+          "id": "9a2a546a-5f64-488b-b8a4-b886a6497aed",
+          "name": "base",
+          "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+          "size": {
+            "width": 64,
+            "height": 64
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": "08139bf9-137c-4aff-bdb3-eeaef00643af",
+      "folder": "objects/a_large_modern_executive_confe_17",
+      "objects": [
+        {
+          "id": "e384c2f5-9bc3-4690-8202-af1ac1fbe2b5",
+          "name": "base",
+          "prompt": "a large modern executive conference table, top-down 2D pixel art, sleek dark oak finish with subtle wood grain, smooth rounded corners, clean dark outlines, game furniture asset, transparent background",
+          "size": {
+            "width": 68,
+            "height": 68
+          },
+          "directions": 8,
+          "view": "low top-down",
+          "rotations": {
+            "south": "rotations/south.png",
+            "south-east": "rotations/south-east.png",
+            "east": "rotations/east.png",
+            "north-east": "rotations/north-east.png",
+            "north": "rotations/north.png",
+            "north-west": "rotations/north-west.png",
+            "west": "rotations/west.png",
+            "south-west": "rotations/south-west.png"
+          },
+          "animations": {}
+        }
+      ]
+    }
+  ],
+  "export_version": "1.0",
+  "export_date": "2026-08-03T18:02:25.426100"
+}

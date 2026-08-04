@@ -1,0 +1,1313 @@
+import Phaser from "phaser";
+import { Client, getStateCallbacks, type Room } from "colyseus.js";
+import { wallTileIndex } from "../wallAutotile";
+import { WebRTCManager } from "../net/webrtc";
+import { LiveKitManager } from "../net/livekit";
+import type { MediaManager } from "../net/media";
+import { buildWalkCanvas, buildSitCanvas, SIT_COLS, SIT_SEATED_COL, decodeAvatar, encodeAvatar, isLpc, avatarKey, defaultDressedConfig, LPC_ROW } from "../avatar/avatarCompose";
+import { openAvatarEditor } from "../avatar/avatarEditor";
+
+const LPC_COLS = 9; // LPC walk sheet: 9 frames per direction row
+const LPC_SCALE = 0.5;    // 64px LPC frames render large vs 32px furniture -> scale down
+const PRESET_SCALE = 0.62; // shrink the older whole-avatar presets too (independent of LPC)
+// chair facing (CHAIR_DIRS) -> avatar facing (DIRS8) for sitting
+const CHAIR_TO_FACING: Record<string, string> = {
+  south: "down", "south-east": "down-right", east: "right", "north-east": "up-right",
+  north: "up", "north-west": "up-left", west: "left", "south-west": "down-left",
+};
+
+const defaultWsHost = typeof window !== "undefined" && window.location.protocol === "https:"
+  ? `wss://${window.location.hostname}`
+  : "ws://localhost:2567";
+const defaultHttpHost = typeof window !== "undefined" && window.location.protocol === "https:"
+  ? `https://${window.location.hostname}`
+  : "http://localhost:2567";
+
+const env = (import.meta as any).env || {};
+const SERVER_URL = (env.VITE_GAME_SERVER_URL as string) || defaultWsHost;
+const HTTP_URL = (env.VITE_GAME_SERVER_HTTP as string) || defaultHttpHost;
+const AUTH_API = (env.VITE_API_URL as string) || (typeof window !== "undefined" && window.location.protocol === "https:" ? `https://${window.location.hostname}` : "http://localhost:3001");
+
+// selectable avatars: spritesheet key + frame size (walk sheet 8 rows x 6 frames)
+// frame size + frames-per-direction (nf) MUST match the generated walk sheets
+const AVATARS: Record<string, { tex: string; file: string; fw: number; fh: number; nf: number }> = {
+  "1": { tex: "avatar1", file: "player-walk.png", fw: 28, fh: 50, nf: 6 },
+  "2": { tex: "avatar2", file: "player-walk-2.png", fw: 26, fh: 50, nf: 6 },
+  "3": { tex: "avatar3", file: "player-walk-3.png", fw: 27, fh: 49, nf: 8 },
+  "4": { tex: "avatar4", file: "player-walk-4.png", fw: 29, fh: 73, nf: 8 },
+  "5": { tex: "avatar5", file: "player-walk-5.png", fw: 34, fh: 49, nf: 8 },
+  "6": { tex: "avatar6", file: "player-walk-6.png", fw: 28, fh: 48, nf: 8 },
+  "7": { tex: "avatar7", file: "player-walk-7.png", fw: 27, fh: 50, nf: 8 },
+};
+const DIRS8 = ["down", "up", "left", "right", "down-right", "down-left", "up-right", "up-left"];
+// idle frame = first frame of a direction's row (row index * frames-per-direction)
+const idleFrame = (avatar: string, dir: string) =>
+  DIRS8.indexOf(dir) * (AVATARS[avatar]?.nf ?? 6);
+
+interface Interactive {
+  type: "whiteboard" | "screen" | "portal" | "embed";
+  x: number; y: number; label: string; icon: string;
+  url?: string; target?: { x: number; y: number };
+}
+
+const INTERACTIVES: Interactive[] = [
+  { type: "whiteboard", x: 7, y: 1, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
+  { type: "screen", x: 16, y: 0, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
+  { type: "portal", x: 2, y: 7, label: "เทเลพอร์ตไปโซนขวา", icon: "✨", target: { x: 17, y: 11 } },
+  { type: "portal", x: 17, y: 11, label: "เทเลพอร์ตกลับ", icon: "✨", target: { x: 2, y: 7 } },
+];
+
+interface Remote {
+  sprite: Phaser.GameObjects.Sprite;
+  label: Phaser.GameObjects.Text;
+  tx: number;
+  ty: number;
+  dir: string;
+  moving: boolean;
+  avatar: string;
+  sitting?: boolean;
+  ring?: Phaser.GameObjects.Arc;
+}
+
+// ===== Office size: SMALL (S) — 1-10 people — compact 20x15 =====
+const TILE = 32;
+const COLS = 20;
+const ROWS = 15;
+const SPAWN = { x: 9, y: 11 }; // open area near reception/entrance
+const ZOOM_MIN = 1.3, ZOOM_MAX = 4, ZOOM_DEFAULT = 2.2;
+
+// furniture: [key, tileX, tileY, solid?]  (map is 20x15)
+// new directional chair styles from assets/office_chair
+const CHAIR_STYLES = ["chair-1", "chair-2", "chair-3", "chair-4", "chair-5", "chair-6", "chair-7", "chair-8"];
+const CHAIR_DIRS = ["south", "south-east", "east", "north-east", "north", "north-west", "west", "south-west"];
+
+const FURNITURE: [string, number, number, boolean][] = [
+  // open desk area (center-left) — 6 seats
+  ["desk", 3, 4, true], ["chair-2-south", 3, 5, false],
+  ["desk", 6, 4, true], ["chair-3-south", 6, 5, false],
+  ["desk-monitor", 9, 4, true], ["chair-4-south", 9, 5, false],
+  ["desk", 3, 8, true], ["chair-5-south", 3, 9, false],
+  ["desk", 6, 8, true], ["chair-6-south", 6, 9, false],
+  ["desk-monitor", 9, 8, true], ["chair-7-south", 9, 9, false],
+  ["rug", 6, 6, false],
+
+  // meeting room (enclosed, top-right, gray carpet) — centered symmetrically at x=16.0
+  ["conference-table", 16.0, 2.5, true],
+  ["chair-1-south", 15.2, 1, false], ["chair-2-south", 16.8, 1, false],
+  ["chair-1-north", 15.2, 4, false], ["chair-2-north", 16.8, 4, false],
+  ["chair-4-east", 14.2, 2, false], ["chair-5-east", 14.2, 3, false],
+  ["chair-6-west", 17.8, 2, false], ["chair-7-west", 17.8, 3, false],
+  ["plant-small", 14.2, 5, false], ["plant-small", 17.8, 5, false],
+
+  // pantry corner (bottom-left, wood floor) — modern tech startup relaxation lounge
+  ["beverage-cooler", 1, 11, true],
+  ["counter", 2.5, 11, true],
+  ["coffee-machine", 3.5, 11, true],
+  ["water-cooler-modern", 4.5, 11, true],
+  ["lounge-sofa", 2, 13, false],
+  ["lounge-coffee-table", 3.2, 13, false],
+  ["bean-bag", 4.3, 13, false],
+
+  // entrance / reception (bottom-center)
+  ["reception-desk", 10, 12, true], ["plant", 12, 12, true],
+
+  // a few plants & whiteboard
+  ["whiteboard", 7, 1, true],
+  ["plant-small", 18, 13, false], ["plant", 18, 8, true], ["plant-small", 12, 1, false],
+];
+
+// decor overlays drawn ON TOP of walls (windows / glass fronts). [key, tileX, tileY]
+const DECOR: [string, number, number][] = [
+  // windows set into the top wall
+  ["window", 4, 0], ["window", 9, 0],
+  // glass front for the meeting room (along its partition wall y=5)
+  ["glass-panel", 14, 5], ["glass-panel", 16, 5], ["glass-panel", 18, 5],
+  // a wide glass accent on the right border wall
+  ["glass-wide", 19, 3],
+];
+
+export class OfficeScene extends Phaser.Scene {
+  private player!: Phaser.Physics.Arcade.Sprite;
+  private myLabel?: Phaser.GameObjects.Text; // my own name above my head
+  private sitting = false;
+  private satChair?: Phaser.GameObjects.Image;
+  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private keys!: Record<string, Phaser.Input.Keyboard.Key>;
+  private facing = "down"; // one of 8: down/up/left/right/down-right/down-left/up-right/up-left
+  private rotatables: Phaser.GameObjects.Image[] = [];
+  private chairStyles = new Map<Phaser.GameObjects.Image, string>(); // image -> chair style prefix (e.g. "chair-2")
+  private selected?: Phaser.GameObjects.Image;
+  private selRing!: Phaser.GameObjects.Arc;
+  private room?: Room;
+  private mySessionId = "";
+  private remotes = new Map<string, Remote>();
+  private lastSent = 0;
+  private lastState = { x: 0, y: 0, dir: "", moving: false };
+  private readonly NEAR = 5 * TILE; // proximity radius (must match server)
+  private bubbles = new Map<string, Phaser.GameObjects.Text>();
+  private localRing!: Phaser.GameObjects.Arc;
+  private webrtc?: MediaManager;
+  private myName = "Guest";
+  private myAvatar = "1";
+  private created = false;
+  private pendingStart = false;
+  private nearInteractive?: Interactive;
+  private sceneScreens = new Map<string, Phaser.GameObjects.Video>(); // screenId -> video
+  private screenPresenter = new Map<string, string>();                // screenId -> sessionId presenting
+  private myScreenId?: string;                                         // screen I'm presenting on
+  private lpcReady = new Set<string>();                               // LPC texKeys with texture+anims registered
+  private lpcBuilding = new Map<string, Promise<string | null>>();    // in-flight LPC texture builds
+  private lpcSitReady = new Set<string>();                            // LPC sit texKeys registered
+  private lpcSitBuilding = new Map<string, Promise<string | null>>(); // in-flight LPC sit builds
+  private activeScreenStream: MediaStream | null = null;
+  private activePresenterName: string = "";
+
+  constructor() {
+    super("office");
+  }
+
+  preload() {
+    this.load.maxParallelDownloads = 100; // load all assets at once (robust when tab/pane is backgrounded)
+    this.load.image("floors", "/assets/tilesets/floors-atlas.png"); // 0=cream 1=wood 2=gray
+    this.load.image("walls", "/assets/tilesets/walls-teal.png");
+    for (const id of Object.keys(AVATARS)) {
+      const a = AVATARS[id];
+      this.load.spritesheet(a.tex, `/assets/${a.file}`, { frameWidth: a.fw, frameHeight: a.fh });
+    }
+    const items = new Set(FURNITURE.map((f) => f[0]));
+    items.forEach((k) => this.load.image(k, `/assets/furniture/${k}.png`));
+    new Set(DECOR.map((d) => d[0])).forEach((k) => this.load.image(k, `/assets/decor/${k}.png`));
+    // load all directional chair images for rotation
+    for (const style of CHAIR_STYLES) {
+      for (const dir of CHAIR_DIRS) {
+        const key = `${style}-${dir}`;
+        if (!items.has(key)) this.load.image(key, `/assets/furniture/${key}.png`);
+      }
+    }
+  }
+
+  create() {
+    const worldW = COLS * TILE;
+    const worldH = ROWS * TILE;
+
+    // --- floor zones: 0=cream (default), 1=wood (lounge), 2=gray (meeting room) ---
+    const floorAt = (x: number, y: number): number => {
+      if (x >= 14 && x <= 18 && y >= 1 && y <= 4) return 2; // meeting room interior (x=14..18, y=1..4)
+      if (x >= 1 && x <= 5 && y >= 10 && y <= 13) return 1; // pantry corner interior (x=1..5, y=10..13)
+      return 0; // cream
+    };
+    const floorData: number[][] = [];
+    for (let y = 0; y < ROWS; y++) {
+      const row: number[] = [];
+      for (let x = 0; x < COLS; x++) row.push(floorAt(x, y));
+      floorData.push(row);
+    }
+    const floorMap = this.make.tilemap({ data: floorData, tileWidth: TILE, tileHeight: TILE });
+    floorMap.createLayer(0, floorMap.addTilesetImage("floors")!, 0, 0)!.setDepth(-1000);
+
+    // --- walls: outer border + meeting-room partition (top-right) ---
+    const walls = new Set<string>();
+    const addWall = (x: number, y: number) => walls.add(`${x},${y}`);
+    for (let x = 0; x < COLS; x++) { addWall(x, 0); addWall(x, ROWS - 1); }
+    for (let y = 0; y < ROWS; y++) { addWall(0, y); addWall(COLS - 1, y); }
+    for (let y = 1; y <= 5; y++) addWall(13, y);        // meeting partition (vertical)
+    for (let x = 13; x < COLS; x++) addWall(x, 5);      // meeting partition (horizontal)
+    walls.delete("10,14"); // entrance door (bottom)
+    walls.delete("13,3");  // meeting room door
+    const isWall = (x: number, y: number) => walls.has(`${x},${y}`);
+
+    const data: number[][] = [];
+    for (let y = 0; y < ROWS; y++) {
+      const row: number[] = [];
+      for (let x = 0; x < COLS; x++) row.push(wallTileIndex(isWall, x, y));
+      data.push(row);
+    }
+    const map = this.make.tilemap({ data, tileWidth: TILE, tileHeight: TILE });
+    const wallLayer = map.createLayer(0, map.addTilesetImage("walls")!, 0, 0)!;
+    wallLayer.setCollisionByExclusion([-1]);
+    wallLayer.setDepth(50);
+
+    // --- furniture ---
+    const solids = this.physics.add.staticGroup();
+    for (const [k, tx, ty, solid] of FURNITURE) {
+      const px = tx * TILE + TILE / 2;
+      const py = ty * TILE + TILE / 2;
+      if (solid) {
+        const img = solids.create(px, py, k) as Phaser.Physics.Arcade.Sprite;
+        img.setDepth(py);
+        img.refreshBody();
+      } else {
+        const spr = this.add.image(px, py, k).setDepth(k.startsWith("rug") ? -900 : py);
+        if (k.includes("chair") || k === "stool" || k.includes("sofa") || k.includes("bean-bag")) {
+          spr.setInteractive({ useHandCursor: true });
+          this.rotatables.push(spr);
+          // extract chair style prefix (e.g. "chair-2" from "chair-2-south")
+          const m = k.match(/^(chair-\d+)/);
+          if (m) this.chairStyles.set(spr, m[1]);
+        }
+      }
+    }
+
+    // --- decor overlays (windows / glass) drawn on top of walls ---
+    for (const [k, tx, ty] of DECOR) {
+      this.add.image(tx * TILE + TILE / 2, ty * TILE + TILE / 2, k).setDepth(55);
+    }
+
+    // walk animations for each avatar (8 dirs x 6 frames), keyed "<avatarId>-<dir>"
+    for (const id of Object.keys(AVATARS)) {
+      const nf = AVATARS[id].nf;
+      DIRS8.forEach((d, row) =>
+        this.anims.create({
+          key: `${id}-${d}`,
+          frames: this.anims.generateFrameNumbers(AVATARS[id].tex, { start: row * nf, end: row * nf + nf - 1 }),
+          frameRate: 10,
+          repeat: -1,
+        }));
+    }
+
+    // --- player (avatar/name applied on startSession after login) ---
+    this.player = this.physics.add.sprite(SPAWN.x * TILE + TILE / 2, SPAWN.y * TILE + TILE / 2, AVATARS[this.myAvatar].tex, 0);
+    this.player.setCollideWorldBounds(true);
+    this.applyAvatarBody();
+    this.player.setDepth(this.player.y);
+    this.physics.add.collider(this.player, wallLayer);
+    this.physics.add.collider(this.player, solids);
+
+    // my own name above my head (same style as remote labels)
+    this.myLabel = this.add.text(this.player.x, this.player.y - 34, this.myName, {
+      fontSize: "9px", color: "#ffffff", stroke: "#1c1b22", strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(100000);
+
+    // --- camera ---
+    this.physics.world.setBounds(0, 0, worldW, worldH);
+    this.cameras.main.setBounds(0, 0, worldW, worldH);
+    this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
+    this.cameras.main.setZoom(ZOOM_DEFAULT);
+
+    // --- input: movement ---
+    this.cursors = this.input.keyboard!.createCursorKeys();
+    this.keys = this.input.keyboard!.addKeys("W,A,S,D") as Record<string, Phaser.Input.Keyboard.Key>;
+
+    // --- input: rotate chairs by swapping directional sprites (click to select, drag/wheel = change direction) ---
+    this.selRing = this.add.circle(0, 0, 17).setStrokeStyle(2, 0x2bb3a3).setFillStyle(0x2bb3a3, 0.08)
+      .setVisible(false).setDepth(99999);
+
+    this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      const hit = this.input.hitTestPointer(p).find((o) => this.rotatables.includes(o as Phaser.GameObjects.Image));
+      if (hit) this.selectChair(hit as Phaser.GameObjects.Image);
+      else this.deselectChair();
+    });
+    this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
+      if (this.selected && p.isDown) {
+        const ang = Phaser.Math.Angle.Between(this.selected.x, this.selected.y, p.worldX, p.worldY);
+        this.rotateChairToAngle(this.selected, ang);
+      }
+    });
+    this.input.on("wheel", (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
+      if (this.selected) this.rotateChairStep(this.selected, Math.sign(dy));
+      else this.zoomBy(dy > 0 ? 1 / 1.12 : 1.12); // scroll = zoom the camera
+    });
+    this.input.keyboard!.on("keydown-ESC", () => this.deselectChair());
+    this.input.keyboard!.on("keydown-Q", () => { if (this.selected) this.rotateChairStep(this.selected, -1); });
+    this.input.keyboard!.on("keydown-E", () => {
+      if (document.activeElement instanceof HTMLInputElement) return; // typing
+      if (this.selected) { this.rotateChairStep(this.selected, 1); return; } // rotate chair
+      if (this.nearInteractive) void this.activateInteractive(this.nearInteractive);
+    });
+    this.input.keyboard!.on("keydown-F", () => {
+      if (document.activeElement instanceof HTMLInputElement) return; // typing
+      this.toggleSit();
+    });
+    this.input.keyboard!.on("keydown-M", () => this.setZoom(ZOOM_MIN)); // zoom out fully
+    this.setupZoomControls();
+    this.setupInteractives();
+
+    // --- multiplayer + proximity chat ---
+    this.localRing = this.add.circle(0, 0, 15).setStrokeStyle(2, 0x2bb3a3, 0.9)
+      .setDepth(1).setVisible(false);
+    this.setupChat();
+    this.setupSidebar();
+    this.setupTopHeader();
+    this.created = true;
+    if (this.pendingStart) void this.connectMultiplayer(); // login already completed
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.webrtc?.dispose(); this.room?.leave(); });
+  }
+
+  /** called by the auth flow once the user has logged in / picked a character */
+  startSession(name: string, avatar: string) {
+    this.myName = name || "Guest";
+    this.myAvatar = isLpc(avatar) || AVATARS[avatar] ? avatar : "1";
+    this.myLabel?.setText(this.myName);
+    if (this.player) void this.applyAvatarBody();
+    if (this.created) void this.connectMultiplayer();
+    else this.pendingStart = true;
+  }
+
+  private async applyAvatarBody() {
+    if (isLpc(this.myAvatar)) {
+      const key = await this.ensureLpc(this.myAvatar);
+      if (key && this.player) {
+        this.player.setTexture(key, this.idleFrameFor(this.myAvatar, this.facing));
+        this.player.setScale(LPC_SCALE);
+        this.player.body!.setSize(16, 9).setOffset((64 - 16) / 2, 64 - 13); // hitbox at feet
+      }
+      return;
+    }
+    const a = AVATARS[this.myAvatar] ?? AVATARS["1"];
+    this.player.setScale(PRESET_SCALE);
+    this.player.setTexture(a.tex, 0);
+    this.player.body!.setSize(12, 8).setOffset((a.fw - 12) / 2, a.fh - 10); // hitbox at feet
+  }
+
+  // ---- LPC (custom avatar) helpers ----------------------------------------
+  /** build + register the spritesheet texture and 8-dir anims for an LPC config (idempotent) */
+  private ensureLpc(avatar: string): Promise<string | null> {
+    const cfg = decodeAvatar(avatar);
+    if (!cfg) return Promise.resolve(null);
+    const key = avatarKey(avatar);
+    if (this.lpcReady.has(key)) return Promise.resolve(key);
+    let p = this.lpcBuilding.get(key);
+    if (!p) {
+      p = (async () => {
+        const canvas = await buildWalkCanvas(cfg);
+        if (!this.textures.exists(key)) {
+          const tex = this.textures.addCanvas(key, canvas)!;
+          let i = 0; // slice the 9x4 grid into numbered frames 0..35
+          for (let r = 0; r < 4; r++)
+            for (let c = 0; c < LPC_COLS; c++) tex.add(i++, 0, c * 64, r * 64, 64, 64);
+        }
+        for (const d of DIRS8) {
+          const ak = `${key}-${d}`;
+          if (this.anims.exists(ak)) continue;
+          const row = LPC_ROW[d] ?? 2;
+          this.anims.create({
+            key: ak,
+            frames: this.anims.generateFrameNumbers(key, { start: row * LPC_COLS, end: row * LPC_COLS + LPC_COLS - 1 }),
+            frameRate: 10, repeat: -1,
+          });
+        }
+        this.lpcReady.add(key);
+        return key;
+      })();
+      this.lpcBuilding.set(key, p);
+    }
+    return p;
+  }
+
+  /** build + register the LPC sit spritesheet (3 cols x 4 dir rows), idempotent */
+  private ensureLpcSit(avatar: string): Promise<string | null> {
+    const cfg = decodeAvatar(avatar);
+    if (!cfg) return Promise.resolve(null);
+    const key = avatarKey(avatar) + "-sit";
+    if (this.lpcSitReady.has(key)) return Promise.resolve(key);
+    let p = this.lpcSitBuilding.get(key);
+    if (!p) {
+      p = (async () => {
+        const canvas = await buildSitCanvas(cfg);
+        if (!this.textures.exists(key)) {
+          const tex = this.textures.addCanvas(key, canvas)!;
+          let i = 0;
+          for (let r = 0; r < 4; r++)
+            for (let c = 0; c < SIT_COLS; c++) tex.add(i++, 0, c * 64, r * 64, 64, 64);
+        }
+        this.lpcSitReady.add(key);
+        return key;
+      })();
+      this.lpcSitBuilding.set(key, p);
+    }
+    return p;
+  }
+  private sitFrameFor(dir: string): number { return (LPC_ROW[dir] ?? 2) * SIT_COLS + SIT_SEATED_COL; }
+  /** seated depth: facing away (up/north) -> behind the chair so its backrest occludes you; else in front */
+  private sitDepth(chairDepth: number, facing: string): number {
+    const away = facing.startsWith("up") || facing.startsWith("north");
+    return away ? chairDepth - 1 : chairDepth + 1;
+  }
+
+  private texKeyFor(avatar: string): string {
+    return isLpc(avatar) ? avatarKey(avatar) : (AVATARS[avatar] ?? AVATARS["1"]).tex;
+  }
+  private animKeyFor(avatar: string, dir: string): string {
+    return isLpc(avatar) ? `${avatarKey(avatar)}-${dir}` : `${AVATARS[avatar] ? avatar : "1"}-${dir}`;
+  }
+  private idleFrameFor(avatar: string, dir: string): number {
+    return isLpc(avatar) ? (LPC_ROW[dir] ?? 2) * LPC_COLS : idleFrame(AVATARS[avatar] ? avatar : "1", dir);
+  }
+
+  /** open the editor while in the room, then apply + broadcast + persist without leaving */
+  private async editAvatarInRoom() {
+    const initial = decodeAvatar(this.myAvatar) ?? await defaultDressedConfig();
+    const cfg = await openAvatarEditor(initial, this.myName);
+    if (!cfg) return;
+    this.myAvatar = encodeAvatar(cfg);
+    await this.applyAvatarBody();
+    this.room?.send("avatar", this.myAvatar);
+    const token = localStorage.getItem("nexspace-token");
+    if (token) {
+      fetch(`${AUTH_API}/me/avatar`, {
+        method: "PUT", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ lpc: cfg }),
+      }).catch(() => {});
+    }
+  }
+
+  /** a peer changed their avatar mid-session -> rebuild their sprite */
+  private changeRemoteAvatar(sessionId: string, raw: string) {
+    const r = this.remotes.get(sessionId);
+    if (!r) return;
+    const av = isLpc(raw) ? raw : (AVATARS[raw] ? raw : "1");
+    r.avatar = av;
+    r.sprite.setScale(isLpc(av) ? LPC_SCALE : PRESET_SCALE);
+    if (isLpc(av)) {
+      void this.ensureLpc(av).then((key) => {
+        const rr = this.remotes.get(sessionId);
+        if (key && rr) rr.sprite.setTexture(key, this.idleFrameFor(av, rr.dir));
+      });
+    } else if (this.textures.exists(this.texKeyFor(av))) {
+      r.sprite.setTexture(this.texKeyFor(av), this.idleFrameFor(av, r.dir));
+    }
+  }
+
+  private async createMedia(room: Room, tilesEl: HTMLElement): Promise<MediaManager> {
+    try {
+      const cfg = await fetch(`${HTTP_URL}/livekit/config`).then((r) => r.json());
+      if (cfg?.enabled) {
+        const name = (room.state.players.get(this.mySessionId) as any)?.name ?? this.mySessionId;
+        const tk = await fetch(
+          `${HTTP_URL}/livekit/token?room=office&identity=${this.mySessionId}&name=${encodeURIComponent(name)}`
+        ).then((r) => r.json());
+        const lk = new LiveKitManager(tilesEl);
+        await lk.connect(tk.url, tk.token);
+        console.log("[nexspace] media backend: LiveKit SFU");
+        return lk;
+      }
+    } catch (e) {
+      console.warn("[nexspace] LiveKit unavailable, using P2P:", e);
+    }
+    console.log("[nexspace] media backend: P2P mesh");
+    return new WebRTCManager(room, this.mySessionId, tilesEl);
+  }
+
+  private async connectMultiplayer() {
+    try {
+      const client = new Client(SERVER_URL);
+      const room = await client.joinOrCreate("office", { name: this.myName, avatar: this.myAvatar });
+      this.room = room;
+      this.mySessionId = room.sessionId;
+      console.log(`[nexspace] joined room ${room.roomId} as ${room.sessionId}`);
+      setTimeout(() => console.log(`[nexspace] room ${room.roomId}: ${room.state.players.size} online`), 1200);
+      const $ = getStateCallbacks(room);
+
+      $(room.state).players.onAdd((player: any, sessionId: string) => {
+        if (sessionId === this.mySessionId) {
+          this.setAvatarChip(player.name);
+        } else {
+          this.addRemote(sessionId, player);
+          $(player).onChange(() => {
+            const r = this.remotes.get(sessionId);
+            if (!r) return;
+            r.tx = player.x; r.ty = player.y; r.dir = player.dir; r.moving = player.moving;
+            if (player.avatar && player.avatar !== r.avatar) this.changeRemoteAvatar(sessionId, player.avatar);
+          });
+        }
+        this.refreshRoster();
+      });
+      $(room.state).players.onRemove((_p: any, sessionId: string) => { this.removeRemote(sessionId); this.refreshRoster(); });
+
+      room.onMessage("chat", (msg: { from: string; text: string }) => this.showBubble(msg.from, msg.text));
+      room.onMessage("roomchat", (msg: { from: string; name: string; text: string }) => this.appendChatLog(msg.from, msg.name, msg.text));
+      room.onMessage("sit", (m: { from: string; on: boolean; dir: string }) => {
+        const r = this.remotes.get(m.from);
+        if (!r) return;
+        r.sitting = m.on;
+        if (m.on) {
+          r.dir = m.dir;
+          if (isLpc(r.avatar)) void this.ensureLpcSit(r.avatar).then((key) => {
+            const rr = this.remotes.get(m.from);
+            if (key && rr?.sitting) rr.sprite.setTexture(key, this.sitFrameFor(m.dir));
+          });
+          else if (this.textures.exists(this.texKeyFor(r.avatar))) r.sprite.setFrame(this.idleFrameFor(r.avatar, m.dir));
+        } else {
+          const wk = this.texKeyFor(r.avatar);
+          if (this.textures.exists(wk)) r.sprite.setTexture(wk, this.idleFrameFor(r.avatar, r.dir));
+        }
+      });
+      room.onMessage("screenshare", (msg: { from: string; on: boolean; screenId: string }) => {
+        console.log(`[screen] ${msg.from} presenting=${msg.on} on ${msg.screenId}`);
+        const it = INTERACTIVES.find((i) => i.type === "screen" && this.screenId(i) === msg.screenId);
+        if (msg.on) {
+          this.screenPresenter.set(msg.screenId, msg.from);
+          const isMe = msg.from === this.mySessionId;
+          const stream = isMe ? this.webrtc?.screenMediaStream ?? null : this.webrtc?.getPeerStream(msg.from) ?? null;
+          const name = isMe ? this.myName : (this.remotes.get(msg.from)?.label.text ?? msg.from);
+          this.activeScreenStream = stream;
+          this.activePresenterName = name;
+          this.setViewMode("call");
+        } else {
+          this.screenPresenter.delete(msg.screenId);
+          this.webrtc?.hidePeerTile(msg.from, false);
+          this.activeScreenStream = null;
+          this.activePresenterName = "";
+          this.updateCallStageUI();
+        }
+        if (it) this.updateScreen(it);
+      });
+
+      // media backend: LiveKit SFU if the server has it configured, else P2P mesh
+      const tilesEl = document.getElementById("tiles");
+      if (tilesEl) {
+        this.webrtc = await this.createMedia(room, tilesEl);
+        this.wireAvButtons();
+        // when a peer's track arrives, refresh any screen they're presenting on
+        this.webrtc.onPeerStream = (peerId) => {
+          for (const it of INTERACTIVES) {
+            if (it.type === "screen" && this.screenPresenter.get(this.screenId(it)) === peerId) {
+              this.activeScreenStream = this.webrtc?.getPeerStream(peerId) ?? null;
+              this.activePresenterName = this.remotes.get(peerId)?.label.text ?? peerId;
+              this.updateScreen(it);
+              this.updateCallStageUI();
+            }
+          }
+          this.refreshCallSidebarTiles();
+        };
+        // browser "Stop sharing" bar -> pure cleanup (the track already ended; do NOT re-call getDisplayMedia)
+        this.webrtc.onScreenEnd = () => {
+          const id = this.myScreenId;
+          if (!id) return;
+          this.myScreenId = undefined;
+          this.screenPresenter.delete(id);
+          this.activeScreenStream = null;
+          this.activePresenterName = "";
+          this.room?.send("screenshare", { on: false, screenId: id });
+          const it = INTERACTIVES.find((i) => i.type === "screen" && this.screenId(i) === id);
+          if (it) this.updateScreen(it);
+          this.setViewMode("space");
+          this.webrtc?.onState?.();
+        };
+      }
+    } catch (e) {
+      console.warn("[nexspace] multiplayer offline — running single-player:", e);
+    }
+  }
+
+  private wireAvButtons() {
+    const w = this.webrtc!;
+    const sv = (inner: string, w2 = "2.4") =>
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w2}" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+    const I = {
+      mic: sv(`<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0"/><path d="M12 17v4"/>`, "1.8"),
+      micOff: sv(`<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0"/><path d="M12 17v4"/><path d="M4 3l16 18"/>`, "1.8"),
+      cam: sv(`<rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/>`, "1.8"),
+      camOff: sv(`<rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/><path d="M4 3l16 18"/>`, "1.8"),
+      emoji: sv(`<circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/>`, "1.8"),
+      screen: sv(`<rect x="3" y="4" width="18" height="13" rx="2" stroke-dasharray="3 3"/><path d="M9 21h6"/>`, "1.8"),
+      door: sv(`<path d="M14 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4"/><path d="M15 12H4"/><path d="M8 8l-4 4 4 4"/>`, "1.8"),
+      chev: sv(`<path d="M6 15l6-6 6 6"/>`),
+    };
+    const el = (id: string) => document.getElementById(id) as HTMLButtonElement | null;
+    const mic = el("btn-mic"), cam = el("btn-cam"), scr = el("btn-screen"),
+      emoji = el("btn-emoji"), leave = el("btn-leave"),
+      micMenu = el("btn-mic-menu"), camMenu = el("btn-cam-menu");
+    if (emoji) emoji.innerHTML = I.emoji;
+    if (leave) leave.innerHTML = I.door;
+    if (scr) scr.innerHTML = I.screen;
+    if (micMenu) micMenu.innerHTML = I.chev;
+    if (camMenu) camMenu.innerHTML = I.chev;
+
+    if (mic) mic.onclick = () => void w.toggleMic();
+    if (cam) cam.onclick = () => void w.toggleCam();
+    // AV-bar "share screen" -> present onto the big in-scene screen, room-wide
+    if (scr) scr.onclick = () => { const it = this.presentationScreen(); if (it) void this.activateScreen(it); };
+    if (micMenu) micMenu.onclick = () => void this.openDeviceMenu("mic", micMenu);
+    if (camMenu) camMenu.onclick = () => void this.openDeviceMenu("cam", camMenu);
+
+    const refresh = () => {
+      if (mic) { mic.innerHTML = w.micOn ? I.mic : I.micOff; mic.classList.toggle("off", !w.micOn); mic.classList.toggle("active", w.micOn); }
+      if (cam) { cam.innerHTML = w.camOn ? I.cam : I.camOff; cam.classList.toggle("off", !w.camOn); cam.classList.toggle("active", w.camOn); }
+      if (scr) scr.classList.toggle("active", w.screenOn);
+    };
+    w.onState = refresh;
+    refresh();
+
+    // emoji reactions → sent as a proximity chat bubble
+    const pop = document.getElementById("emoji-pop") as HTMLElement | null;
+    if (emoji && pop) {
+      pop.innerHTML = ["👍", "❤️", "😂", "🎉", "👋", "😮"].map((e) => `<button>${e}</button>`).join("");
+      Array.from(pop.children).forEach((b) => ((b as HTMLElement).onclick = () => {
+        this.room?.send("chat", { text: (b as HTMLElement).textContent ?? "" });
+        pop.style.display = "none";
+      }));
+      emoji.onclick = () => { pop.style.display = pop.style.display === "flex" ? "none" : "flex"; };
+    }
+
+    // leave the room
+    if (leave) leave.onclick = () => {
+      this.webrtc?.dispose();
+      this.room?.leave();
+      const ov = document.getElementById("left-overlay");
+      if (ov) ov.style.display = "grid";
+      document.getElementById("btn-rejoin")?.addEventListener("click", () => location.reload());
+    };
+  }
+
+  private chipParts(name: string): { initial: string; color: string } {
+    const clean = (name || "?").trim();
+    const initial = (clean.match(/[A-Za-z0-9฀-๿]/)?.[0] || "?").toUpperCase();
+    let h = 0;
+    for (let i = 0; i < clean.length; i++) h = (h * 31 + clean.charCodeAt(i)) >>> 0;
+    return { initial, color: `hsl(${h % 360} 60% 68%)` };
+  }
+
+  private setAvatarChip(name: string) {
+    const chip = document.getElementById("ava-chip");
+    if (!chip) return;
+    const { initial, color } = this.chipParts(name);
+    chip.style.background = color;
+    chip.style.color = "#2a2330";
+    chip.innerHTML = `${initial}<i class="dot"></i>`;
+  }
+
+  private setupSidebar() {
+    const sidebar = document.getElementById("sidebar");
+    const views: Record<string, string> = { people: "view-people", chat: "view-chat", settings: "view-settings" };
+    const titles: Record<string, string> = { people: "NexSpace", chat: "แชตห้องรวม", settings: "ตั้งค่า" };
+    const showView = (v: string) => {
+      sidebar?.classList.remove("closed");
+      for (const [k, id] of Object.entries(views)) {
+        const el = document.getElementById(id);
+        if (el) (el as HTMLElement).hidden = k !== v;
+      }
+      for (const k of Object.keys(views)) document.getElementById(`rail-${k}`)?.classList.toggle("active", k === v);
+      const t = document.getElementById("sb-title"); if (t) t.textContent = titles[v] ?? "NexSpace";
+    };
+    document.getElementById("btn-edit-avatar")?.addEventListener("click", () => void this.editAvatarInRoom());
+    document.getElementById("rail-people")?.addEventListener("click", () => showView("people"));
+    document.getElementById("rail-chat")?.addEventListener("click", () => showView("chat"));
+    document.getElementById("rail-settings")?.addEventListener("click", () => showView("settings"));
+    document.getElementById("sb-close")?.addEventListener("click", () => sidebar?.classList.add("closed"));
+    document.getElementById("sb-search")?.addEventListener("input", () => this.refreshRoster());
+
+    // invite: copy the room link
+    document.getElementById("btn-invite")?.addEventListener("click", async () => {
+      const btn = document.getElementById("btn-invite") as HTMLButtonElement;
+      try { await navigator.clipboard.writeText(location.href); btn.textContent = "✓ คัดลอกลิงก์แล้ว!"; }
+      catch { btn.textContent = location.href; }
+      setTimeout(() => (btn.textContent = "＋ เชิญ / คัดลอกลิงก์"), 2000);
+    });
+
+    // room-wide chat
+    const input = document.getElementById("room-chat-input") as HTMLInputElement | null;
+    const send = () => {
+      const text = input?.value.trim();
+      if (text && this.room) this.room.send("roomchat", { text });
+      if (input) input.value = "";
+    };
+    document.getElementById("room-chat-send")?.addEventListener("click", send);
+    input?.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") send(); });
+  }
+
+  private appendChatLog(from: string, name: string, text: string) {
+    const log = document.getElementById("chat-log");
+    if (!log) return;
+    log.querySelector(".chat-empty")?.remove();
+    const div = document.createElement("div"); div.className = "msg";
+    const who = document.createElement("span");
+    who.className = "who" + (from === this.mySessionId ? " me" : "");
+    who.textContent = (from === this.mySessionId ? "คุณ" : name) + ":";
+    const txt = document.createElement("span"); txt.className = "txt"; txt.textContent = " " + text;
+    div.append(who, txt); log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  private refreshRoster() {
+    const count = this.room?.state.players.size ?? 0;
+    for (const id of ["sb-count", "rail-count"]) {
+      const e = document.getElementById(id);
+      if (e) e.textContent = String(count);
+    }
+    const list = document.getElementById("people");
+    if (!list || !this.room) return;
+    const q = (document.getElementById("sb-search") as HTMLInputElement | null)?.value.toLowerCase() ?? "";
+    const rows: { name: string; self: boolean }[] = [];
+    this.room.state.players.forEach((p: any, id: string) =>
+      rows.push({ name: p.name || "Guest", self: id === this.mySessionId }));
+    rows.sort((a, b) => Number(b.self) - Number(a.self) || a.name.localeCompare(b.name));
+    list.innerHTML = "";
+    for (const r of rows) {
+      if (q && !r.name.toLowerCase().includes(q)) continue;
+      const { initial, color } = this.chipParts(r.name);
+      const row = document.createElement("div"); row.className = "person";
+      const chip = document.createElement("span"); chip.className = "p-chip";
+      chip.style.background = color; chip.textContent = initial;
+      const dot = document.createElement("i"); dot.className = "p-dot"; chip.appendChild(dot);
+      const info = document.createElement("span"); info.className = "p-info";
+      const nm = document.createElement("b"); nm.textContent = r.name + (r.self ? " (คุณ)" : "");
+      const st = document.createElement("small"); st.textContent = "Active";
+      info.append(nm, st); row.append(chip, info); list.appendChild(row);
+    }
+  }
+
+  private async openDeviceMenu(kind: "mic" | "cam", anchor: HTMLElement) {
+    const w = this.webrtc;
+    if (!w) return;
+    let pop = document.getElementById("dev-pop") as HTMLElement | null;
+    if (!pop) {
+      pop = document.createElement("div");
+      pop.id = "dev-pop";
+      pop.style.cssText = "position:fixed;z-index:22;background:#2e3238f2;border-radius:10px;padding:6px;" +
+        "min-width:210px;box-shadow:0 6px 20px #0006;font:13px 'Segoe UI',sans-serif;color:#e6e9ee;";
+      document.body.appendChild(pop);
+    }
+    if (pop.dataset.open === kind && pop.style.display !== "none") { pop.style.display = "none"; pop.dataset.open = ""; return; }
+
+    const dev = await w.devices();
+    pop.innerHTML = "";
+    const section = (title: string, items: MediaDeviceInfo[], cur: string | undefined, pick: (id: string) => void, fb: string) => {
+      const head = document.createElement("div");
+      head.textContent = title;
+      head.style.cssText = "opacity:.55;font-size:11px;padding:5px 8px 2px;";
+      pop!.appendChild(head);
+      if (!items.length) {
+        const e = document.createElement("div");
+        e.textContent = "— อนุญาตอุปกรณ์ก่อน (เปิดไมค์/กล้อง) —";
+        e.style.cssText = "padding:4px 8px;opacity:.5;font-size:12px;";
+        pop!.appendChild(e);
+      }
+      items.forEach((d, i) => {
+        const b = document.createElement("button");
+        b.textContent = (cur === d.deviceId ? "✓ " : "") + (d.label || `${fb} ${i + 1}`);
+        b.style.cssText = "display:block;width:100%;text-align:left;border:none;background:transparent;" +
+          "color:#e6e9ee;padding:6px 8px;border-radius:6px;cursor:pointer;font:13px 'Segoe UI',sans-serif;";
+        b.onmouseenter = () => (b.style.background = "#ffffff1a");
+        b.onmouseleave = () => (b.style.background = "transparent");
+        b.onclick = () => { pick(d.deviceId); pop!.style.display = "none"; pop!.dataset.open = ""; };
+        pop!.appendChild(b);
+      });
+    };
+
+    if (kind === "mic") {
+      section("ไมโครโฟน", dev.mics, w.selMic, (id) => void w.setMic(id), "Microphone");
+      section("ลำโพง", dev.speakers, w.selSpk, (id) => void w.setSpeaker(id), "Speaker");
+    } else {
+      section("กล้อง", dev.cams, w.selCam, (id) => void w.setCam(id), "Camera");
+    }
+
+    const r = anchor.getBoundingClientRect();
+    pop.style.display = "block";
+    pop.dataset.open = kind;
+    pop.style.left = Math.max(8, r.left - 95) + "px";
+    pop.style.bottom = window.innerHeight - r.top + 8 + "px";
+  }
+
+  private setZoom(z: number) {
+    this.cameras.main.setZoom(Phaser.Math.Clamp(z, ZOOM_MIN, ZOOM_MAX));
+  }
+  private zoomBy(factor: number) {
+    this.setZoom(this.cameras.main.zoom * factor);
+  }
+
+  private setupZoomControls() {
+    const svg = (inner: string) =>
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+    const icons = {
+      locate: svg(`<circle cx="12" cy="12" r="3.2"/><path d="M12 2v3.5M12 18.5V22M2 12h3.5M18.5 12H22"/>`),
+      in: svg(`<path d="M12 5v14M5 12h14"/>`),
+      out: svg(`<path d="M5 12h14"/>`),
+      fully: svg(`<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>`),
+    };
+    const b = (id: string, html: string, fn: () => void) => {
+      const el = document.getElementById(id) as HTMLButtonElement | null;
+      if (el) { el.innerHTML = html; el.onclick = fn; }
+    };
+    b("zb-locate", icons.locate, () => { this.setZoom(ZOOM_DEFAULT); this.cameras.main.startFollow(this.player, true, 0.12, 0.12); });
+    b("zb-in", icons.in, () => this.zoomBy(1.2));
+    b("zb-out", icons.out, () => this.zoomBy(1 / 1.2));
+    b("zb-fully", icons.fully, () => this.setZoom(ZOOM_MIN));
+  }
+
+  private setupInteractives() {
+    // floating bobbing icon over each interactive tile
+    for (const it of INTERACTIVES) {
+      const px = it.x * TILE + TILE / 2, py = it.y * TILE + TILE / 2;
+      const ic = this.add.text(px, py - 22, it.icon, { fontSize: "16px" }).setOrigin(0.5).setDepth(90000);
+      this.tweens.add({ targets: ic, y: py - 28, duration: 700, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+    }
+    document.getElementById("modal-close")?.addEventListener("click", () => this.closeModal());
+    this.input.keyboard!.on("keydown-ESC", () => this.closeModal());
+  }
+
+  private async activateInteractive(it: Interactive) {
+    if (it.type === "portal" && it.target) {
+      const tx = it.target.x * TILE + TILE / 2, ty = it.target.y * TILE + TILE / 2;
+      const cam = this.cameras.main;
+      cam.fadeOut(140);
+      cam.once("camerafadeoutcomplete", () => {
+        this.player.setPosition(tx, ty);
+        this.player.body!.reset(tx, ty);
+        cam.fadeIn(160);
+      });
+      return;
+    }
+    if (it.type === "screen") { await this.activateScreen(it); return; }
+    if (it.url) this.openModal(it.label, it.url); // whiteboard / embed
+  }
+
+  private screenId(it: Interactive) { return `${it.x},${it.y}`; }
+  /** the shared presentation screen (the AV-bar share button routes here) */
+  private presentationScreen() { return INTERACTIVES.find((i) => i.type === "screen"); }
+
+  /** presenter toggles their screen-share onto this in-scene screen (room-wide) */
+  private async activateScreen(it: Interactive) {
+    const id = this.screenId(it);
+    if (this.myScreenId === id) {
+      // stop presenting
+      if (this.webrtc?.screenOn) await this.webrtc.toggleScreen();
+      this.myScreenId = undefined;
+      this.activeScreenStream = null;
+      this.activePresenterName = "";
+      this.room?.send("screenshare", { on: false, screenId: id });
+      this.screenPresenter.delete(id);
+      this.updateScreen(it);
+      this.setViewMode("space");
+      this.webrtc?.onState?.();
+      return;
+    }
+    await this.webrtc?.toggleScreen(); // getDisplayMedia
+    if (!this.webrtc?.screenOn) {
+      this.activeScreenStream = null;
+      this.activePresenterName = "";
+      this.updateCallStageUI();
+      return;
+    }
+    this.myScreenId = id;
+    this.screenPresenter.set(id, this.mySessionId);
+    this.activeScreenStream = this.webrtc?.screenMediaStream ?? null;
+    this.activePresenterName = this.myName;
+    this.setViewMode("call");
+    this.room?.send("screenshare", { on: true, screenId: id }); // broadcast -> everyone force-connects a peer
+    this.updateScreen(it);
+    this.webrtc?.onState?.();
+  }
+
+  private setupTopHeader() {
+    const spaceBtn = document.getElementById("nav-tab-space");
+    const callBtn = document.getElementById("nav-tab-call");
+    spaceBtn?.addEventListener("click", () => this.setViewMode("space"));
+    callBtn?.addEventListener("click", () => this.setViewMode("call"));
+
+    document.getElementById("btn-fullscreen")?.addEventListener("click", () => {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+      else document.exitFullscreen().catch(() => {});
+    });
+  }
+
+  private setViewMode(mode: "space" | "call") {
+    const spaceBtn = document.getElementById("nav-tab-space");
+    const callBtn = document.getElementById("nav-tab-call");
+    const callOverlay = document.getElementById("call-view-overlay");
+    const appContainer = document.getElementById("app");
+    const zoomBar = document.getElementById("zoom-bar");
+
+    spaceBtn?.classList.toggle("active", mode === "space");
+    callBtn?.classList.toggle("active", mode === "call");
+
+    if (callOverlay) callOverlay.style.display = mode === "call" ? "grid" : "none";
+    if (appContainer) appContainer.style.visibility = mode === "call" ? "hidden" : "visible";
+    if (zoomBar) zoomBar.style.display = mode === "call" ? "none" : "flex";
+
+    if (mode === "call") this.updateCallStageUI();
+  }
+
+  private updateCallStageUI() {
+    const stageVideo = document.getElementById("call-stage-video") as HTMLVideoElement | null;
+    const noStreamEl = document.getElementById("call-no-stream");
+    const presenterTag = document.getElementById("presenter-tag");
+    const callBtn = document.getElementById("nav-tab-call");
+
+    const hasStream = !!this.activeScreenStream;
+    document.body.classList.toggle("has-screenshare", hasStream);
+    if (callBtn) callBtn.classList.toggle("has-call", hasStream);
+
+    if (stageVideo) {
+      if (hasStream) {
+        if (stageVideo.srcObject !== this.activeScreenStream) {
+          stageVideo.srcObject = this.activeScreenStream;
+          stageVideo.play().catch(() => {});
+        }
+        stageVideo.style.display = "block";
+      } else {
+        stageVideo.srcObject = null;
+        stageVideo.style.display = "none";
+      }
+    }
+    if (noStreamEl) noStreamEl.style.display = hasStream ? "none" : "flex";
+    if (presenterTag) {
+      presenterTag.style.display = hasStream ? "block" : "none";
+      presenterTag.textContent = `${this.activePresenterName}'s Screenshare`;
+    }
+    this.refreshCallSidebarTiles();
+  }
+
+  private refreshCallSidebarTiles() {
+    const selfLabel = document.getElementById("call-self-label");
+    if (selfLabel) selfLabel.textContent = this.myName + " (คุณ)";
+    const container = document.getElementById("call-peers-container");
+    if (!container) return;
+    container.innerHTML = "";
+    for (const [id, r] of this.remotes) {
+      const card = document.createElement("div");
+      card.className = "peer-card";
+      const lbl = document.createElement("span");
+      lbl.className = "peer-label";
+      lbl.textContent = r.label.text || id;
+      const avatar = document.createElement("div");
+      avatar.className = "peer-avatar-fallback";
+      avatar.textContent = "👤";
+      card.append(avatar, lbl);
+      const peerStream = this.webrtc?.getPeerStream(id);
+      if (peerStream) {
+        const vid = document.createElement("video");
+        vid.autoplay = true; vid.playsInline = true;
+        vid.srcObject = peerStream;
+        avatar.style.display = "none";
+        card.appendChild(vid);
+      }
+      container.appendChild(card);
+    }
+  }
+
+  /** pick the right stream (mine or the remote presenter's) and (re)render it on the object */
+  private updateScreen(it: Interactive) {
+    const id = this.screenId(it);
+    const presenter = this.screenPresenter.get(id);
+    if (!presenter) return this.renderScreen(it, null);
+    const stream = presenter === this.mySessionId
+      ? this.webrtc?.screenMediaStream ?? null
+      : this.webrtc?.getPeerStream(presenter) ?? null;
+    if (presenter !== this.mySessionId) this.webrtc?.hidePeerTile(presenter, true); // route to big screen, not a small tile
+    this.renderScreen(it, stream);
+  }
+
+  private renderScreen(it: Interactive, stream: MediaStream | null) {
+    const id = this.screenId(it);
+    console.log(`[screen] render ${id}: ${stream ? "STREAM (" + stream.getVideoTracks().length + " video)" : "clear"}`);
+    this.sceneScreens.get(id)?.destroy();
+    this.sceneScreens.delete(id);
+    if (!stream) return;
+    const px = it.x * TILE + TILE / 2, py = it.y * TILE + TILE / 2 + TILE; // sits just below the top wall
+    // fixed 16:9 panel on the wall (don't depend on late-arriving video dimensions)
+    const SW = 6 * TILE, SH = Math.round(SW * 9 / 16);
+    const v = this.add.video(px, py).setOrigin(0.5, 0).setDisplaySize(SW, SH).setDepth(90000); // above walls/furniture
+    this.sceneScreens.set(id, v);
+    const start = (why: string) => { v.setDisplaySize(SW, SH); const p = v.play(true) as unknown as Promise<void> | undefined; if (p?.catch) p.catch(() => {}); console.log(`[screen] play (${why})`); };
+    v.on("created", () => start("created"));
+    v.on("playing", () => v.setDisplaySize(SW, SH));
+    try {
+      v.loadMediaStream(stream, true);
+      start("immediate");
+    } catch (e) { console.warn("scene screen", e); }
+  }
+
+  private openModal(title: string, url: string) {
+    const m = document.getElementById("modal");
+    const f = document.getElementById("modal-frame") as HTMLIFrameElement | null;
+    const t = document.getElementById("modal-title");
+    if (t) t.textContent = title;
+    if (f) f.src = url;
+    if (m) m.style.display = "grid";
+  }
+
+  private closeModal() {
+    const m = document.getElementById("modal");
+    const f = document.getElementById("modal-frame") as HTMLIFrameElement | null;
+    if (f) f.src = "about:blank";
+    if (m) m.style.display = "none";
+  }
+
+  private setupChat() {
+    const input = document.getElementById("chat") as HTMLInputElement | null;
+    if (!input) return;
+    const open = (v: boolean) => { input.style.display = v ? "block" : "none"; if (v) input.focus(); else input.blur(); };
+    // Enter (game focused) opens the chat box
+    this.input.keyboard!.on("keydown-ENTER", () => { if (input.style.display === "none") open(true); });
+    // keys inside the box don't leak to the game (stops movement while typing)
+    input.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter") {
+        const text = input.value.trim();
+        if (text && this.room) this.room.send("chat", { text });
+        input.value = ""; open(false);
+      } else if (e.key === "Escape") { input.value = ""; open(false); }
+    });
+  }
+
+  private showBubble(fromId: string, text: string) {
+    const key = fromId === this.mySessionId ? "local" : fromId;
+    this.bubbles.get(key)?.destroy();
+    const t = this.add.text(0, 0, text, {
+      fontSize: "9px", color: "#2a2f36", backgroundColor: "#fffef9",
+      padding: { x: 5, y: 3 }, wordWrap: { width: 120 }, align: "center",
+    }).setOrigin(0.5, 1).setDepth(100001);
+    this.bubbles.set(key, t);
+    this.time.delayedCall(4500, () => {
+      if (this.bubbles.get(key) === t) { t.destroy(); this.bubbles.delete(key); }
+    });
+  }
+
+  private addRemote(sessionId: string, player: any) {
+    const raw: string = player.avatar || "1";
+    const av = isLpc(raw) ? raw : (AVATARS[raw] ? raw : "1");
+    // custom avatars aren't ready yet -> start on a placeholder, swap in when composed
+    const startTex = this.textures.exists(this.texKeyFor(av)) ? this.texKeyFor(av) : AVATARS["1"].tex;
+    const sprite = this.add.sprite(player.x, player.y, startTex, 0).setDepth(player.y);
+    sprite.setScale(isLpc(av) ? LPC_SCALE : PRESET_SCALE);
+    const label = this.add.text(player.x, player.y - 34, player.name ?? "Guest", {
+      fontSize: "9px", color: "#ffffff", stroke: "#1c1b22", strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(100000);
+    this.remotes.set(sessionId, { sprite, label, tx: player.x, ty: player.y, dir: player.dir, moving: player.moving, avatar: av });
+    if (isLpc(av)) void this.ensureLpc(av).then((key) => {
+      const r = this.remotes.get(sessionId);
+      if (key && r) r.sprite.setTexture(key, this.idleFrameFor(av, r.dir));
+    });
+  }
+
+  private removeRemote(sessionId: string) {
+    const r = this.remotes.get(sessionId);
+    if (!r) return;
+    r.sprite.destroy();
+    r.label.destroy();
+    r.ring?.destroy();
+    this.bubbles.get(sessionId)?.destroy();
+    this.bubbles.delete(sessionId);
+    this.remotes.delete(sessionId);
+    // if they were presenting on a screen, clear it
+    for (const it of INTERACTIVES) {
+      if (it.type === "screen" && this.screenPresenter.get(this.screenId(it)) === sessionId) {
+        this.screenPresenter.delete(this.screenId(it));
+        this.updateScreen(it);
+      }
+    }
+  }
+
+  private selectChair(obj: Phaser.GameObjects.Image) {
+    this.selected?.clearTint();
+    this.selected = obj;
+    obj.setTint(0xfff2c0);
+    this.selRing.setPosition(obj.x, obj.y).setVisible(true);
+  }
+
+  private deselectChair() {
+    this.selected?.clearTint();
+    this.selected = undefined;
+    this.selRing.setVisible(false);
+  }
+
+  /** nearest directional chair to the player, within ~1.5 tiles (else undefined) */
+  private chairNearPlayer(): Phaser.GameObjects.Image | undefined {
+    let best: Phaser.GameObjects.Image | undefined, bd = (1.5 * TILE) ** 2;
+    for (const c of this.rotatables) {
+      const d2 = (c.x - this.player.x) ** 2 + (c.y - this.player.y) ** 2;
+      if (d2 < bd) { bd = d2; best = c; }
+    }
+    return best;
+  }
+
+  /** sit on the nearest chair (facing the way it points), or stand up if already sitting */
+  private toggleSit() {
+    if (this.sitting) { this.standUp(); return; }
+    const chair = this.chairNearPlayer();
+    if (!chair) return;
+    const dir = CHAIR_DIRS[this.getChairDirIndex(chair)] ?? "south";
+    this.facing = CHAIR_TO_FACING[dir] ?? "down";
+    this.sitting = true;
+    this.satChair = chair;
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(0, 0);
+    this.player.setPosition(chair.x, chair.y - 6); // sit on the seat
+    body.reset(chair.x, chair.y - 6);
+    this.player.setDepth(this.sitDepth(chair.depth, this.facing));
+    if (this.textures.exists(this.texKeyFor(this.myAvatar)))
+      this.player.setFrame(this.idleFrameFor(this.myAvatar, this.facing)); // immediate; sit pose swaps in below
+    if (isLpc(this.myAvatar)) {
+      void this.ensureLpcSit(this.myAvatar).then((key) => {
+        if (key && this.sitting) this.player.setTexture(key, this.sitFrameFor(this.facing)); // real sit pose
+      });
+    }
+    this.room?.send("move", { x: Math.round(chair.x), y: Math.round(chair.y - 6), dir: this.facing, moving: false });
+    this.room?.send("sit", { on: true, dir: this.facing }); // let peers show the sit pose too
+  }
+
+  private standUp() {
+    if (!this.sitting) return;
+    this.sitting = false;
+    this.satChair = undefined;
+    if (isLpc(this.myAvatar)) { // back to the walk texture
+      const wk = this.texKeyFor(this.myAvatar);
+      if (this.textures.exists(wk)) this.player.setTexture(wk, this.idleFrameFor(this.myAvatar, this.facing));
+    }
+    this.room?.send("sit", { on: false, dir: this.facing });
+  }
+
+  /** Get the current direction index of a directional chair from its texture key */
+  private getChairDirIndex(obj: Phaser.GameObjects.Image): number {
+    const texKey = obj.texture.key;
+    for (let i = 0; i < CHAIR_DIRS.length; i++) {
+      if (texKey.endsWith(`-${CHAIR_DIRS[i]}`)) return i;
+    }
+    return 0; // default south
+  }
+
+  /** Rotate a chair to the nearest 8-way direction based on angle (radians) */
+  private rotateChairToAngle(obj: Phaser.GameObjects.Image, ang: number) {
+    const style = this.chairStyles.get(obj);
+    if (!style) return; // stool or non-directional chair
+    // Snap angle to nearest of 8 directions
+    let deg = Phaser.Math.RadToDeg(ang);
+    if (deg < 0) deg += 360;
+    // 0=E, 45=SE, 90=S, 135=SW, 180=W, 225=NW, 270=N, 315=NE
+    const snapDirs: [number, string][] = [
+      [0, "east"], [45, "south-east"], [90, "south"], [135, "south-west"],
+      [180, "west"], [225, "north-west"], [270, "north"], [315, "north-east"],
+    ];
+    let best = "south";
+    let bestDist = 999;
+    for (const [a, d] of snapDirs) {
+      let diff = Math.abs(deg - a);
+      if (diff > 180) diff = 360 - diff;
+      if (diff < bestDist) { bestDist = diff; best = d; }
+    }
+    const key = `${style}-${best}`;
+    if (this.textures.exists(key)) obj.setTexture(key);
+  }
+
+  /** Step a chair through directions by +1 or -1 */
+  private rotateChairStep(obj: Phaser.GameObjects.Image, step: number) {
+    const style = this.chairStyles.get(obj);
+    if (!style) {
+      // fallback for non-directional chairs (stool etc): use rotation
+      obj.rotation += step * Phaser.Math.DegToRad(45);
+      return;
+    }
+    const idx = this.getChairDirIndex(obj);
+    const newIdx = ((idx + step) % CHAIR_DIRS.length + CHAIR_DIRS.length) % CHAIR_DIRS.length;
+    const key = `${style}-${CHAIR_DIRS[newIdx]}`;
+    if (this.textures.exists(key)) obj.setTexture(key);
+  }
+
+  update() {
+    const speed = 150;
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    let vx = 0, vy = 0;
+    const typing = document.activeElement instanceof HTMLInputElement; // any text field (chat/search/room-chat)
+    if (!typing) {
+      if (this.cursors.left.isDown || this.keys.A.isDown) vx = -1;
+      else if (this.cursors.right.isDown || this.keys.D.isDown) vx = 1;
+      if (this.cursors.up.isDown || this.keys.W.isDown) vy = -1;
+      else if (this.cursors.down.isDown || this.keys.S.isDown) vy = 1;
+    }
+
+    if (this.sitting && (vx !== 0 || vy !== 0)) this.standUp(); // any movement input stands up
+
+    const len = Math.hypot(vx, vy) || 1;
+    body.setVelocity((vx / len) * speed, (vy / len) * speed);
+
+    const h = vx < 0 ? "left" : vx > 0 ? "right" : "";
+    const v = vy < 0 ? "up" : vy > 0 ? "down" : "";
+    if (v && h) this.facing = `${v}-${h}`;
+    else if (v || h) this.facing = v || h;
+
+    // walk animation while moving; stand on the neutral frame when idle
+    // (skip entirely while seated so the sit pose/texture isn't overwritten)
+    const myAnim = this.animKeyFor(this.myAvatar, this.facing);
+    if (this.sitting) {
+      this.player.anims.stop();
+    } else if ((vx !== 0 || vy !== 0) && this.anims.exists(myAnim)) {
+      this.player.anims.play(myAnim, true);
+    } else {
+      this.player.anims.stop();
+      if (this.textures.exists(this.texKeyFor(this.myAvatar)))
+        this.player.setFrame(this.idleFrameFor(this.myAvatar, this.facing));
+    }
+    this.player.setDepth(this.sitting && this.satChair ? this.sitDepth(this.satChair.depth, this.facing) : this.player.y);
+    this.myLabel?.setPosition(this.player.x, this.player.y - 34);
+
+    // --- send my state to server (throttled + only when it changes) ---
+    const moving = vx !== 0 || vy !== 0;
+    if (this.room) {
+      const now = this.time.now;
+      const changed =
+        Math.abs(this.player.x - this.lastState.x) > 0.5 ||
+        Math.abs(this.player.y - this.lastState.y) > 0.5 ||
+        this.facing !== this.lastState.dir ||
+        moving !== this.lastState.moving;
+      if (changed && now - this.lastSent > 60) {
+        this.room.send("move", { x: Math.round(this.player.x), y: Math.round(this.player.y), dir: this.facing, moving });
+        this.lastSent = now;
+        this.lastState = { x: this.player.x, y: this.player.y, dir: this.facing, moving };
+      }
+    }
+
+    // --- interpolate + animate remotes, and compute proximity ("in conversation") ---
+    const near2 = this.NEAR * this.NEAR;
+    const FULL = 2 * TILE; // distance for full audio volume
+    let anyNear = false;
+    const nearbyIds = new Set<string>();
+    for (const [id, r] of this.remotes) {
+      r.sprite.x = Phaser.Math.Linear(r.sprite.x, r.tx, 0.25);
+      r.sprite.y = Phaser.Math.Linear(r.sprite.y, r.ty, 0.25);
+      r.sprite.setDepth(r.sitting ? this.sitDepth(r.ty + 6, r.dir) : r.sprite.y);
+      const rAnim = this.animKeyFor(r.avatar, r.dir);
+      if (r.sitting) {
+        r.sprite.anims.stop(); // seated: keep the sit pose (set on the sit message)
+      } else if (r.moving && this.anims.exists(rAnim)) r.sprite.anims.play(rAnim, true);
+      else if (this.textures.exists(this.texKeyFor(r.avatar))) {
+        r.sprite.anims.stop(); r.sprite.setFrame(this.idleFrameFor(r.avatar, r.dir));
+      }
+      r.label.setPosition(r.sprite.x, r.sprite.y - 34);
+
+      const dx = r.sprite.x - this.player.x, dy = r.sprite.y - this.player.y;
+      const d2 = dx * dx + dy * dy;
+      const near = d2 <= near2;
+      if (near) { anyNear = true; nearbyIds.add(id); }
+      if (near && !r.ring) r.ring = this.add.circle(0, 0, 15).setStrokeStyle(2, 0x2bb3a3, 0.9).setDepth(1);
+      if (r.ring) r.ring.setVisible(near).setPosition(r.sprite.x, r.sprite.y + 18);
+
+      // spatial audio: louder when close, fading to silent at the proximity edge
+      if (near) {
+        const dist = Math.sqrt(d2);
+        const vol = dist <= FULL ? 1 : 1 - (dist - FULL) / (this.NEAR - FULL);
+        this.webrtc?.setPeerVolume(id, Math.max(0, Math.min(1, vol)));
+      }
+    }
+    this.localRing.setVisible(anyNear).setPosition(this.player.x, this.player.y + 18);
+
+    // connect/disconnect P2P media by proximity, PLUS a room-wide set for screen
+    // sharing: if I'm presenting, connect to everyone; also connect to any presenter.
+    const forced = new Set<string>();
+    if (this.webrtc?.screenOn) for (const id of this.remotes.keys()) forced.add(id);
+    for (const pid of this.screenPresenter.values()) if (this.remotes.has(pid)) forced.add(pid);
+    this.webrtc?.syncPeers(nearbyIds, forced);
+
+    // --- keep chat bubbles above their owner ---
+    for (const [key, t] of this.bubbles) {
+      const spr = key === "local" ? this.player : this.remotes.get(key)?.sprite;
+      if (spr) t.setPosition(spr.x, spr.y - 42);
+    }
+
+    // --- interactive objects: find nearest in range, show/hide the "press E" hint ---
+    let near: Interactive | undefined;
+    let best = 46 * 46;
+    for (const it of INTERACTIVES) {
+      const dx = it.x * TILE + TILE / 2 - this.player.x;
+      const dy = it.y * TILE + TILE / 2 - this.player.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < best) { best = d2; near = it; }
+    }
+    this.nearInteractive = near;
+    const hint = document.getElementById("interact-hint");
+    if (hint) {
+      hint.style.display = near ? "flex" : "none";
+      if (near) { const l = document.getElementById("interact-label"); if (l) l.textContent = near.label; }
+    }
+  }
+}

@@ -1,0 +1,584 @@
+{
+  "objects": [
+    {
+      "id": "0403ac9a-1523-4dc4-80b0-6f25368c4a4d",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "1935bcfb-bb04-4875-9366-b021cc58581b",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "39c15dfb-9fd2-421b-9de4-3123f0385e00",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "40f777a9-aed8-4851-bfab-4336f62b9727",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "41911e71-f5aa-4cf8-85ef-0ff452d5f8e7",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "5e1b2374-9d45-4796-9cd7-6257eba4d8e5",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "61f5fa72-2589-4fbb-96ee-631d2ee46d08",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "6ec7c248-8d4e-44e7-b8ae-aa9ff4ce9055",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "919df7cc-e0c9-474b-a1cd-c2667aec14d8",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "969827dc-96ba-4ef6-b36f-08770fb83ba6",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "9d1c94a3-4a9b-4da4-b721-aa10221807df",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "a4c5d1d7-43ea-43d6-977c-c9a9cef04df9",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "b601b9bb-3e63-4dbf-86e6-532e9bc1d39c",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "d0a3c075-3b61-4e47-b5b2-a1fea33960ed",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "d0faa19b-b3af-4c9a-914f-a52ba09e323f",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "d3fe49b3-c834-406e-9d5b-84ee354118cd",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    }
+  ],
+  "groups": [
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a",
+      "objects": [
+        {
+          "id": "0403ac9a-1523-4dc4-80b0-6f25368c4a4d",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_2",
+      "objects": [
+        {
+          "id": "1935bcfb-bb04-4875-9366-b021cc58581b",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_3",
+      "objects": [
+        {
+          "id": "39c15dfb-9fd2-421b-9de4-3123f0385e00",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_4",
+      "objects": [
+        {
+          "id": "40f777a9-aed8-4851-bfab-4336f62b9727",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_5",
+      "objects": [
+        {
+          "id": "41911e71-f5aa-4cf8-85ef-0ff452d5f8e7",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_6",
+      "objects": [
+        {
+          "id": "5e1b2374-9d45-4796-9cd7-6257eba4d8e5",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_7",
+      "objects": [
+        {
+          "id": "61f5fa72-2589-4fbb-96ee-631d2ee46d08",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_8",
+      "objects": [
+        {
+          "id": "6ec7c248-8d4e-44e7-b8ae-aa9ff4ce9055",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_9",
+      "objects": [
+        {
+          "id": "919df7cc-e0c9-474b-a1cd-c2667aec14d8",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_10",
+      "objects": [
+        {
+          "id": "969827dc-96ba-4ef6-b36f-08770fb83ba6",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_11",
+      "objects": [
+        {
+          "id": "9d1c94a3-4a9b-4da4-b721-aa10221807df",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_12",
+      "objects": [
+        {
+          "id": "a4c5d1d7-43ea-43d6-977c-c9a9cef04df9",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_13",
+      "objects": [
+        {
+          "id": "b601b9bb-3e63-4dbf-86e6-532e9bc1d39c",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_14",
+      "objects": [
+        {
+          "id": "d0a3c075-3b61-4e47-b5b2-a1fea33960ed",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_15",
+      "objects": [
+        {
+          "id": "d0faa19b-b3af-4c9a-914f-a52ba09e323f",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_16",
+      "objects": [
+        {
+          "id": "d3fe49b3-c834-406e-9d5b-84ee354118cd",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [white sneakers] SHOES  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    }
+  ],
+  "export_version": "1.0",
+  "export_date": "2026-07-30T09:44:03.061591"
+}

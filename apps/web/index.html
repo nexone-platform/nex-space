@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NexSpace — Phase 1</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #f3e7ca; overflow: hidden; }
+      #app { width: 100vw; height: 100vh; display: grid; place-items: center; }
+      canvas { image-rendering: pixelated; }
+      .hint {
+        position: fixed; left: 12px; bottom: 12px; z-index: 10;
+        font: 13px/1.5 "Segoe UI", sans-serif; color: #cbd3dc;
+        background: #00000066; padding: 8px 12px; border-radius: 8px;
+      }
+      /* Gather-style AV control bar */
+      #av-bar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 20;
+        display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 16px;
+        background: #2e3238e6; box-shadow: 0 6px 22px #0006; }
+      #av-bar .ava { position: relative; width: 38px; height: 38px; border-radius: 50%; margin-right: 4px;
+        display: grid; place-items: center; background: #eaa0a0; color: #3a2b2b; font: 700 16px "Segoe UI", sans-serif; }
+      #av-bar .ava .dot { position: absolute; right: 0; bottom: 1px; width: 10px; height: 10px;
+        border-radius: 50%; background: #39d353; border: 2px solid #2e3238; }
+      #av-bar .grp { display: flex; align-items: center; }
+      #av-bar .ctl { width: 40px; height: 40px; border: none; border-radius: 10px; cursor: pointer;
+        background: transparent; color: #e6e9ee; display: grid; place-items: center; transition: background .15s, color .15s; }
+      #av-bar .ctl:hover { background: #ffffff1a; }
+      #av-bar .ctl.off { color: #ff6b6b; }
+      #av-bar .ctl.active { background: #2bb3a3; color: #fff; }
+      #av-bar .ctl.leave { color: #ff8f8f; }
+      #av-bar .ctl.leave:hover { background: #ff6b6b22; }
+      #av-bar .chev { width: 15px; height: 40px; border: none; background: transparent; color: #9aa3ad;
+        cursor: pointer; border-radius: 6px; display: grid; place-items: center; padding: 0; }
+      #av-bar .chev:hover { background: #ffffff14; }
+      #av-bar .sep { width: 1px; height: 26px; background: #ffffff26; margin: 0 4px; }
+      #av-bar .ctl svg { width: 22px; height: 22px; }
+      #av-bar .chev svg { width: 11px; height: 11px; }
+      #emoji-pop { position: fixed; bottom: 66px; left: 50%; transform: translateX(-50%); z-index: 21;
+        background: #2e3238f2; border-radius: 12px; padding: 5px; display: none; gap: 2px; box-shadow: 0 6px 20px #0006; }
+      #emoji-pop button { border: none; background: transparent; font-size: 20px; cursor: pointer; padding: 4px 7px; border-radius: 8px; }
+      #emoji-pop button:hover { background: #ffffff1f; }
+      #left-overlay { position: fixed; inset: 0; z-index: 40; display: none; place-items: center;
+        background: #1c1b22e6; color: #e6e9ee; font: 16px "Segoe UI", sans-serif; text-align: center; }
+      #left-overlay button { margin-top: 14px; padding: 10px 22px; border: none; border-radius: 22px;
+        background: #2bb3a3; color: #fff; font-size: 15px; cursor: pointer; }
+      /* zoom controls (right, vertical) */
+      #zoom-bar { position: fixed; right: 12px; top: 50%; transform: translateY(-50%); z-index: 20;
+        display: flex; flex-direction: column; gap: 6px; }
+      #zoom-bar button { width: 40px; height: 40px; border: none; border-radius: 10px; cursor: pointer;
+        background: #2e3238e6; color: #e6e9ee; display: grid; place-items: center; box-shadow: 0 2px 8px #0004; transition: background .15s; }
+      #zoom-bar button:hover { background: #3b424b; }
+      #zoom-bar button:active { background: #2bb3a3; color: #fff; }
+      #zoom-bar svg { width: 20px; height: 20px; }
+      /* left people sidebar (Gather-style) */
+      #sidebar { position: fixed; left: 0; top: 0; height: 100vh; width: 250px; z-index: 25;
+        background: #fbfbfd; box-shadow: 2px 0 16px #0002; display: flex; flex-direction: column;
+        font-family: "Segoe UI", sans-serif; transition: transform .2s; }
+      #sidebar.closed { transform: translateX(-100%); }
+      .sb-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 8px; }
+      .sb-head #sb-title { font-weight: 700; font-size: 17px; color: #1c1b22; }
+      .sb-head #sb-close { border: none; background: #eceef2; width: 28px; height: 28px; border-radius: 8px;
+        cursor: pointer; color: #555; font-size: 16px; line-height: 1; }
+      #sb-search { margin: 4px 14px 8px; padding: 8px 12px; border: 1px solid #e2e4ea; border-radius: 10px;
+        background: #f2f3f6; font-size: 13px; outline: none; }
+      .sb-online { padding: 6px 16px; font-size: 13px; color: #8a8f98; font-weight: 600; }
+      #people { overflow-y: auto; flex: 1; padding: 0 8px 12px; }
+      .person { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; }
+      .person:hover { background: #f0f1f5; }
+      .p-chip { position: relative; width: 36px; height: 36px; border-radius: 50%; display: grid;
+        place-items: center; color: #2a2330; font-weight: 700; font-size: 15px; flex: 0 0 auto; }
+      .p-chip .p-dot { position: absolute; right: 0; bottom: 0; width: 10px; height: 10px; border-radius: 50%;
+        background: #39d353; border: 2px solid #fbfbfd; }
+      .p-info { display: flex; flex-direction: column; line-height: 1.25; overflow: hidden; }
+      .p-info b { font-size: 14px; color: #1c1b22; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .p-info small { font-size: 12px; color: #8a8f98; }
+      /* left nav rail */
+      #rail { position: fixed; left: 0; top: 0; height: 100vh; width: 56px; z-index: 26; background: #26292f;
+        display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0; }
+      #rail button { position: relative; width: 40px; height: 40px; border: none; border-radius: 12px;
+        background: transparent; color: #c7cdd6; cursor: pointer; display: grid; place-items: center; transition: background .15s; }
+      #rail button:hover { background: #ffffff14; }
+      #rail button.active { background: #3a3f47; color: #fff; }
+      #rail .spacer { flex: 1; }
+      #rail svg { width: 22px; height: 22px; }
+      #rail .rail-badge { position: absolute; top: -2px; right: -2px; background: #e5484d; color: #fff;
+        font: 700 10px sans-serif; border-radius: 9px; padding: 0 5px; min-width: 16px; text-align: center; }
+      /* sidebar now sits next to the rail */
+      #sidebar { left: 56px; }
+      .sb-view { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+      .sb-view[hidden] { display: none; }
+      /* invite card */
+      .invite-card { margin: 4px 14px 10px; padding: 14px; border-radius: 14px; background: #eef1fb; }
+      .invite-card b { font-size: 15px; color: #1c1b22; }
+      .invite-card p { margin: 4px 0 10px; font-size: 12.5px; color: #6b7280; }
+      .invite-avas { display: flex; margin-bottom: 10px; }
+      .invite-avas span { width: 30px; height: 30px; border-radius: 50%; margin-left: -6px; border: 2px solid #eef1fb;
+        display: grid; place-items: center; color: #fff; font-size: 12px; }
+      .invite-avas span:first-child { margin-left: 0; }
+      #btn-invite { width: 100%; border: none; border-radius: 10px; background: #4f46e5; color: #fff;
+        padding: 10px; font: 600 14px "Segoe UI", sans-serif; cursor: pointer; }
+      #btn-invite:hover { background: #4338ca; }
+      /* chat panel */
+      #chat-log { flex: 1; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+      .msg { font-size: 13px; line-height: 1.35; }
+      .msg .who { font-weight: 700; color: #4f46e5; margin-right: 4px; }
+      .msg .who.me { color: #2bb3a3; }
+      .msg .txt { color: #24262b; word-break: break-word; }
+      .chat-empty { color: #9aa0aa; font-size: 13px; padding: 16px; text-align: center; }
+      .chat-compose { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid #eceef2; }
+      #room-chat-input { flex: 1; padding: 8px 12px; border: 1px solid #e2e4ea; border-radius: 20px; outline: none; font-size: 13px; }
+      #room-chat-send { border: none; background: #4f46e5; color: #fff; border-radius: 20px; padding: 0 14px; cursor: pointer; font-weight: 600; }
+      /* interactive-object prompt + embed modal */
+      #interact-hint { position: fixed; left: 50%; bottom: 74px; transform: translateX(-50%); z-index: 22;
+        background: #1c1b22e6; color: #fff; padding: 8px 14px; border-radius: 20px; font: 13px "Segoe UI", sans-serif;
+        display: none; align-items: center; gap: 8px; box-shadow: 0 3px 12px #0004; }
+      #interact-hint kbd { background: #2bb3a3; border-radius: 6px; padding: 2px 8px; font-weight: 700; font-family: inherit; }
+      #modal { position: fixed; inset: 0; z-index: 45; background: #0b0b10cc; display: none; place-items: center; }
+      #modal .modal-box { width: min(90vw, 1000px); height: min(85vh, 700px); background: #fff; border-radius: 14px;
+        overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 12px 40px #0007; }
+      #modal .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
+        background: #f2f3f6; font: 600 14px "Segoe UI", sans-serif; color: #1c1b22; }
+      #modal .modal-head button { border: none; background: #e5484d; color: #fff; width: 28px; height: 28px;
+        border-radius: 8px; cursor: pointer; font-size: 15px; }
+      #modal iframe { flex: 1; border: 0; width: 100%; background: #fff; }
+      /* login / character-select overlay */
+      #auth-overlay { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
+        background: radial-gradient(circle at 50% 25%, #2a3340, #14161b); font-family: "Segoe UI", sans-serif; }
+      #auth-overlay .card { width: min(92vw, 350px); background: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 24px 60px #0008; }
+      #auth-overlay h1 { margin: 0; font-size: 22px; color: #1c1b22; }
+      #auth-overlay .sub { margin: 2px 0 16px; font-size: 13px; color: #8a8f98; }
+      .auth-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+      .auth-tabs button { flex: 1; padding: 8px; border: none; border-radius: 9px; background: #eef0f4; color: #555; cursor: pointer; font-weight: 600; }
+      .auth-tabs button.active { background: #2bb3a3; color: #fff; }
+      #auth-overlay input { width: 100%; box-sizing: border-box; padding: 10px 12px; margin-bottom: 10px;
+        border: 1px solid #e2e4ea; border-radius: 10px; font-size: 14px; outline: none; }
+      #auth-overlay input:focus { border-color: #2bb3a3; }
+      #auth-overlay .primary { width: 100%; padding: 11px; border: none; border-radius: 10px; background: #2bb3a3;
+        color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; }
+      #auth-overlay .primary:hover { background: #249e90; }
+      #auth-overlay .ghost { width: 100%; margin-top: 8px; padding: 8px; border: none; background: transparent; color: #8a8f98; cursor: pointer; font-size: 13px; }
+      #auth-overlay .err { color: #e5484d; font-size: 13px; min-height: 18px; margin-bottom: 4px; }
+      .char-grid { display: flex; gap: 8px; justify-content: center; margin: 10px 0 16px; flex-wrap: wrap; }
+      .char-opt { border: 3px solid transparent; border-radius: 14px; padding: 6px; cursor: pointer; background: #f2f3f6; width: 68px; box-sizing: border-box; }
+      .char-opt.sel { border-color: #2bb3a3; background: #e9f7f4; }
+      .char-opt img { width: 56px; height: 56px; image-rendering: pixelated; display: block; margin: 0 auto; }
+      .char-opt span { display: block; text-align: center; font-size: 11px; color: #555; margin-top: 3px; }
+      /* zoom controls (right side) */
+      #zoom-bar { position: fixed; right: 12px; top: 50%; transform: translateY(-50%); z-index: 20;
+        display: flex; flex-direction: column; gap: 8px; align-items: center; }
+      #zoom-bar .zb { width: 40px; height: 40px; border: none; border-radius: 10px; background: #2e3238e6;
+        color: #e6e9ee; cursor: pointer; display: grid; place-items: center; box-shadow: 0 2px 8px #0004; }
+      #zoom-bar .zb:hover { background: #3a4048f2; }
+      #zoom-bar .zgrp { display: flex; flex-direction: column; background: #2e3238e6; border-radius: 10px; box-shadow: 0 2px 8px #0004; }
+      #zoom-bar .zgrp .zb { background: transparent; box-shadow: none; border-radius: 0; }
+      #zoom-bar .zgrp .zb:hover { background: #ffffff1a; }
+      #zoom-bar .zdiv { height: 1px; background: #ffffff26; margin: 0 8px; }
+      /* Top Navigation Bar (Shown ONLY when screen share is active) */
+      #top-nav-bar {
+        position: fixed; top: 0; left: 0; right: 0; height: 46px; z-index: 35;
+        background: #181625; color: #e6e9ee; display: none; align-items: center;
+        justify-content: space-between; padding: 0 16px; font-family: "Segoe UI", sans-serif;
+        box-shadow: 0 2px 10px #0004; border-bottom: 1px solid #ffffff14;
+      }
+      body.has-screenshare #top-nav-bar { display: flex; }
+      .top-brand { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 15px; cursor: pointer; color: #fff; }
+      .top-nav-switcher {
+        display: flex; align-items: center; background: #262438; padding: 3px; border-radius: 20px; gap: 3px;
+        border: 1px solid #ffffff12;
+      }
+      .nav-tab {
+        display: flex; align-items: center; gap: 6px; padding: 5px 16px; border: none; border-radius: 16px;
+        background: transparent; color: #9aa0aa; font: 600 13px "Segoe UI", sans-serif; cursor: pointer; transition: all .18s;
+      }
+      .nav-tab:hover { color: #fff; background: #ffffff12; }
+      .nav-tab.active { background: #3b3952; color: #fff; box-shadow: 0 2px 8px #0004; }
+      .nav-tab#nav-tab-call.active { background: #2bb3a3; color: #fff; }
+      .nav-tab .call-dot { width: 8px; height: 8px; border-radius: 50%; background: #39d353; display: inline-block; display: none; }
+      .nav-tab#nav-tab-call.has-call .call-dot { display: inline-block; }
+      .top-right-actions { display: flex; align-items: center; gap: 6px; }
+      .top-right-actions button { width: 32px; height: 32px; border: none; border-radius: 8px; background: transparent; color: #9aa0aa; cursor: pointer; display: grid; place-items: center; }
+      .top-right-actions button:hover { background: #ffffff14; color: #fff; }
+
+      /* Rail & Sidebar layout */
+      #rail { position: fixed; left: 0; top: 0; height: 100vh; width: 56px; z-index: 26; background: #26292f;
+        display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0; transition: top .15s, height .15s; }
+      #sidebar { position: fixed; left: 56px; top: 0; height: 100vh; width: 250px; z-index: 25;
+        background: #fbfbfd; box-shadow: 2px 0 16px #0002; display: flex; flex-direction: column;
+        font-family: "Segoe UI", sans-serif; transition: transform .2s, top .15s, height .15s; }
+      #sidebar.closed { transform: translateX(-100%); }
+
+      body.has-screenshare #rail { top: 46px; height: calc(100vh - 46px); }
+      body.has-screenshare #sidebar { top: 46px; height: calc(100vh - 46px); }
+
+      /* Call View Overlay (matching Image 1) */
+      #call-view-overlay {
+        position: fixed; inset: 0; top: 46px; z-index: 24; background: #0f1017;
+        display: none; grid-template-columns: 1fr 220px; gap: 12px; padding: 12px 16px 74px;
+        font-family: "Segoe UI", sans-serif; box-sizing: border-box;
+      }
+      #call-main-stage {
+        position: relative; background: #181a24; border-radius: 14px; overflow: hidden;
+        display: flex; align-items: center; justify-content: center; border: 1px solid #ffffff12;
+      }
+      #call-stage-video { width: 100%; height: 100%; object-fit: contain; background: #000; display: none; }
+      .call-empty-stage { display: flex; flex-direction: column; align-items: center; gap: 8px; color: #8a8f98; text-align: center; }
+      .call-empty-stage .call-empty-icon { font-size: 48px; margin-bottom: 4px; }
+      .call-empty-stage p { margin: 0; font-size: 16px; font-weight: 600; color: #e6e9ee; }
+      #call-main-stage .presenter-tag {
+        position: absolute; left: 16px; bottom: 16px; background: #1c1b22cc; color: #fff;
+        padding: 6px 14px; border-radius: 16px; font-size: 13px; font-weight: 600; backdrop-filter: blur(8px);
+        display: none; border: 1px solid #ffffff22;
+      }
+      #call-tiles-sidebar {
+        display: flex; flex-direction: column; gap: 10px; overflow-y: auto;
+      }
+      .peer-card {
+        position: relative; height: 150px; background: #181a24; border-radius: 12px;
+        overflow: hidden; border: 2px solid transparent; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        border: 1px solid #ffffff14;
+      }
+      .peer-card.active-speaker { border-color: #2bb3a3; }
+      .peer-card video { width: 100%; height: 100%; object-fit: cover; }
+      .peer-card .peer-label {
+        position: absolute; left: 8px; bottom: 8px; background: #000000aa; color: #fff;
+        padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; backdrop-filter: blur(4px);
+      }
+      .peer-avatar-fallback { font-size: 32px; }
+    </style>
+  </head>
+  <body>
+    <!-- Top Navigation Header with Space vs Call Switcher -->
+    <header id="top-nav-bar">
+      <div class="top-brand">
+        <span>NexOne</span>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="top-nav-switcher">
+        <button id="nav-tab-space" class="nav-tab active">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8"/><path d="M11.5 3a17 17 0 0 0 0 18M12.5 3a17 17 0 0 1 0 18"/></svg>
+          <span>Space</span>
+        </button>
+        <button id="nav-tab-call" class="nav-tab">
+          <span class="call-dot"></span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>
+          <span>Call</span>
+        </button>
+      </div>
+      <div class="top-right-actions">
+        <button id="btn-pip" title="Picture in Picture"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="12" y="12" width="7" height="7" rx="1"/></svg></button>
+        <button id="btn-fullscreen" title="Full Screen"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
+      </div>
+    </header>
+
+    <!-- Call View Overlay (matching Image 1) -->
+    <div id="call-view-overlay">
+      <div id="call-main-stage">
+        <video id="call-stage-video" autoplay playsinline></video>
+        <div id="call-no-stream" class="call-empty-stage">
+          <div class="call-empty-icon">🖥️</div>
+          <p>ยังไม่มีการแชร์หน้าจอ</p>
+          <small>กดปุ่ม <b>แชร์จอ</b> ที่แถบด้านล่างเพื่อเริ่มการนำเสนอ</small>
+        </div>
+        <span class="presenter-tag" id="presenter-tag">chalisa's Screenshare</span>
+      </div>
+      <div id="call-tiles-sidebar">
+        <div class="peer-card active-speaker" id="call-self-card">
+          <div class="peer-avatar-fallback" id="call-self-avatar">👤</div>
+          <span class="peer-label" id="call-self-label">คุณ</span>
+        </div>
+        <div id="call-peers-container" style="display:flex;flex-direction:column;gap:10px;"></div>
+      </div>
+    </div>
+
+    <div id="app"></div>
+    <div id="auth-overlay">
+      <div class="card">
+        <div id="auth-step">
+          <h1>NexSpace</h1>
+          <p class="sub">ออฟฟิศเสมือนของทีมคุณ</p>
+          <div class="auth-tabs"><button id="tab-login" class="active">เข้าสู่ระบบ</button><button id="tab-register">สมัคร</button></div>
+          <div class="err" id="auth-err"></div>
+          <input id="a-name" type="text" placeholder="ชื่อที่แสดง" style="display:none" autocomplete="off" />
+          <input id="a-email" type="email" placeholder="อีเมล" autocomplete="username" />
+          <input id="a-pass" type="password" placeholder="รหัสผ่าน (อย่างน้อย 6 ตัว)" autocomplete="current-password" />
+          <button class="primary" id="a-submit">เข้าสู่ระบบ</button>
+          <button class="ghost" id="a-guest">ข้ามไปก่อน — เข้าแบบ Guest</button>
+        </div>
+        <div id="char-step" style="display:none">
+          <h1>เลือกตัวละคร</h1>
+          <p class="sub" id="char-hello"></p>
+          <div class="char-grid" style="flex-wrap:wrap;">
+            <div class="char-opt" id="c-custom" data-avatar="custom" title="ออกแบบอวาตาร์เอง"><img id="c-custom-img" src="" alt="custom" style="background:#e7efff" /><span>✏️ สร้างเอง</span></div>
+            <div class="char-opt sel" data-avatar="1"><img src="/assets/avatar1.png" alt="avatar 1" /><span>เสื้อฟ้า</span></div>
+            <div class="char-opt" data-avatar="2"><img src="/assets/avatar2.png" alt="avatar 2" /><span>เสื้อเขียว</span></div>
+            <div class="char-opt" data-avatar="3"><img src="/assets/avatar3.png" alt="avatar 3" /><span>เสื้อเหลือง</span></div>
+            <div class="char-opt" data-avatar="4"><img src="/assets/avatar4.png" alt="avatar 4" /><span>เชิ้ตขาว</span></div>
+            <div class="char-opt" data-avatar="5"><img src="/assets/avatar5.png" alt="avatar 5" /><span>แจ็คเก็ตแดง</span></div>
+            <div class="char-opt" data-avatar="6"><img src="/assets/avatar6.png" alt="avatar 6" /><span>หมวกแดง</span></div>
+            <div class="char-opt" data-avatar="7"><img src="/assets/avatar7.png" alt="avatar 7" /><span>เชิ้ตฟ้า</span></div>
+          </div>
+          <input id="c-name" type="text" placeholder="ชื่อในห้อง" autocomplete="off" />
+          <button class="primary" id="c-enter">เข้าห้อง</button>
+        </div>
+      </div>
+    </div>
+    <div class="hint">เดิน: <b>WASD</b>/ลูกศร &nbsp;·&nbsp; เก้าอี้: คลิก+ลาก=หมุน &nbsp;·&nbsp; <b>Enter</b>=แชตกับคนที่อยู่ใกล้ &nbsp;·&nbsp; NexSpace</div>
+    <div id="tiles" style="position:fixed; top:12px; right:12px; z-index:20; display:flex; flex-direction:column; gap:8px; width:180px;"></div>
+    <div id="av-bar">
+      <div class="ava" id="ava-chip">N<i class="dot"></i></div>
+      <button id="btn-edit-avatar" class="ctl" title="แก้ไขอวาตาร์">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 11-7.4"/><path d="M18.5 13.5l3 3-4 1 1-4z"/></svg>
+      </button>
+      <span class="sep"></span>
+      <div class="grp"><button id="btn-mic" class="ctl off" title="ไมค์"></button><button id="btn-mic-menu" class="chev" title="เลือกอุปกรณ์ไมค์"></button></div>
+      <div class="grp"><button id="btn-cam" class="ctl off" title="กล้อง"></button><button id="btn-cam-menu" class="chev" title="เลือกกล้อง"></button></div>
+      <button id="btn-emoji" class="ctl" title="อีโมจิ"></button>
+      <button id="btn-screen" class="ctl" title="แชร์จอ"></button>
+      <span class="sep"></span>
+      <button id="btn-leave" class="ctl leave" title="ออกจากห้อง"></button>
+    </div>
+    <div id="zoom-bar">
+      <button id="zb-locate" class="zb" title="กลับไปที่ตัวเรา"></button>
+      <div class="zgrp">
+        <button id="zb-in" class="zb" title="ซูมเข้า"></button>
+        <div class="zdiv"></div>
+        <button id="zb-out" class="zb" title="ซูมออก"></button>
+      </div>
+      <button id="zb-fully" class="zb" title="ซูมออกสุด (M)"></button>
+    </div>
+    <div id="left-overlay"><div>ออกจากห้องแล้ว<br/><button id="btn-rejoin">กลับเข้าห้อง</button></div></div>
+    <div id="interact-hint"><kbd>E</kbd> <span id="interact-label"></span></div>
+    <div id="modal">
+      <div class="modal-box">
+        <div class="modal-head"><span id="modal-title"></span><button id="modal-close" title="ปิด">✕</button></div>
+        <iframe id="modal-frame" allow="camera; microphone; clipboard-write" referrerpolicy="no-referrer"></iframe>
+      </div>
+    </div>
+    <nav id="rail">
+      <button id="rail-people" class="active" title="ผู้เล่น">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6a3 3 0 0 1 0 6"/><path d="M18 20a6 6 0 0 0-3-5"/></svg>
+        <span class="rail-badge" id="rail-count">0</span>
+      </button>
+      <button id="rail-chat" title="แชตห้อง">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z"/></svg>
+      </button>
+      <span class="spacer"></span>
+      <button id="rail-settings" title="ตั้งค่า">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
+      </button>
+    </nav>
+    <aside id="sidebar">
+      <div class="sb-head"><span id="sb-title">NexSpace</span><button id="sb-close" title="ซ่อน">‹</button></div>
+
+      <div id="view-people" class="sb-view">
+        <div class="invite-card">
+          <b>ชวนเพื่อนเข้าห้อง</b>
+          <p>แชร์ลิงก์นี้ให้เพื่อนร่วมงาน</p>
+          <div class="invite-avas">
+            <span style="background:#f6c453">🙂</span><span style="background:#5ac47d">🙂</span>
+            <span style="background:#ef7d6b">🙂</span><span style="background:#b58bd8">🙂</span>
+          </div>
+          <button id="btn-invite">＋ เชิญ / คัดลอกลิงก์</button>
+        </div>
+        <input id="sb-search" type="text" placeholder="ค้นหาคน…" autocomplete="off" />
+        <div class="sb-online">ออนไลน์ (<span id="sb-count">0</span>)</div>
+        <div id="people"></div>
+      </div>
+
+      <div id="view-chat" class="sb-view" hidden>
+        <div id="chat-log"><div class="chat-empty">ยังไม่มีข้อความ — ทักทายทั้งห้องได้เลย 👋</div></div>
+        <div class="chat-compose">
+          <input id="room-chat-input" type="text" maxlength="300" autocomplete="off" placeholder="ส่งข้อความถึงทั้งห้อง…" />
+          <button id="room-chat-send">ส่ง</button>
+        </div>
+      </div>
+
+      <div id="view-settings" class="sb-view" hidden>
+        <div style="padding:16px;color:#6b7280;font-size:13px;line-height:1.6;">
+          <b style="color:#1c1b22;">ตั้งค่า</b><br/>ธีม, อุปกรณ์, และโปรไฟล์ — เร็ว ๆ นี้
+        </div>
+      </div>
+    </aside>
+    <input id="chat" type="text" maxlength="140" autocomplete="off"
+      placeholder="พิมพ์แล้ว Enter เพื่อคุยกับคนใกล้ ๆ…"
+      style="position:fixed; left:50%; bottom:56px; transform:translateX(-50%); z-index:20;
+             width:min(420px,80vw); padding:9px 14px; border-radius:20px; border:2px solid #2bb3a3;
+             background:#fffef9; color:#2a2f36; font:14px 'Segoe UI',sans-serif; outline:none;
+             box-shadow:0 3px 12px #0002; display:none;" />
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

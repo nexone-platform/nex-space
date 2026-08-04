@@ -1,0 +1,4629 @@
+{
+ "grid": 64,
+ "walkCols": 9,
+ "anim": "walk",
+ "rowByDir": {
+  "north": 0,
+  "west": 1,
+  "south": 2,
+  "east": 3
+ },
+ "spriteBase": "/lpc/spritesheets",
+ "materials": {
+  "hair": {
+   "base": "orange",
+   "colors": {
+    "orange": [
+     "#260D14",
+     "#6A1108",
+     "#A42600",
+     "#BF4000",
+     "#E55600",
+     "#FF8A00"
+    ],
+    "ash": [
+     "#2D061B",
+     "#642442",
+     "#935065",
+     "#C18F8A",
+     "#EDDF95",
+     "#FFF1C1"
+    ],
+    "platinum": [
+     "#1C0E06",
+     "#7D5D5D",
+     "#A87D52",
+     "#C0AB81",
+     "#EDDF95",
+     "#F6F6F3"
+    ],
+    "white": [
+     "#1D1D21",
+     "#484E57",
+     "#8B9498",
+     "#B8BBBC",
+     "#D8DCDC",
+     "#FFFFFF"
+    ],
+    "gray": [
+     "#0E0E0E",
+     "#292929",
+     "#4B4B4B",
+     "#777777",
+     "#AAAAAA",
+     "#D9D9D9"
+    ],
+    "blonde": [
+     "#331313",
+     "#552B15",
+     "#AC5D1F",
+     "#E09E2B",
+     "#FCCF56",
+     "#FFE67D"
+    ],
+    "sandy": [
+     "#1C0E06",
+     "#633E2C",
+     "#99622D",
+     "#BF9D5A",
+     "#EDDC7E",
+     "#F6F6C2"
+    ],
+    "strawberry": [
+     "#300700",
+     "#6A2800",
+     "#9C5900",
+     "#CCA000",
+     "#FAF080",
+     "#F6F6C2"
+    ],
+    "gold": [
+     "#5C0D00",
+     "#902900",
+     "#E47100",
+     "#FFA913",
+     "#FFE453",
+     "#EEFE7E"
+    ],
+    "ginger": [
+     "#300500",
+     "#6A1A00",
+     "#9C3B01",
+     "#CC6901",
+     "#FAA301",
+     "#FFE01E"
+    ],
+    "carrot": [
+     "#5A1500",
+     "#8A2000",
+     "#AC2800",
+     "#EC673E",
+     "#F68764",
+     "#FFB39C"
+    ],
+    "redhead": [
+     "#260D14",
+     "#3E111A",
+     "#73171E",
+     "#9E1F1F",
+     "#C7341B",
+     "#E74716"
+    ],
+    "red": [
+     "#300000",
+     "#870000",
+     "#A40712",
+     "#CB0000",
+     "#E21414",
+     "#F1583A"
+    ],
+    "light_brown": [
+     "#1A0E04",
+     "#301B07",
+     "#60350F",
+     "#7D4513",
+     "#AE682A",
+     "#C88D58"
+    ],
+    "chestnut": [
+     "#200C0D",
+     "#3A130E",
+     "#63200B",
+     "#81310A",
+     "#B6550E",
+     "#D28102"
+    ],
+    "dark_brown": [
+     "#050100",
+     "#160701",
+     "#290E02",
+     "#421603",
+     "#5F1F04",
+     "#792806"
+    ],
+    "dark_gray": [
+     "#000000",
+     "#0E0E0E",
+     "#1B1B1B",
+     "#3B3B3B",
+     "#7C7C7C",
+     "#C1C1C1"
+    ],
+    "black": [
+     "#000000",
+     "#080A0A",
+     "#101414",
+     "#1C2222",
+     "#31313E",
+     "#4A5057"
+    ],
+    "raven": [
+     "#010107",
+     "#040B18",
+     "#061421",
+     "#071F2A",
+     "#0D384D",
+     "#1A5369"
+    ],
+    "rose": [
+     "#30051F",
+     "#6A1E4B",
+     "#9C4373",
+     "#CC789D",
+     "#FABBC6",
+     "#FAE1E5"
+    ],
+    "pink": [
+     "#330410",
+     "#71043A",
+     "#B60A68",
+     "#E941AA",
+     "#E976C4",
+     "#EA95D5"
+    ],
+    "purple": [
+     "#13112D",
+     "#2B225A",
+     "#402E82",
+     "#7141B2",
+     "#A966DD",
+     "#D085ED"
+    ],
+    "violet": [
+     "#1E032E",
+     "#30035C",
+     "#380392",
+     "#3C07D8",
+     "#5662F3",
+     "#5792F2"
+    ],
+    "navy": [
+     "#180716",
+     "#20102B",
+     "#281E41",
+     "#322D6A",
+     "#3C49AD",
+     "#466AC9"
+    ],
+    "blue": [
+     "#000027",
+     "#00005E",
+     "#000091",
+     "#0041B4",
+     "#0074CB",
+     "#1E85EF"
+    ],
+    "green": [
+     "#000400",
+     "#001400",
+     "#002D00",
+     "#005000",
+     "#007C00",
+     "#00A700"
+    ]
+   }
+  },
+  "cloth": {
+   "base": "white",
+   "colors": {
+    "brown": [
+     "#1d131e",
+     "#411E05",
+     "#4B2B13",
+     "#62351C",
+     "#744B30",
+     "#996B4A"
+    ],
+    "leather": [
+     "#2b1c1d",
+     "#311210",
+     "#4B2B13",
+     "#704325",
+     "#75502D",
+     "#9A6F37"
+    ],
+    "walnut": [
+     "#1d0f0e",
+     "#3e2613",
+     "#62351c",
+     "#744b30",
+     "#996b4a",
+     "#a17c50"
+    ],
+    "yellow": [
+     "#301723",
+     "#5F2F25",
+     "#BA5B23",
+     "#D99431",
+     "#F3C03F",
+     "#FFE360"
+    ],
+    "tan": [
+     "#3e2613",
+     "#684415",
+     "#986A20",
+     "#B78C41",
+     "#B7996A",
+     "#CFC587"
+    ],
+    "orange": [
+     "#301723",
+     "#5F1D1B",
+     "#9C3F23",
+     "#D75B1A",
+     "#EF7E19",
+     "#FFA749"
+    ],
+    "rose": [
+     "#1d131e",
+     "#301723",
+     "#562323",
+     "#77372B",
+     "#8A3D28",
+     "#B05F3C"
+    ],
+    "maroon": [
+     "#1d131e",
+     "#400B1F",
+     "#551C22",
+     "#682121",
+     "#832121",
+     "#AE424A"
+    ],
+    "red": [
+     "#1d131e",
+     "#400B1F",
+     "#651117",
+     "#82171C",
+     "#AB1E1E",
+     "#CD2429"
+    ],
+    "pink": [
+     "#1d131e",
+     "#54242E",
+     "#6C3536",
+     "#AE424A",
+     "#C36072",
+     "#E08080"
+    ],
+    "lavender": [
+     "#13112d",
+     "#2B225A",
+     "#402E82",
+     "#7141B2",
+     "#A966DD",
+     "#D085ED"
+    ],
+    "purple": [
+     "#180716",
+     "#13112D",
+     "#261044",
+     "#411357",
+     "#621E78",
+     "#813089"
+    ],
+    "blue": [
+     "#180716",
+     "#281E41",
+     "#322D6A",
+     "#3C49AD",
+     "#466AC9",
+     "#61A0EF"
+    ],
+    "navy": [
+     "#180716",
+     "#20102B",
+     "#281E41",
+     "#322D6A",
+     "#3C49AD",
+     "#466AC9"
+    ],
+    "teal": [
+     "#180716",
+     "#1B2B47",
+     "#0E4E72",
+     "#156C99",
+     "#0098B2",
+     "#00CFDF"
+    ],
+    "bluegray": [
+     "#11150b",
+     "#0B2B28",
+     "#2E403A",
+     "#315B49",
+     "#557E85",
+     "#79979D"
+    ],
+    "forest": [
+     "#09131d",
+     "#07391D",
+     "#0B1F25",
+     "#0B2B28",
+     "#134507",
+     "#1B5502"
+    ],
+    "green": [
+     "#101820",
+     "#192832",
+     "#0B5C2F",
+     "#214437",
+     "#2F8136",
+     "#64A42C"
+    ],
+    "white": [
+     "#281820",
+     "#4D4A5D",
+     "#958080",
+     "#C4B59F",
+     "#E5E6C7",
+     "#FFFFFF"
+    ],
+    "sky": [
+     "#1a0d18",
+     "#313148",
+     "#586B90",
+     "#9FBBCB",
+     "#C6EEFD",
+     "#FFFFFF"
+    ],
+    "slate": [
+     "#1d131e",
+     "#31313E",
+     "#4A5057",
+     "#818B8B",
+     "#B3AFA1",
+     "#E5E6C7"
+    ],
+    "gray": [
+     "#0e0e18",
+     "#201E2B",
+     "#373340",
+     "#585561",
+     "#797580",
+     "#A2A0A4"
+    ],
+    "black": [
+     "#000000",
+     "#101414",
+     "#1C2222",
+     "#22282A",
+     "#2A3034",
+     "#4A5057"
+    ],
+    "charcoal": [
+     "#000000",
+     "#130D14",
+     "#1C2222",
+     "#2A3034",
+     "#4A5057",
+     "#6E7675"
+    ]
+   }
+  },
+  "body": {
+   "base": "light",
+   "colors": {
+    "light": [
+     "#271920",
+     "#99423c",
+     "#cc8665",
+     "#E4A47C",
+     "#F9D5BA",
+     "#FAECE7"
+    ],
+    "amber": [
+     "#281716",
+     "#9E3E37",
+     "#D28144",
+     "#EA9F54",
+     "#FDD082",
+     "#FBE7A4"
+    ],
+    "olive": [
+     "#271920",
+     "#442725",
+     "#7F4C31",
+     "#AE6B3F",
+     "#D38B59",
+     "#E4A47C"
+    ],
+    "taupe": [
+     "#271920",
+     "#503734",
+     "#785946",
+     "#936849",
+     "#BA8454",
+     "#C7935F"
+    ],
+    "bronze": [
+     "#1A1213",
+     "#442725",
+     "#644133",
+     "#7F4C31",
+     "#AE6B3F",
+     "#D38B59"
+    ],
+    "brown": [
+     "#120E10",
+     "#412B29",
+     "#5F4539",
+     "#76513A",
+     "#9C663E",
+     "#B8773F"
+    ],
+    "black": [
+     "#000000",
+     "#1A1213",
+     "#2E1F1C",
+     "#442725",
+     "#603429",
+     "#7F4C31"
+    ],
+    "blue": [
+     "#16171B",
+     "#46425D",
+     "#586B90",
+     "#748DA4",
+     "#A9C9CA",
+     "#C8E8E8"
+    ],
+    "bright_green": [
+     "#02280E",
+     "#06410E",
+     "#255E1D",
+     "#5B8F11",
+     "#75AE23",
+     "#99D248"
+    ],
+    "dark_green": [
+     "#011708",
+     "#02280E",
+     "#06410E",
+     "#255E1D",
+     "#508A48",
+     "#509E59"
+    ],
+    "fur_black": [
+     "#040510",
+     "#0A0E1B",
+     "#0D1621",
+     "#14212C",
+     "#1B2C36",
+     "#154259"
+    ],
+    "fur_brown": [
+     "#000000",
+     "#1E120E",
+     "#251B19",
+     "#473730",
+     "#624135",
+     "#975B5A"
+    ],
+    "fur_copper": [
+     "#0F0506",
+     "#300500",
+     "#6A1A00",
+     "#9C3B01",
+     "#CC6901",
+     "#FAA301"
+    ],
+    "fur_gold": [
+     "#200808",
+     "#552B15",
+     "#AC5D1F",
+     "#E09E2B",
+     "#FCCF56",
+     "#FFE67D"
+    ],
+    "fur_grey": [
+     "#0F0F11",
+     "#36363F",
+     "#55585F",
+     "#6A6E74",
+     "#909699",
+     "#B8BBBC"
+    ],
+    "fur_tan": [
+     "#222121",
+     "#3A200E",
+     "#663A1A",
+     "#975F43",
+     "#B88751",
+     "#DB8E60"
+    ],
+    "fur_white": [
+     "#17171A",
+     "#36363F",
+     "#484E57",
+     "#8B9498",
+     "#B8BBBC",
+     "#D8DCDC"
+    ],
+    "green": [
+     "#140C09",
+     "#09320B",
+     "#19541D",
+     "#228236",
+     "#39AA4E",
+     "#53BF71"
+    ],
+    "lavender": [
+     "#16171B",
+     "#393B44",
+     "#787C8F",
+     "#A0A5BC",
+     "#C9D0EE",
+     "#FBECE6"
+    ],
+    "pale_green": [
+     "#271920",
+     "#314829",
+     "#456238",
+     "#5F874D",
+     "#86B278",
+     "#ADCCA6"
+    ],
+    "zombie": [
+     "#281820",
+     "#6B5C40",
+     "#928364",
+     "#A79778",
+     "#C5B38F",
+     "#DBCBAB"
+    ],
+    "zombie_green": [
+     "#101925",
+     "#074337",
+     "#4A7A69",
+     "#839F6E",
+     "#D4D887",
+     "#F2F0C4"
+    ]
+   }
+  },
+  "eye": {
+   "base": "blue",
+   "colors": {
+    "blue": [
+     "#2a3c49",
+     "#5686ae",
+     "#57cee4"
+    ],
+    "green": [
+     "#2b4b29",
+     "#53b351",
+     "#84ec50"
+    ],
+    "purple": [
+     "#710862",
+     "#b90da0",
+     "#eba0e0"
+    ],
+    "red": [
+     "#532421",
+     "#cb4a39",
+     "#ff3d62"
+    ],
+    "orange": [
+     "#a45227",
+     "#be734b",
+     "#ea9b71"
+    ],
+    "yellow": [
+     "#b69953",
+     "#d9bf46",
+     "#fedf47"
+    ],
+    "brown": [
+     "#232017",
+     "#544c2e",
+     "#7e4e20"
+    ],
+    "gray": [
+     "#3d3c37",
+     "#8b8979",
+     "#ada18f"
+    ]
+   }
+  }
+ },
+ "base": {
+  "male": [
+   {
+    "z": 10,
+    "sheet": "body/bodies/male",
+    "material": "body"
+   },
+   {
+    "z": 100,
+    "sheet": "head/heads/human/male",
+    "material": "body"
+   },
+   {
+    "z": 101,
+    "sheet": "head/faces/male/neutral",
+    "material": "body"
+   }
+  ],
+  "female": [
+   {
+    "z": 10,
+    "sheet": "body/bodies/female",
+    "material": "body"
+   },
+   {
+    "z": 100,
+    "sheet": "head/heads/human/female",
+    "material": "body"
+   },
+   {
+    "z": 101,
+    "sheet": "head/faces/female/neutral",
+    "material": "body"
+   }
+  ]
+ },
+ "categories": [
+  {
+   "key": "skin",
+   "label": "ผิว",
+   "material": "body",
+   "items": []
+  },
+  {
+   "key": "eyes",
+   "label": "ตา",
+   "material": "eye",
+   "items": []
+  },
+  {
+   "key": "hair",
+   "label": "ผม",
+   "material": null,
+   "items": [
+    {
+     "id": "hair_afro",
+     "name": "Afro",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/afro/adult",
+       "female": "hair/afro/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_cornrows",
+     "name": "Cornrows",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/cornrows/adult",
+       "female": "hair/cornrows/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_dreadlocks_long",
+     "name": "Dreadlocks long",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/dreadlocks_long/adult",
+       "female": "hair/dreadlocks_long/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_dreadlocks_short",
+     "name": "Dreadlocks short",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/dreadlocks_short/adult",
+       "female": "hair/dreadlocks_short/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_flat_top_fade",
+     "name": "Flat top fade",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/flat_top_fade/adult",
+       "female": "hair/flat_top_fade/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_flat_top_straight",
+     "name": "Flat top straight",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/flat_top_straight/adult",
+       "female": "hair/flat_top_straight/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_natural",
+     "name": "Natural",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/natural/adult",
+       "female": "hair/natural/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_twists_fade",
+     "name": "Twists fade",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/twists_fade/adult",
+       "female": "hair/twists_fade/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_twists_straight",
+     "name": "Twists straight",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/twists_straight/adult",
+       "female": "hair/twists_straight/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_balding",
+     "name": "Balding",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/balding/adult",
+       "female": "hair/balding/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_buzzcut",
+     "name": "Buzzcut",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/buzzcut/adult",
+       "female": "hair/buzzcut/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_high_and_tight",
+     "name": "High and tight",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/high_and_tight/adult",
+       "female": "hair/high_and_tight/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_longhawk",
+     "name": "Longhawk",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/longhawk/adult",
+       "female": "hair/longhawk/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_shorthawk",
+     "name": "Shorthawk",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/shorthawk/adult",
+       "female": "hair/shorthawk/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_bob",
+     "name": "Bob",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/bob/adult",
+       "female": "hair/bob/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_bob_side_part",
+     "name": "Bob side part",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/bob_side_part/adult",
+       "female": "hair/bob_side_part/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_lob",
+     "name": "Lob",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/lob/adult",
+       "female": "hair/lob/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_relm_short",
+     "name": "Relm Short",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/relm_short/adult",
+       "female": "hair/relm_short/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_bangs_bun",
+     "name": "Bangs bun",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/bangs_bun/adult",
+       "female": "hair/bangs_bun/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_braid",
+     "name": "Braid",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/braid/adult/bg",
+       "female": "hair/braid/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/braid/adult/fg",
+       "female": "hair/braid/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_braid2",
+     "name": "Braid2",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/braid2/adult/bg",
+       "female": "hair/braid2/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/braid2/adult/fg",
+       "female": "hair/braid2/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_half_up",
+     "name": "Half up",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/half_up/adult",
+       "female": "hair/half_up/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_high_ponytail",
+     "name": "High ponytail",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/high_ponytail/adult/bg",
+       "female": "hair/high_ponytail/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/high_ponytail/adult/fg",
+       "female": "hair/high_ponytail/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_long_tied",
+     "name": "Long tied",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/long_tied/adult/bg",
+       "female": "hair/long_tied/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/long_tied/adult/fg",
+       "female": "hair/long_tied/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_ponytail",
+     "name": "Ponytail",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/ponytail/adult/bg",
+       "female": "hair/ponytail/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/ponytail/adult/fg",
+       "female": "hair/ponytail/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_ponytail2",
+     "name": "Ponytail2",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/ponytail2/adult/bg",
+       "female": "hair/ponytail2/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/ponytail2/adult/fg",
+       "female": "hair/ponytail2/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_relm_ponytail",
+     "name": "Relm w/Ponytail",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/relm_ponytail/adult/bg",
+       "female": "hair/relm_ponytail/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/relm_ponytail/adult/mg",
+       "female": "hair/relm_ponytail/adult/mg"
+      },
+      {
+       "z": 145,
+       "male": "hair/relm_ponytail/adult/fg",
+       "female": "hair/relm_ponytail/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_relm_xlong",
+     "name": "Relm XLong",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/relm_xlong/adult/bg",
+       "female": "hair/relm_xlong/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/relm_xlong/adult/fg",
+       "female": "hair/relm_xlong/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_shoulderl",
+     "name": "Shoulderl",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/shoulderl/adult/bg",
+       "female": "hair/shoulderl/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/shoulderl/adult/fg",
+       "female": "hair/shoulderl/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_shoulderr",
+     "name": "Shoulderr",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/shoulderr/adult/bg",
+       "female": "hair/shoulderr/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/shoulderr/adult/fg",
+       "female": "hair/shoulderr/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_topknot_long",
+     "name": "Long Topknot",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/extensions/ponytails/topknot_long/adult/bg",
+       "female": "hair/extensions/ponytails/topknot_long/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/parted_side_bangs/adult",
+       "female": "hair/parted_side_bangs/adult"
+      },
+      {
+       "z": 145,
+       "male": "hair/extensions/ponytails/topknot_long/adult/fg",
+       "female": "hair/extensions/ponytails/topknot_long/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_topknot_long2",
+     "name": "Long Topknot 2",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/extensions/ponytails/topknot_long/adult/bg",
+       "female": "hair/extensions/ponytails/topknot_long/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/parted_side_bangs2/adult",
+       "female": "hair/parted_side_bangs2/adult"
+      },
+      {
+       "z": 145,
+       "male": "hair/extensions/ponytails/topknot_long/adult/fg",
+       "female": "hair/extensions/ponytails/topknot_long/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_topknot_short",
+     "name": "Short Topknot",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/parted_side_bangs/adult",
+       "female": "hair/parted_side_bangs/adult"
+      },
+      {
+       "z": 145,
+       "male": "hair/extensions/ponytails/topknot_short/adult",
+       "female": "hair/extensions/ponytails/topknot_short/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_topknot_short2",
+     "name": "Short Topknot 2",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/parted_side_bangs2/adult",
+       "female": "hair/parted_side_bangs2/adult"
+      },
+      {
+       "z": 145,
+       "male": "hair/extensions/ponytails/topknot_short/adult",
+       "female": "hair/extensions/ponytails/topknot_short/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_curls_large",
+     "name": "Large Curls",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/curls_large/adult/bg",
+       "female": "hair/curls_large/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/curls_large/adult/fg",
+       "female": "hair/curls_large/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_curls_large_xlong",
+     "name": "Large Curls XLong",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/curls_large_xlong/adult/bg",
+       "female": "hair/curls_large_xlong/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/curls_large_xlong/adult/fg",
+       "female": "hair/curls_large_xlong/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_curly_long",
+     "name": "Curly long",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/curly_long/adult",
+       "female": "hair/curly_long/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_curly_short",
+     "name": "Curly short",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/curly_short/adult",
+       "female": "hair/curly_short/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_curly_short2",
+     "name": "Curly short 2",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/curly_short2/adult",
+       "female": "hair/curly_short2/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_jewfro",
+     "name": "Jewfro",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/jewfro/adult",
+       "female": "hair/jewfro/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_bangslong",
+     "name": "Bangslong",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/bangslong/adult",
+       "female": "hair/bangslong/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_bangslong2",
+     "name": "Bangslong2",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/bangslong2/adult/bg",
+       "female": "hair/bangslong2/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/bangslong2/adult/fg",
+       "female": "hair/bangslong2/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_curtains_long",
+     "name": "Curtains long",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/curtains_long/adult",
+       "female": "hair/curtains_long/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_long",
+     "name": "Long",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/long/adult",
+       "female": "hair/long/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_long_center_part",
+     "name": "Long center part",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/long_center_part/adult/bg",
+       "female": "hair/long_center_part/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/long_center_part/adult/fg",
+       "female": "hair/long_center_part/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_long_messy",
+     "name": "Long messy",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/long_messy/adult",
+       "female": "hair/long_messy/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_long_messy2",
+     "name": "Long messy2",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/long_messy2/adult",
+       "female": "hair/long_messy2/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_long_straight",
+     "name": "Long straight",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/long_straight/adult",
+       "female": "hair/long_straight/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_loose",
+     "name": "Loose",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/loose/adult",
+       "female": "hair/loose/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_wavy",
+     "name": "Wavy",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/wavy/adult/bg",
+       "female": "hair/wavy/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/wavy/adult/fg",
+       "female": "hair/wavy/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_bunches",
+     "name": "Bunches",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/bunches/adult/bg",
+       "female": "hair/bunches/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/bunches/adult/fg",
+       "female": "hair/bunches/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_pigtails",
+     "name": "Pigtails",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/pigtails/adult",
+       "female": "hair/pigtails/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_pigtails_bangs",
+     "name": "Pigtails bangs",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/pigtails_bangs/adult",
+       "female": "hair/pigtails_bangs/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_bangs",
+     "name": "Bangs",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/bangs/adult",
+       "female": "hair/bangs/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_bangsshort",
+     "name": "Bangsshort",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/bangsshort/adult",
+       "female": "hair/bangsshort/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_bedhead",
+     "name": "Bedhead",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/bedhead/adult",
+       "female": "hair/bedhead/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_cowlick",
+     "name": "Cowlick",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/cowlick/adult",
+       "female": "hair/cowlick/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_cowlick_tall",
+     "name": "Cowlick tall",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/cowlick_tall/adult",
+       "female": "hair/cowlick_tall/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_curtains",
+     "name": "Curtains",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/curtains/adult",
+       "female": "hair/curtains/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_idol",
+     "name": "Idol",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/idol/adult",
+       "female": "hair/idol/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_messy1",
+     "name": "Messy1",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/messy1/adult",
+       "female": "hair/messy1/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_messy2",
+     "name": "Messy2",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/messy2/adult",
+       "female": "hair/messy2/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_messy3",
+     "name": "Messy3",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/messy3/adult",
+       "female": "hair/messy3/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_mop",
+     "name": "Mop",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/mop/adult",
+       "female": "hair/mop/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_page",
+     "name": "Page",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/page/adult",
+       "female": "hair/page/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_page2",
+     "name": "Page2",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/page2/adult",
+       "female": "hair/page2/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_parted",
+     "name": "Parted",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/parted/adult",
+       "female": "hair/parted/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_parted2",
+     "name": "Parted 2",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/parted2/adult",
+       "female": "hair/parted2/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_parted3",
+     "name": "Parted 3",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/parted3/adult",
+       "female": "hair/parted3/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_parted_side_bangs",
+     "name": "Side Parted w/Bangs",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/parted_side_bangs/adult",
+       "female": "hair/parted_side_bangs/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_parted_side_bangs2",
+     "name": "Side Parted w/Bangs 2",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/parted_side_bangs2/adult",
+       "female": "hair/parted_side_bangs2/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_pixie",
+     "name": "Pixie",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/pixie/adult",
+       "female": "hair/pixie/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_plain",
+     "name": "Plain",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/plain/adult",
+       "female": "hair/plain/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_single",
+     "name": "Single",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/single/adult/bg",
+       "female": "hair/single/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/single/adult/fg",
+       "female": "hair/single/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_swoop",
+     "name": "Swoop",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/swoop/adult",
+       "female": "hair/swoop/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_swoop_side",
+     "name": "Side Swoop",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/swoop_side/adult",
+       "female": "hair/swoop_side/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_unkempt",
+     "name": "Unkempt",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/unkempt/adult",
+       "female": "hair/unkempt/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_halfmessy",
+     "name": "Halfmessy",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/halfmessy/adult",
+       "female": "hair/halfmessy/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_spiked",
+     "name": "Spiked",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/spiked/adult",
+       "female": "hair/spiked/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_spiked2",
+     "name": "Spiked2",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/spiked2/adult",
+       "female": "hair/spiked2/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_spiked_beehive",
+     "name": "Spiked beehive",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/spiked_beehive/adult",
+       "female": "hair/spiked_beehive/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_spiked_liberty",
+     "name": "Spiked liberty",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/spiked_liberty/adult",
+       "female": "hair/spiked_liberty/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_spiked_liberty2",
+     "name": "Spiked liberty2",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/spiked_liberty2/adult",
+       "female": "hair/spiked_liberty2/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_spiked_porcupine",
+     "name": "Spiked porcupine",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 120,
+       "male": "hair/spiked_porcupine/adult",
+       "female": "hair/spiked_porcupine/adult"
+      }
+     ]
+    },
+    {
+     "id": "hair_long_band",
+     "name": "Long band",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/long_band/adult/bg",
+       "female": "hair/long_band/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/long_band/adult/fg",
+       "female": "hair/long_band/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_princess",
+     "name": "Princess",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/princess/adult/bg",
+       "female": "hair/princess/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/princess/adult/fg",
+       "female": "hair/princess/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_sara",
+     "name": "Sara",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/sara/adult/bg",
+       "female": "hair/sara/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/sara/adult/fg",
+       "female": "hair/sara/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_xlong",
+     "name": "Xlong",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/xlong/adult/bg",
+       "female": "hair/xlong/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/xlong/adult/fg",
+       "female": "hair/xlong/adult/fg"
+      }
+     ]
+    },
+    {
+     "id": "hair_xlong_wavy",
+     "name": "XLong Wavy",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 9,
+       "male": "hair/xlong_wavy/adult/bg",
+       "female": "hair/xlong_wavy/adult/bg"
+      },
+      {
+       "z": 120,
+       "male": "hair/xlong_wavy/adult/fg",
+       "female": "hair/xlong_wavy/adult/fg"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "facial",
+   "label": "หนวด/เครา",
+   "material": null,
+   "items": [
+    {
+     "id": "beards_5oclock_shadow",
+     "name": "5 O'clock Shadow",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 111,
+       "male": "beards/beard/5oclock_shadow",
+       "female": "beards/beard/5oclock_shadow"
+      }
+     ]
+    },
+    {
+     "id": "beards_beard",
+     "name": "Basic Beard",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 110,
+       "male": "beards/beard/basic",
+       "female": "beards/beard/basic"
+      }
+     ]
+    },
+    {
+     "id": "beards_medium",
+     "name": "Medium Beard",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 110,
+       "male": "beards/beard/medium",
+       "female": "beards/beard/medium"
+      }
+     ]
+    },
+    {
+     "id": "beards_trimmed",
+     "name": "Trimmed Beard",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 110,
+       "male": "beards/beard/trimmed",
+       "female": "beards/beard/trimmed"
+      }
+     ]
+    },
+    {
+     "id": "beards_winter",
+     "name": "Winter Beard",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 110,
+       "male": "beards/beard/winter/male",
+       "female": "beards/beard/winter/female"
+      }
+     ]
+    },
+    {
+     "id": "beards_bigstache",
+     "name": "Big Mustache",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 111,
+       "male": "beards/mustache/bigstache",
+       "female": "beards/mustache/bigstache"
+      }
+     ]
+    },
+    {
+     "id": "beards_chevron",
+     "name": "Chevron Mustache",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 111,
+       "male": "beards/mustache/chevron",
+       "female": "beards/mustache/chevron"
+      }
+     ]
+    },
+    {
+     "id": "beards_french",
+     "name": "French Mustache",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 111,
+       "male": "beards/mustache/french",
+       "female": "beards/mustache/french"
+      }
+     ]
+    },
+    {
+     "id": "beards_handlebar",
+     "name": "Handlebar Mustache",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 111,
+       "male": "beards/mustache/handlebar",
+       "female": "beards/mustache/handlebar"
+      }
+     ]
+    },
+    {
+     "id": "beards_horseshoe",
+     "name": "Horseshoe Mustache",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 111,
+       "male": "beards/mustache/horseshoe",
+       "female": "beards/mustache/horseshoe"
+      }
+     ]
+    },
+    {
+     "id": "beards_lampshade",
+     "name": "Lampshade Mustache",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 111,
+       "male": "beards/mustache/lampshade",
+       "female": "beards/mustache/lampshade"
+      }
+     ]
+    },
+    {
+     "id": "beards_mustache",
+     "name": "Mustache",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 111,
+       "male": "beards/mustache/basic",
+       "female": "beards/mustache/basic"
+      }
+     ]
+    },
+    {
+     "id": "beards_walrus",
+     "name": "Walrus Mustache",
+     "material": "hair",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 111,
+       "male": "beards/mustache/walrus",
+       "female": "beards/mustache/walrus"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "top",
+   "label": "เสื้อ",
+   "material": null,
+   "items": [
+    {
+     "id": "torso_clothes_longsleeve",
+     "name": "Longsleeve",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/longsleeve/longsleeve/male",
+       "female": "torso/clothes/longsleeve/longsleeve/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_longsleeve2",
+     "name": "Longsleeve 2",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/longsleeve/longsleeve2/male",
+       "female": "torso/clothes/longsleeve/longsleeve2/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_longsleeve2_buttoned",
+     "name": "Longsleeve 2 Buttoned",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/longsleeve/longsleeve2_buttoned/male",
+       "female": "torso/clothes/longsleeve/longsleeve2_buttoned/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_longsleeve2_cardigan",
+     "name": "Cardigan",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/longsleeve/longsleeve2_cardigan/male",
+       "female": "torso/clothes/longsleeve/longsleeve2_cardigan/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_longsleeve2_polo",
+     "name": "Longsleeve Polo",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/longsleeve/longsleeve2_polo/male",
+       "female": "torso/clothes/longsleeve/longsleeve2_polo/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_longsleeve2_scoop",
+     "name": "Longsleeve 2 Scoop",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/longsleeve/longsleeve2_scoop/male",
+       "female": "torso/clothes/longsleeve/longsleeve2_scoop/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_longsleeve2_vneck",
+     "name": "Longsleeve 2 VNeck",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/longsleeve/longsleeve2_vneck/male",
+       "female": "torso/clothes/longsleeve/longsleeve2_vneck/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_longsleeve_scoop",
+     "name": "Scoop",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/longsleeve/scoop/male",
+       "female": "torso/clothes/longsleeve/scoop/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_shortsleeve",
+     "name": "Shortsleeve",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/shortsleeve/shortsleeve/male",
+       "female": "torso/clothes/shortsleeve/shortsleeve/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_shortsleeve_cardigan",
+     "name": "Shortsleeve Cardigan",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/shortsleeve/shortsleeve_cardigan/male",
+       "female": "torso/clothes/shortsleeve/shortsleeve_cardigan/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_shortsleeve_polo",
+     "name": "Shortsleeve Polo",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/shortsleeve/shortsleeve_polo/male",
+       "female": "torso/clothes/shortsleeve/shortsleeve_polo/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_tshirt",
+     "name": "TShirt",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/shortsleeve/tshirt/male",
+       "female": "torso/clothes/shortsleeve/tshirt/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_tshirt_buttoned",
+     "name": "TShirt Buttoned",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/shortsleeve/tshirt_buttoned/male",
+       "female": "torso/clothes/shortsleeve/tshirt_buttoned/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_tshirt_scoop",
+     "name": "TShirt Scoop",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/shortsleeve/tshirt_scoop/male",
+       "female": "torso/clothes/shortsleeve/tshirt_scoop/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_tshirt_vneck",
+     "name": "TShirt VNeck",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/shortsleeve/tshirt_vneck/male",
+       "female": "torso/clothes/shortsleeve/tshirt_vneck/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_sleeveless1",
+     "name": "Original Sleeveless",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/sleeveless/sleeveless1/male",
+       "female": "torso/clothes/sleeveless/sleeveless1/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_sleeveless2",
+     "name": "Sleeveless 2",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/sleeveless/sleeveless2/male",
+       "female": "torso/clothes/sleeveless/sleeveless2/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_sleeveless2_buttoned",
+     "name": "Sleeveless 2 Buttoned",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/sleeveless/sleeveless2_buttoned/male",
+       "female": "torso/clothes/sleeveless/sleeveless2_buttoned/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_sleeveless2_cardigan",
+     "name": "Sleeveless 2 Cardigan",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/sleeveless/sleeveless2_cardigan/male",
+       "female": "torso/clothes/sleeveless/sleeveless2_cardigan/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_sleeveless2_polo",
+     "name": "Sleeveless 2 Polo",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/sleeveless/sleeveless2_polo/male",
+       "female": "torso/clothes/sleeveless/sleeveless2_polo/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_sleeveless2_scoop",
+     "name": "Sleeveless 2 Scoop",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/sleeveless/sleeveless2_scoop/male",
+       "female": "torso/clothes/sleeveless/sleeveless2_scoop/female"
+      }
+     ]
+    },
+    {
+     "id": "torso_clothes_sleeveless2_vneck",
+     "name": "Sleeveless 2 VNeck",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 35,
+       "male": "torso/clothes/sleeveless/sleeveless2_vneck/male",
+       "female": "torso/clothes/sleeveless/sleeveless2_vneck/female"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "jacket",
+   "label": "แจ็กเก็ต",
+   "material": null,
+   "items": []
+  },
+  {
+   "key": "bottom",
+   "label": "กางเกง",
+   "material": null,
+   "items": [
+    {
+     "id": "legs_hose",
+     "name": "Hose",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 20,
+       "male": "legs/hose/male",
+       "female": "legs/hose/thin"
+      }
+     ]
+    },
+    {
+     "id": "legs_leggings",
+     "name": "Leggings",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 20,
+       "male": "legs/leggings/male",
+       "female": "legs/leggings/thin"
+      }
+     ]
+    },
+    {
+     "id": "legs_leggings2",
+     "name": "Leggings 2",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 20,
+       "male": "legs/leggings2/male",
+       "female": "legs/leggings2/thin"
+      }
+     ]
+    },
+    {
+     "id": "legs_armour",
+     "name": "Armour",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 20,
+       "male": "legs/armour/plate/male",
+       "female": "legs/armour/plate/thin"
+      }
+     ]
+    },
+    {
+     "id": "legs_cuffed",
+     "name": "Cuffed Pants",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 20,
+       "male": "legs/cuffed/male",
+       "female": "legs/cuffed/thin"
+      }
+     ]
+    },
+    {
+     "id": "legs_formal",
+     "name": "Formal Pants",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 20,
+       "male": "legs/formal/male",
+       "female": "legs/formal/thin"
+      }
+     ]
+    },
+    {
+     "id": "legs_formal_striped",
+     "name": "Striped Formal Pants",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 20,
+       "male": "legs/formal_striped/male",
+       "female": "legs/formal_striped/thin"
+      }
+     ]
+    },
+    {
+     "id": "legs_pantaloons",
+     "name": "Pantaloons",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 20,
+       "male": "legs/pantaloons/male",
+       "female": "legs/pantaloons/thin"
+      }
+     ]
+    },
+    {
+     "id": "legs_pants",
+     "name": "Pants",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 20,
+       "male": "legs/pants/male",
+       "female": "legs/pants/thin"
+      }
+     ]
+    },
+    {
+     "id": "legs_pants2",
+     "name": "Long Pants",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 20,
+       "male": "legs/pants2/male",
+       "female": "legs/pants2/thin"
+      }
+     ]
+    },
+    {
+     "id": "legs_shorts",
+     "name": "Shorts",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 20,
+       "male": "legs/shorts/shorts/male",
+       "female": "legs/shorts/shorts/thin"
+      }
+     ]
+    },
+    {
+     "id": "legs_shorts_short",
+     "name": "Short Shorts",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 20,
+       "male": "legs/shorts/short_shorts/male",
+       "female": "legs/shorts/short_shorts/thin"
+      }
+     ]
+    },
+    {
+     "id": "legs_skirt_belle",
+     "name": "Belle skirt",
+     "material": "cloth",
+     "bodyTypes": [
+      "female"
+     ],
+     "layers": [
+      {
+       "z": 20,
+       "female": "legs/skirts/belle/thin"
+      }
+     ]
+    },
+    {
+     "id": "legs_skirt_straight",
+     "name": "Straight skirt",
+     "material": "cloth",
+     "bodyTypes": [
+      "female"
+     ],
+     "layers": [
+      {
+       "z": 20,
+       "female": "legs/skirts/straight/thin"
+      }
+     ]
+    },
+    {
+     "id": "legs_skirts_legion",
+     "name": "Legion skirt",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 20,
+       "male": "legs/skirts/legion/male",
+       "female": "legs/skirts/legion/thin"
+      }
+     ]
+    },
+    {
+     "id": "legs_skirts_plain",
+     "name": "Plain skirt",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 20,
+       "male": "legs/skirts/plain/male",
+       "female": "legs/skirts/plain/thin"
+      }
+     ]
+    },
+    {
+     "id": "legs_skirts_slit",
+     "name": "Slit skirt",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 20,
+       "male": "legs/skirts/slit/thin",
+       "female": "legs/skirts/slit/thin"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "shoes",
+   "label": "รองเท้า",
+   "material": null,
+   "items": [
+    {
+     "id": "feet_boots_basic",
+     "name": "Basic Boots",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 25,
+       "male": "feet/boots/basic/male",
+       "female": "feet/boots/basic/thin"
+      }
+     ]
+    },
+    {
+     "id": "feet_boots_fold",
+     "name": "Folded Rim Boots",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 25,
+       "male": "feet/boots/fold/male",
+       "female": "feet/boots/fold/thin"
+      }
+     ]
+    },
+    {
+     "id": "feet_boots_revised",
+     "name": "Revised Boots",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 25,
+       "male": "feet/boots/revised/male",
+       "female": "feet/boots/revised/thin"
+      }
+     ]
+    },
+    {
+     "id": "feet_boots_rim",
+     "name": "Rimmed Boots",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 25,
+       "male": "feet/boots/rimmed/male",
+       "female": "feet/boots/rimmed/thin"
+      }
+     ]
+    },
+    {
+     "id": "feet_armour",
+     "name": "Armour",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 15,
+       "male": "feet/armour/plate/male",
+       "female": "feet/armour/plate/thin"
+      }
+     ]
+    },
+    {
+     "id": "feet_hoofs",
+     "name": "Hoofs",
+     "material": "body",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 15,
+       "male": "feet/hoofs/male",
+       "female": "feet/hoofs/thin"
+      }
+     ]
+    },
+    {
+     "id": "feet_sandals",
+     "name": "Sandals",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 15,
+       "male": "feet/sandals/male",
+       "female": "feet/sandals/thin"
+      }
+     ]
+    },
+    {
+     "id": "feet_slippers",
+     "name": "Slippers",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 15,
+       "male": "feet/slippers/male",
+       "female": "feet/slippers/thin"
+      }
+     ]
+    },
+    {
+     "id": "feet_shoes_basic",
+     "name": "Basic Shoes",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 15,
+       "male": "feet/shoes/basic/male",
+       "female": "feet/shoes/basic/thin"
+      }
+     ]
+    },
+    {
+     "id": "feet_shoes_ghillies",
+     "name": "Ghillies",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 15,
+       "male": "feet/shoes/ghillies/male",
+       "female": "feet/shoes/ghillies/thin"
+      }
+     ]
+    },
+    {
+     "id": "feet_shoes_revised",
+     "name": "Revised Shoes",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 15,
+       "male": "feet/shoes/revised/male",
+       "female": "feet/shoes/revised/thin"
+      }
+     ]
+    },
+    {
+     "id": "feet_shoes_sara",
+     "name": "Sara Shoes",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 15,
+       "male": "feet/shoes/sara/male",
+       "female": "feet/shoes/sara/thin"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "hat",
+   "label": "หมวก",
+   "material": null,
+   "items": [
+    {
+     "id": "hat_hood_cloth",
+     "name": "Hood",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/cloth/hood/adult",
+       "female": "hat/cloth/hood/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_hood_hijab",
+     "name": "Hijab",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/cloth/hijab/male",
+       "female": "hat/cloth/hijab/thin"
+      }
+     ]
+    },
+    {
+     "id": "hat_hood_sack_cloth",
+     "name": "Sack Cloth Hood",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/cloth/hood_sack/adult",
+       "female": "hat/cloth/hood_sack/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_bicorne_athwart_admiral",
+     "name": "Bicorne Athwart Admiral",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/pirate/bicorne/athwart/admiral/adult",
+       "female": "hat/pirate/bicorne/athwart/admiral/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_bicorne_athwart_basic",
+     "name": "Bicorne Athwart",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/pirate/bicorne/athwart/basic/adult",
+       "female": "hat/pirate/bicorne/athwart/basic/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_bicorne_athwart_captain",
+     "name": "Bicorne Athwart Captain",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/pirate/bicorne/athwart/captain/adult",
+       "female": "hat/pirate/bicorne/athwart/captain/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_bicorne_athwart_commodore",
+     "name": "Bicorne Athwart Commodore",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/pirate/bicorne/athwart/commodore/adult",
+       "female": "hat/pirate/bicorne/athwart/commodore/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_cap_bonnie",
+     "name": "Bonnie",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/pirate/bonnie/adult",
+       "female": "hat/pirate/bonnie/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_cap_bonnie_tilt",
+     "name": "Bonnie Alt Tilt",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/pirate/bonnie/tilt/adult",
+       "female": "hat/pirate/bonnie/tilt/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_cap_cavalier",
+     "name": "Cavalier",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/pirate/cavalier/adult",
+       "female": "hat/pirate/cavalier/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_cap_leather",
+     "name": "Leather Cap",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/cloth/leather_cap/adult",
+       "female": "hat/cloth/leather_cap/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_bicorne_foreaft",
+     "name": "Bicorne foreaft",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/pirate/bicorne/foreaft/adult",
+       "female": "hat/pirate/bicorne/foreaft/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_bicorne_foreaft_commodore",
+     "name": "Bicorne Foreaft Commodore",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/pirate/bicorne/foreaft/commodore/adult",
+       "female": "hat/pirate/bicorne/foreaft/commodore/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_formal_bowler",
+     "name": "Formal Bowler Hat",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/formal/bowler/adult",
+       "female": "hat/formal/bowler/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_formal_crown",
+     "name": "Crown",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/formal/crown/adult",
+       "female": "hat/formal/crown/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_formal_tiara",
+     "name": "Tiara",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/formal/tiara/adult",
+       "female": "hat/formal/tiara/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_formal_tophat",
+     "name": "Formal Tophat",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/formal/tophat/adult",
+       "female": "hat/formal/tophat/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_holiday_christmas",
+     "name": "Christmas Hat",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/holiday/christmas/adult",
+       "female": "hat/holiday/christmas/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_magic_celestial",
+     "name": "Celestial Wizard Hat",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/magic/celestial/adult",
+       "female": "hat/magic/celestial/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_magic_celestial_moon",
+     "name": "Celestial Wizard Moon Hat",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/magic/celestial_moon/adult",
+       "female": "hat/magic/celestial_moon/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_magic_wizard",
+     "name": "Wizard Hat Base",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/magic/wizard/base/adult",
+       "female": "hat/magic/wizard/base/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_tricorne",
+     "name": "Tricorne",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/pirate/tricorne/basic/adult",
+       "female": "hat/pirate/tricorne/basic/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_tricorne_captain",
+     "name": "Tricorne Captain",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/pirate/tricorne/captain/adult",
+       "female": "hat/pirate/tricorne/captain/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_tricorne_lieutenant",
+     "name": "Tricorne Lieutenant",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/pirate/tricorne/lieutenant/adult",
+       "female": "hat/pirate/tricorne/lieutenant/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_armet",
+     "name": "Armet",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/armet/adult",
+       "female": "hat/helmet/armet/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_armet_simple",
+     "name": "Simple Armet",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/armet_simple/adult",
+       "female": "hat/helmet/armet_simple/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_barbarian",
+     "name": "Barbarian",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/barbarian/adult",
+       "female": "hat/helmet/barbarian/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_barbarian_nasal",
+     "name": "Barbarian nasal",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/barbarian_nasal/adult",
+       "female": "hat/helmet/barbarian_nasal/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_barbarian_viking",
+     "name": "Barbarian Viking",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/barbarian_viking/adult",
+       "female": "hat/helmet/barbarian_viking/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_barbuta",
+     "name": "Barbuta",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/barbuta/male",
+       "female": "hat/helmet/barbuta/female"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_barbuta_simple",
+     "name": "Simple barbuta",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/barbuta_simple/adult",
+       "female": "hat/helmet/barbuta_simple/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_bascinet",
+     "name": "Bascinet",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/bascinet/adult",
+       "female": "hat/helmet/bascinet/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_bascinet_round",
+     "name": "Round bascinet",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/bascinet_round/adult",
+       "female": "hat/helmet/bascinet_round/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_close",
+     "name": "Close helm",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/close/male",
+       "female": "hat/helmet/close/female"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_flattop",
+     "name": "Flattop",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/flattop/male",
+       "female": "hat/helmet/flattop/female"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_greathelm",
+     "name": "Greathelm",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/greathelm/male",
+       "female": "hat/helmet/greathelm/female"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_horned",
+     "name": "Horned helmet",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/horned/adult",
+       "female": "hat/helmet/horned/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_kettle",
+     "name": "Kettle helm",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 135,
+       "male": "hat/helmet/kettle/adult",
+       "female": "hat/helmet/kettle/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_legion",
+     "name": "Legion",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/legion/adult",
+       "female": "hat/helmet/legion/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_maximus",
+     "name": "Maximus",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/maximus/adult",
+       "female": "hat/helmet/maximus/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_morion",
+     "name": "Morion",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 135,
+       "male": "hat/helmet/morion/adult",
+       "female": "hat/helmet/morion/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_nasal",
+     "name": "Nasal helm",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/nasal/adult",
+       "female": "hat/helmet/nasal/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_norman",
+     "name": "Norman helm",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 135,
+       "male": "hat/helmet/norman/adult",
+       "female": "hat/helmet/norman/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_pointed",
+     "name": "Pointed helm",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 135,
+       "male": "hat/helmet/pointed/adult",
+       "female": "hat/helmet/pointed/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_spangenhelm",
+     "name": "Spangenhelm",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/spangenhelm/adult",
+       "female": "hat/helmet/spangenhelm/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_spangenhelm_viking",
+     "name": "Viking spangenhelm",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/spangenhelm_viking/adult",
+       "female": "hat/helmet/spangenhelm_viking/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_sugarloaf",
+     "name": "Sugarloaf greathelm",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/sugarloaf/male",
+       "female": "hat/helmet/sugarloaf/female"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_sugarloaf_simple",
+     "name": "Simple sugarloaf helm",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/sugarloaf_simple/male",
+       "female": "hat/helmet/sugarloaf_simple/female"
+      }
+     ]
+    },
+    {
+     "id": "hat_helmet_xeon",
+     "name": "Xeon helmet",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 130,
+       "male": "hat/helmet/xeon/adult",
+       "female": "hat/helmet/xeon/adult"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "glasses",
+   "label": "แว่น",
+   "material": null,
+   "items": [
+    {
+     "id": "facial_eyepatch2_left",
+     "name": "Eyepatch 2 Left",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 115,
+       "male": "facial/patches/eyepatch2/left/adult",
+       "female": "facial/patches/eyepatch2/left/adult"
+      }
+     ]
+    },
+    {
+     "id": "facial_eyepatch2_right",
+     "name": "Eyepatch 2 Right",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 115,
+       "male": "facial/patches/eyepatch2/right/adult",
+       "female": "facial/patches/eyepatch2/right/adult"
+      }
+     ]
+    },
+    {
+     "id": "facial_eyepatch_ambi",
+     "name": "Eyepatch Ambidextrous",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 115,
+       "male": "facial/patches/eyepatch/ambi/adult",
+       "female": "facial/patches/eyepatch/ambi/adult"
+      }
+     ]
+    },
+    {
+     "id": "facial_eyepatch_left",
+     "name": "Eyepatch Left",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 115,
+       "male": "facial/patches/eyepatch/left/adult",
+       "female": "facial/patches/eyepatch/left/adult"
+      }
+     ]
+    },
+    {
+     "id": "facial_eyepatch_right",
+     "name": "Eyepatch Right",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 115,
+       "male": "facial/patches/eyepatch/right/adult",
+       "female": "facial/patches/eyepatch/right/adult"
+      }
+     ]
+    },
+    {
+     "id": "facial_eyepatch_small_left",
+     "name": "Small Eyepatch Left",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 115,
+       "male": "facial/patches/small/left/adult",
+       "female": "facial/patches/small/left/adult"
+      }
+     ]
+    },
+    {
+     "id": "facial_eyepatch_small_right",
+     "name": "Small Eyepatch Right",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 115,
+       "male": "facial/patches/small/right/adult",
+       "female": "facial/patches/small/right/adult"
+      }
+     ]
+    },
+    {
+     "id": "facial_glasses",
+     "name": "Glasses",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 115,
+       "male": "facial/glasses/glasses/adult",
+       "female": "facial/glasses/glasses/adult"
+      }
+     ]
+    },
+    {
+     "id": "facial_glasses_halfmoon",
+     "name": "Halfmoon Glasses",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 115,
+       "male": "facial/glasses/halfmoon/adult",
+       "female": "facial/glasses/halfmoon/adult"
+      }
+     ]
+    },
+    {
+     "id": "facial_glasses_nerd",
+     "name": "Nerd Glasses",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 115,
+       "male": "facial/glasses/nerd/adult",
+       "female": "facial/glasses/nerd/adult"
+      }
+     ]
+    },
+    {
+     "id": "facial_glasses_round",
+     "name": "Round Glasses",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 115,
+       "male": "facial/glasses/round/adult",
+       "female": "facial/glasses/round/adult"
+      }
+     ]
+    },
+    {
+     "id": "facial_glasses_secretary",
+     "name": "Secretary Glasses",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 115,
+       "male": "facial/glasses/secretary/adult",
+       "female": "facial/glasses/secretary/adult"
+      }
+     ]
+    },
+    {
+     "id": "facial_glasses_shades",
+     "name": "Shades",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 115,
+       "male": "facial/glasses/shades/adult",
+       "female": "facial/glasses/shades/adult"
+      }
+     ]
+    },
+    {
+     "id": "facial_glasses_sunglasses",
+     "name": "Sunglasses",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 115,
+       "male": "facial/glasses/sunglasses/adult",
+       "female": "facial/glasses/sunglasses/adult"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "other",
+   "label": "อื่นๆ",
+   "material": null,
+   "items": [
+    {
+     "id": "neck_necklace_beaded_large",
+     "name": "Large Beaded Necklace",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 80,
+       "male": "neck/necklace/beaded_large/male",
+       "female": "neck/necklace/beaded_large/female"
+      }
+     ]
+    },
+    {
+     "id": "neck_necklace_beaded_small",
+     "name": "Small Beaded Necklace",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 80,
+       "male": "neck/necklace/beaded_small/male",
+       "female": "neck/necklace/beaded_small/female"
+      }
+     ]
+    },
+    {
+     "id": "neck_necklace_chain",
+     "name": "Chain Necklace",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 80,
+       "male": "neck/necklace/chain/male",
+       "female": "neck/necklace/chain/female"
+      }
+     ]
+    },
+    {
+     "id": "neck_necklace_simple",
+     "name": "Simple Necklace",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 80,
+       "male": "neck/necklace/simple/male",
+       "female": "neck/necklace/simple/female"
+      }
+     ]
+    },
+    {
+     "id": "hat_accessory_crest",
+     "name": "Crest",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 139,
+       "male": "hat/accessory/crest/adult",
+       "female": "hat/accessory/crest/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_accessory_crest_centurion",
+     "name": "Centurion Crest",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 139,
+       "male": "hat/accessory/crest_centurion/adult",
+       "female": "hat/accessory/crest_centurion/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_accessory_horns_downward",
+     "name": "Downward Horns",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 95,
+       "male": "hat/accessory/horns_downward/bg/adult",
+       "female": "hat/accessory/horns_downward/bg/adult"
+      },
+      {
+       "z": 139,
+       "male": "hat/accessory/horns_downward/fg/adult",
+       "female": "hat/accessory/horns_downward/fg/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_accessory_horns_short",
+     "name": "Short Horns",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 95,
+       "male": "hat/accessory/horns_short/bg/adult",
+       "female": "hat/accessory/horns_short/bg/adult"
+      },
+      {
+       "z": 139,
+       "male": "hat/accessory/horns_short/fg/adult",
+       "female": "hat/accessory/horns_short/fg/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_accessory_horns_upward",
+     "name": "Upward Horns",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 95,
+       "male": "hat/accessory/horns_upward/bg/adult",
+       "female": "hat/accessory/horns_upward/bg/adult"
+      },
+      {
+       "z": 139,
+       "male": "hat/accessory/horns_upward/fg/adult",
+       "female": "hat/accessory/horns_upward/fg/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_accessory_plumage",
+     "name": "Plumage",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 139,
+       "male": "hat/accessory/plumage/adult",
+       "female": "hat/accessory/plumage/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_accessory_plumage_centurion",
+     "name": "Centurion Plumage",
+     "material": null,
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 139,
+       "male": "hat/accessory/plumage_centurion/adult",
+       "female": "hat/accessory/plumage_centurion/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_accessory_plumage_legion",
+     "name": "Legion Plumage",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 139,
+       "male": "hat/accessory/plumage_legion/adult",
+       "female": "hat/accessory/plumage_legion/adult"
+      }
+     ]
+    },
+    {
+     "id": "hat_accessory_wings",
+     "name": "Helmet wings",
+     "material": "metal",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 125,
+       "male": "hat/accessory/wings/bg/adult",
+       "female": "hat/accessory/wings/bg/adult"
+      },
+      {
+       "z": 139,
+       "male": "hat/accessory/wings/fg/adult",
+       "female": "hat/accessory/wings/fg/adult"
+      }
+     ]
+    },
+    {
+     "id": "cape_solid",
+     "name": "Solid",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 5,
+       "male": "cape/solid/bg",
+       "female": "cape/solid/bg"
+      },
+      {
+       "z": 85,
+       "male": "cape/solid/fg",
+       "female": "cape/solid/fg"
+      }
+     ]
+    },
+    {
+     "id": "cape_tattered",
+     "name": "Tattered",
+     "material": "cloth",
+     "bodyTypes": [
+      "female",
+      "male"
+     ],
+     "layers": [
+      {
+       "z": 5,
+       "male": "cape/tattered/bg",
+       "female": "cape/tattered/bg"
+      },
+      {
+       "z": 85,
+       "male": "cape/tattered/fg",
+       "female": "cape/tattered/fg"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

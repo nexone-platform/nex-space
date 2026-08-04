@@ -1,0 +1,584 @@
+{
+  "objects": [
+    {
+      "id": "131f0fa6-9427-45bd-8ac6-040ae54af877",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "17a8bc28-2293-40c2-90ee-c4a12de188dc",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "19b7d284-bd2d-454a-b68a-109eb858ff2a",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "60eaf4f7-d635-4997-a756-4990240f2c8c",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "6ba63c9a-94df-400b-b193-8eeff18173e6",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "77c875f0-d804-45b1-a71d-2697a2f8b9ad",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "82e0dc5c-c058-4754-8f7f-257fa00568be",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "846e5ef5-f5b0-4279-8d89-bc0bf5030fb2",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "8e37dd52-8c7d-469f-90e5-571d6a40499e",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "a3fe5468-f146-4817-9d6c-46294a6a6a25",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "a86b24c7-16f4-4014-86a2-6dc7addfa61a",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "ad2b3531-cf85-4bc9-b9d8-bad8094ba853",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "c4b2fbae-1606-4903-88c2-9a474481f9d6",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "d134b360-caf5-4820-a7cc-65180be4c954",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "d69226a6-11fa-47ee-9bb9-8f82c1d850b3",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "f9f74a9c-51ad-47de-8da7-d23b1d5097f5",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    }
+  ],
+  "groups": [
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a",
+      "objects": [
+        {
+          "id": "131f0fa6-9427-45bd-8ac6-040ae54af877",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_2",
+      "objects": [
+        {
+          "id": "17a8bc28-2293-40c2-90ee-c4a12de188dc",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_3",
+      "objects": [
+        {
+          "id": "19b7d284-bd2d-454a-b68a-109eb858ff2a",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_4",
+      "objects": [
+        {
+          "id": "60eaf4f7-d635-4997-a756-4990240f2c8c",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_5",
+      "objects": [
+        {
+          "id": "6ba63c9a-94df-400b-b193-8eeff18173e6",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_6",
+      "objects": [
+        {
+          "id": "77c875f0-d804-45b1-a71d-2697a2f8b9ad",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_7",
+      "objects": [
+        {
+          "id": "82e0dc5c-c058-4754-8f7f-257fa00568be",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_8",
+      "objects": [
+        {
+          "id": "846e5ef5-f5b0-4279-8d89-bc0bf5030fb2",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_9",
+      "objects": [
+        {
+          "id": "8e37dd52-8c7d-469f-90e5-571d6a40499e",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_10",
+      "objects": [
+        {
+          "id": "a3fe5468-f146-4817-9d6c-46294a6a6a25",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_11",
+      "objects": [
+        {
+          "id": "a86b24c7-16f4-4014-86a2-6dc7addfa61a",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_12",
+      "objects": [
+        {
+          "id": "ad2b3531-cf85-4bc9-b9d8-bad8094ba853",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_13",
+      "objects": [
+        {
+          "id": "c4b2fbae-1606-4903-88c2-9a474481f9d6",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_14",
+      "objects": [
+        {
+          "id": "d134b360-caf5-4820-a7cc-65180be4c954",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_15",
+      "objects": [
+        {
+          "id": "d69226a6-11fa-47ee-9bb9-8f82c1d850b3",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_16",
+      "objects": [
+        {
+          "id": "f9f74a9c-51ad-47de-8da7-d23b1d5097f5",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [teal short-sleeve t-shirt] worn on it \u2014 positioned exactly on the torso at the same scale and pose. Everything except the shirt must be TRANSPARENT (no body, no other clothes). Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    }
+  ],
+  "export_version": "1.0",
+  "export_date": "2026-07-30T08:49:53.336073"
+}

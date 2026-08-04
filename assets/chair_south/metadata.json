@@ -1,0 +1,29 @@
+{
+  "group_id": "385def02-00cf-4cf6-8fb1-1bc62e571a7b",
+  "objects": [
+    {
+      "id": "ac517abb-5bc2-451e-93a8-2077db8f3499",
+      "name": "base",
+      "prompt": "a single small office chair, pixel art, teal seat and backrest, black wheeled base, clean dark outline, transparent background",
+      "size": {
+        "width": 48,
+        "height": 48
+      },
+      "directions": 8,
+      "view": "low top-down",
+      "rotations": {
+        "south": "rotations/south.png",
+        "south-east": "rotations/south-east.png",
+        "east": "rotations/east.png",
+        "north-east": "rotations/north-east.png",
+        "north": "rotations/north.png",
+        "north-west": "rotations/north-west.png",
+        "west": "rotations/west.png",
+        "south-west": "rotations/south-west.png"
+      },
+      "animations": {}
+    }
+  ],
+  "export_version": "1.0",
+  "export_date": "2026-08-03T09:36:20.307236"
+}

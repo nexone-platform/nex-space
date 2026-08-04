@@ -1,0 +1,584 @@
+{
+  "objects": [
+    {
+      "id": "1c45db68-92b0-4d3d-90c6-6037299fa7e2",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "26db0073-62aa-46c9-b2a0-ed80f9fb48e1",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "48c9f49a-bea6-436c-aa71-0511fad8e117",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "4fd2b771-f386-4d7b-80e2-a934f6f992b4",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "542d1f2d-a5f0-4706-9554-563600f8f704",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "738768aa-63ee-4c5a-90bf-e41e96ea80f3",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "999c6dab-36e8-484e-8443-0ee82b020fba",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "a1f321f1-11df-4320-9e32-bc6abd1a28cf",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "b09a00f4-5014-4917-9dff-762a795254ac",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "c70053ae-ccdf-4970-9a37-ecd8d3d57246",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "c873990f-2be3-4ad3-86f8-e010b1fb24ac",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "d6126b5f-d982-463d-b5ca-fbe519be8f5b",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "db68cff8-eec5-43c2-b99c-1e53f32bface",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "e8733b60-0898-467b-8972-f503b39dcee8",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "ecad2ffa-1f44-4b13-9fd8-95cbc48989de",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    },
+    {
+      "id": "fcb3e37e-eae2-4b3b-8db7-b49932afcf63",
+      "name": null,
+      "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+      "size": {
+        "width": 80,
+        "height": 80
+      },
+      "directions": 1,
+      "view": "low top-down",
+      "rotations": {
+        "unknown": "rotations/unknown.png"
+      },
+      "animations": {}
+    }
+  ],
+  "groups": [
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a",
+      "objects": [
+        {
+          "id": "1c45db68-92b0-4d3d-90c6-6037299fa7e2",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_2",
+      "objects": [
+        {
+          "id": "26db0073-62aa-46c9-b2a0-ed80f9fb48e1",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_3",
+      "objects": [
+        {
+          "id": "48c9f49a-bea6-436c-aa71-0511fad8e117",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_4",
+      "objects": [
+        {
+          "id": "4fd2b771-f386-4d7b-80e2-a934f6f992b4",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_5",
+      "objects": [
+        {
+          "id": "542d1f2d-a5f0-4706-9554-563600f8f704",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_6",
+      "objects": [
+        {
+          "id": "738768aa-63ee-4c5a-90bf-e41e96ea80f3",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_7",
+      "objects": [
+        {
+          "id": "999c6dab-36e8-484e-8443-0ee82b020fba",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_8",
+      "objects": [
+        {
+          "id": "a1f321f1-11df-4320-9e32-bc6abd1a28cf",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_9",
+      "objects": [
+        {
+          "id": "b09a00f4-5014-4917-9dff-762a795254ac",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_10",
+      "objects": [
+        {
+          "id": "c70053ae-ccdf-4970-9a37-ecd8d3d57246",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_11",
+      "objects": [
+        {
+          "id": "c873990f-2be3-4ad3-86f8-e010b1fb24ac",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_12",
+      "objects": [
+        {
+          "id": "d6126b5f-d982-463d-b5ca-fbe519be8f5b",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_13",
+      "objects": [
+        {
+          "id": "db68cff8-eec5-43c2-b99c-1e53f32bface",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_14",
+      "objects": [
+        {
+          "id": "e8733b60-0898-467b-8972-f503b39dcee8",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_15",
+      "objects": [
+        {
+          "id": "ecad2ffa-1f44-4b13-9fd8-95cbc48989de",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    },
+    {
+      "group_id": null,
+      "folder": "objects/Using_the_attached_base_body_a_16",
+      "objects": [
+        {
+          "id": "fcb3e37e-eae2-4b3b-8db7-b49932afcf63",
+          "name": null,
+          "prompt": "Using the attached base body as reference, draw ONLY a [navy trousers] BOTTOM  worn on it \u2014 positioned exactly on the torso at the same scale and pose.  Everything except the shirt must be TRANSPARENT (no body, no other clothes).  Same 48x64 canvas, same alignment, pixel art, 1px outline, 2-3 shades, light top-left.",
+          "size": {
+            "width": 80,
+            "height": 80
+          },
+          "directions": 1,
+          "view": "low top-down",
+          "rotations": {
+            "unknown": "rotations/unknown.png"
+          },
+          "animations": {}
+        }
+      ]
+    }
+  ],
+  "export_version": "1.0",
+  "export_date": "2026-07-30T09:07:19.000086"
+}

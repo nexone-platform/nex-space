@@ -1,0 +1,761 @@
+{
+  "cols": 8,
+  "rows": 6,
+  "tile_px": 32,
+  "tile_px_2x": 64,
+  "count": 47,
+  "tiles": [
+    {
+      "index": 0,
+      "col": 0,
+      "row": 0,
+      "px_1x": [
+        0,
+        0
+      ],
+      "px_2x": [
+        0,
+        0
+      ],
+      "orth": "",
+      "diag": "",
+      "code": "\u2013"
+    },
+    {
+      "index": 1,
+      "col": 1,
+      "row": 0,
+      "px_1x": [
+        32,
+        0
+      ],
+      "px_2x": [
+        64,
+        0
+      ],
+      "orth": "N",
+      "diag": "",
+      "code": "N"
+    },
+    {
+      "index": 2,
+      "col": 2,
+      "row": 0,
+      "px_1x": [
+        64,
+        0
+      ],
+      "px_2x": [
+        128,
+        0
+      ],
+      "orth": "E",
+      "diag": "",
+      "code": "E"
+    },
+    {
+      "index": 3,
+      "col": 3,
+      "row": 0,
+      "px_1x": [
+        96,
+        0
+      ],
+      "px_2x": [
+        192,
+        0
+      ],
+      "orth": "S",
+      "diag": "",
+      "code": "S"
+    },
+    {
+      "index": 4,
+      "col": 4,
+      "row": 0,
+      "px_1x": [
+        128,
+        0
+      ],
+      "px_2x": [
+        256,
+        0
+      ],
+      "orth": "W",
+      "diag": "",
+      "code": "W"
+    },
+    {
+      "index": 5,
+      "col": 5,
+      "row": 0,
+      "px_1x": [
+        160,
+        0
+      ],
+      "px_2x": [
+        320,
+        0
+      ],
+      "orth": "NE",
+      "diag": "",
+      "code": "NE"
+    },
+    {
+      "index": 6,
+      "col": 6,
+      "row": 0,
+      "px_1x": [
+        192,
+        0
+      ],
+      "px_2x": [
+        384,
+        0
+      ],
+      "orth": "NE",
+      "diag": "NE",
+      "code": "NE+NE"
+    },
+    {
+      "index": 7,
+      "col": 7,
+      "row": 0,
+      "px_1x": [
+        224,
+        0
+      ],
+      "px_2x": [
+        448,
+        0
+      ],
+      "orth": "NS",
+      "diag": "",
+      "code": "NS"
+    },
+    {
+      "index": 8,
+      "col": 0,
+      "row": 1,
+      "px_1x": [
+        0,
+        32
+      ],
+      "px_2x": [
+        0,
+        64
+      ],
+      "orth": "NW",
+      "diag": "",
+      "code": "NW"
+    },
+    {
+      "index": 9,
+      "col": 1,
+      "row": 1,
+      "px_1x": [
+        32,
+        32
+      ],
+      "px_2x": [
+        64,
+        64
+      ],
+      "orth": "NW",
+      "diag": "NW",
+      "code": "NW+NW"
+    },
+    {
+      "index": 10,
+      "col": 2,
+      "row": 1,
+      "px_1x": [
+        64,
+        32
+      ],
+      "px_2x": [
+        128,
+        64
+      ],
+      "orth": "ES",
+      "diag": "",
+      "code": "ES"
+    },
+    {
+      "index": 11,
+      "col": 3,
+      "row": 1,
+      "px_1x": [
+        96,
+        32
+      ],
+      "px_2x": [
+        192,
+        64
+      ],
+      "orth": "ES",
+      "diag": "SE",
+      "code": "ES+SE"
+    },
+    {
+      "index": 12,
+      "col": 4,
+      "row": 1,
+      "px_1x": [
+        128,
+        32
+      ],
+      "px_2x": [
+        256,
+        64
+      ],
+      "orth": "EW",
+      "diag": "",
+      "code": "EW"
+    },
+    {
+      "index": 13,
+      "col": 5,
+      "row": 1,
+      "px_1x": [
+        160,
+        32
+      ],
+      "px_2x": [
+        320,
+        64
+      ],
+      "orth": "SW",
+      "diag": "",
+      "code": "SW"
+    },
+    {
+      "index": 14,
+      "col": 6,
+      "row": 1,
+      "px_1x": [
+        192,
+        32
+      ],
+      "px_2x": [
+        384,
+        64
+      ],
+      "orth": "SW",
+      "diag": "SW",
+      "code": "SW+SW"
+    },
+    {
+      "index": 15,
+      "col": 7,
+      "row": 1,
+      "px_1x": [
+        224,
+        32
+      ],
+      "px_2x": [
+        448,
+        64
+      ],
+      "orth": "NES",
+      "diag": "",
+      "code": "NES"
+    },
+    {
+      "index": 16,
+      "col": 0,
+      "row": 2,
+      "px_1x": [
+        0,
+        64
+      ],
+      "px_2x": [
+        0,
+        128
+      ],
+      "orth": "NES",
+      "diag": "NE",
+      "code": "NES+NE"
+    },
+    {
+      "index": 17,
+      "col": 1,
+      "row": 2,
+      "px_1x": [
+        32,
+        64
+      ],
+      "px_2x": [
+        64,
+        128
+      ],
+      "orth": "NES",
+      "diag": "SE",
+      "code": "NES+SE"
+    },
+    {
+      "index": 18,
+      "col": 2,
+      "row": 2,
+      "px_1x": [
+        64,
+        64
+      ],
+      "px_2x": [
+        128,
+        128
+      ],
+      "orth": "NES",
+      "diag": "NESE",
+      "code": "NES+NESE"
+    },
+    {
+      "index": 19,
+      "col": 3,
+      "row": 2,
+      "px_1x": [
+        96,
+        64
+      ],
+      "px_2x": [
+        192,
+        128
+      ],
+      "orth": "NEW",
+      "diag": "",
+      "code": "NEW"
+    },
+    {
+      "index": 20,
+      "col": 4,
+      "row": 2,
+      "px_1x": [
+        128,
+        64
+      ],
+      "px_2x": [
+        256,
+        128
+      ],
+      "orth": "NEW",
+      "diag": "NE",
+      "code": "NEW+NE"
+    },
+    {
+      "index": 21,
+      "col": 5,
+      "row": 2,
+      "px_1x": [
+        160,
+        64
+      ],
+      "px_2x": [
+        320,
+        128
+      ],
+      "orth": "NEW",
+      "diag": "NW",
+      "code": "NEW+NW"
+    },
+    {
+      "index": 22,
+      "col": 6,
+      "row": 2,
+      "px_1x": [
+        192,
+        64
+      ],
+      "px_2x": [
+        384,
+        128
+      ],
+      "orth": "NEW",
+      "diag": "NENW",
+      "code": "NEW+NENW"
+    },
+    {
+      "index": 23,
+      "col": 7,
+      "row": 2,
+      "px_1x": [
+        224,
+        64
+      ],
+      "px_2x": [
+        448,
+        128
+      ],
+      "orth": "NSW",
+      "diag": "",
+      "code": "NSW"
+    },
+    {
+      "index": 24,
+      "col": 0,
+      "row": 3,
+      "px_1x": [
+        0,
+        96
+      ],
+      "px_2x": [
+        0,
+        192
+      ],
+      "orth": "NSW",
+      "diag": "SW",
+      "code": "NSW+SW"
+    },
+    {
+      "index": 25,
+      "col": 1,
+      "row": 3,
+      "px_1x": [
+        32,
+        96
+      ],
+      "px_2x": [
+        64,
+        192
+      ],
+      "orth": "NSW",
+      "diag": "NW",
+      "code": "NSW+NW"
+    },
+    {
+      "index": 26,
+      "col": 2,
+      "row": 3,
+      "px_1x": [
+        64,
+        96
+      ],
+      "px_2x": [
+        128,
+        192
+      ],
+      "orth": "NSW",
+      "diag": "NWSW",
+      "code": "NSW+NWSW"
+    },
+    {
+      "index": 27,
+      "col": 3,
+      "row": 3,
+      "px_1x": [
+        96,
+        96
+      ],
+      "px_2x": [
+        192,
+        192
+      ],
+      "orth": "ESW",
+      "diag": "",
+      "code": "ESW"
+    },
+    {
+      "index": 28,
+      "col": 4,
+      "row": 3,
+      "px_1x": [
+        128,
+        96
+      ],
+      "px_2x": [
+        256,
+        192
+      ],
+      "orth": "ESW",
+      "diag": "SE",
+      "code": "ESW+SE"
+    },
+    {
+      "index": 29,
+      "col": 5,
+      "row": 3,
+      "px_1x": [
+        160,
+        96
+      ],
+      "px_2x": [
+        320,
+        192
+      ],
+      "orth": "ESW",
+      "diag": "SW",
+      "code": "ESW+SW"
+    },
+    {
+      "index": 30,
+      "col": 6,
+      "row": 3,
+      "px_1x": [
+        192,
+        96
+      ],
+      "px_2x": [
+        384,
+        192
+      ],
+      "orth": "ESW",
+      "diag": "SESW",
+      "code": "ESW+SESW"
+    },
+    {
+      "index": 31,
+      "col": 7,
+      "row": 3,
+      "px_1x": [
+        224,
+        96
+      ],
+      "px_2x": [
+        448,
+        192
+      ],
+      "orth": "NESW",
+      "diag": "",
+      "code": "NESW"
+    },
+    {
+      "index": 32,
+      "col": 0,
+      "row": 4,
+      "px_1x": [
+        0,
+        128
+      ],
+      "px_2x": [
+        0,
+        256
+      ],
+      "orth": "NESW",
+      "diag": "NE",
+      "code": "NESW+NE"
+    },
+    {
+      "index": 33,
+      "col": 1,
+      "row": 4,
+      "px_1x": [
+        32,
+        128
+      ],
+      "px_2x": [
+        64,
+        256
+      ],
+      "orth": "NESW",
+      "diag": "SE",
+      "code": "NESW+SE"
+    },
+    {
+      "index": 34,
+      "col": 2,
+      "row": 4,
+      "px_1x": [
+        64,
+        128
+      ],
+      "px_2x": [
+        128,
+        256
+      ],
+      "orth": "NESW",
+      "diag": "SW",
+      "code": "NESW+SW"
+    },
+    {
+      "index": 35,
+      "col": 3,
+      "row": 4,
+      "px_1x": [
+        96,
+        128
+      ],
+      "px_2x": [
+        192,
+        256
+      ],
+      "orth": "NESW",
+      "diag": "NW",
+      "code": "NESW+NW"
+    },
+    {
+      "index": 36,
+      "col": 4,
+      "row": 4,
+      "px_1x": [
+        128,
+        128
+      ],
+      "px_2x": [
+        256,
+        256
+      ],
+      "orth": "NESW",
+      "diag": "NESE",
+      "code": "NESW+NESE"
+    },
+    {
+      "index": 37,
+      "col": 5,
+      "row": 4,
+      "px_1x": [
+        160,
+        128
+      ],
+      "px_2x": [
+        320,
+        256
+      ],
+      "orth": "NESW",
+      "diag": "NESW",
+      "code": "NESW+NESW"
+    },
+    {
+      "index": 38,
+      "col": 6,
+      "row": 4,
+      "px_1x": [
+        192,
+        128
+      ],
+      "px_2x": [
+        384,
+        256
+      ],
+      "orth": "NESW",
+      "diag": "NENW",
+      "code": "NESW+NENW"
+    },
+    {
+      "index": 39,
+      "col": 7,
+      "row": 4,
+      "px_1x": [
+        224,
+        128
+      ],
+      "px_2x": [
+        448,
+        256
+      ],
+      "orth": "NESW",
+      "diag": "SESW",
+      "code": "NESW+SESW"
+    },
+    {
+      "index": 40,
+      "col": 0,
+      "row": 5,
+      "px_1x": [
+        0,
+        160
+      ],
+      "px_2x": [
+        0,
+        320
+      ],
+      "orth": "NESW",
+      "diag": "NWSE",
+      "code": "NESW+NWSE"
+    },
+    {
+      "index": 41,
+      "col": 1,
+      "row": 5,
+      "px_1x": [
+        32,
+        160
+      ],
+      "px_2x": [
+        64,
+        320
+      ],
+      "orth": "NESW",
+      "diag": "NWSW",
+      "code": "NESW+NWSW"
+    },
+    {
+      "index": 42,
+      "col": 2,
+      "row": 5,
+      "px_1x": [
+        64,
+        160
+      ],
+      "px_2x": [
+        128,
+        320
+      ],
+      "orth": "NESW",
+      "diag": "NESESW",
+      "code": "NESW+NESESW"
+    },
+    {
+      "index": 43,
+      "col": 3,
+      "row": 5,
+      "px_1x": [
+        96,
+        160
+      ],
+      "px_2x": [
+        192,
+        320
+      ],
+      "orth": "NESW",
+      "diag": "NENWSE",
+      "code": "NESW+NENWSE"
+    },
+    {
+      "index": 44,
+      "col": 4,
+      "row": 5,
+      "px_1x": [
+        128,
+        160
+      ],
+      "px_2x": [
+        256,
+        320
+      ],
+      "orth": "NESW",
+      "diag": "NENWSW",
+      "code": "NESW+NENWSW"
+    },
+    {
+      "index": 45,
+      "col": 5,
+      "row": 5,
+      "px_1x": [
+        160,
+        160
+      ],
+      "px_2x": [
+        320,
+        320
+      ],
+      "orth": "NESW",
+      "diag": "NWSESW",
+      "code": "NESW+NWSESW"
+    },
+    {
+      "index": 46,
+      "col": 6,
+      "row": 5,
+      "px_1x": [
+        192,
+        160
+      ],
+      "px_2x": [
+        384,
+        320
+      ],
+      "orth": "NESW",
+      "diag": "NENWSESW",
+      "code": "NESW+NENWSESW"
+    }
+  ]
+}
