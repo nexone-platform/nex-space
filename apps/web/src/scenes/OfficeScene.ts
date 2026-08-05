@@ -302,15 +302,17 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // --- outdoor props (trees / fountain / benches / signs) on the grass ring ---
+    const outdoorScale = (k: string) => (/planter/.test(k) ? 0.6 : 1); // shrink bulky planters
     for (const [k, tx, ty, solid] of OUTDOOR) {
       const px = tx * TILE + TILE / 2;
       const py = ty * TILE + TILE / 2;
+      const s = outdoorScale(k);
       if (solid) {
         const img = solids.create(px, py, k) as Phaser.Physics.Arcade.Sprite;
-        img.setDepth(py);
+        img.setScale(s).setDepth(py);
         img.refreshBody();
       } else {
-        this.add.image(px, py, k).setDepth(py);
+        this.add.image(px, py, k).setScale(s).setDepth(py);
       }
     }
 
