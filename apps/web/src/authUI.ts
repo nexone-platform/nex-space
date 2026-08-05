@@ -3,10 +3,11 @@
 import { openAvatarEditor } from "./avatar/avatarEditor";
 import { encodeAvatar, buildFrameCanvas, defaultDressedConfig, type LpcConfig } from "./avatar/avatarCompose";
 
-const defaultApiHost = typeof window !== "undefined" && window.location.protocol === "https:"
-  ? `https://${window.location.hostname}`
-  : "http://localhost:3001";
-const API = ((import.meta as any).env?.VITE_API_URL as string) || defaultApiHost;
+// In production the app is served by nginx, which reverse-proxies the API on the
+// same origin (/auth, /me). Use same-origin relative URLs there so it works over
+// any host/port/protocol; fall back to the local API port only in dev.
+const API = ((import.meta as any).env?.VITE_API_URL as string)
+  || ((import.meta as any).env?.DEV ? "http://localhost:3001" : "");
 
 export interface StartInfo { name: string; avatar: string; }
 interface User { name: string; email: string; avatar: { avatarId?: string; lpc?: LpcConfig } | null; }

@@ -16,17 +16,16 @@ const CHAIR_TO_FACING: Record<string, string> = {
   north: "up", "north-west": "up-left", west: "left", "south-west": "down-left",
 };
 
-const defaultWsHost = typeof window !== "undefined" && window.location.protocol === "https:"
-  ? `wss://${window.location.hostname}`
-  : "ws://localhost:2567";
-const defaultHttpHost = typeof window !== "undefined" && window.location.protocol === "https:"
-  ? `https://${window.location.hostname}`
-  : "http://localhost:2567";
-
+// In production the app is served by nginx, which reverse-proxies the game server
+// and API on the same origin (/colyseus, /livekit, /me). Use same-origin URLs there
+// so it works over any host/port/protocol; fall back to local ports only in dev.
 const env = (import.meta as any).env || {};
-const SERVER_URL = (env.VITE_GAME_SERVER_URL as string) || defaultWsHost;
-const HTTP_URL = (env.VITE_GAME_SERVER_HTTP as string) || defaultHttpHost;
-const AUTH_API = (env.VITE_API_URL as string) || (typeof window !== "undefined" && window.location.protocol === "https:" ? `https://${window.location.hostname}` : "http://localhost:3001");
+const isDev = !!env.DEV;
+const wsProto = typeof window !== "undefined" && window.location.protocol === "https:" ? "wss:" : "ws:";
+const sameHost = typeof window !== "undefined" ? window.location.host : "";
+const SERVER_URL = (env.VITE_GAME_SERVER_URL as string) || (isDev ? "ws://localhost:2567" : `${wsProto}//${sameHost}/colyseus`);
+const HTTP_URL = (env.VITE_GAME_SERVER_HTTP as string) || (isDev ? "http://localhost:2567" : "");
+const AUTH_API = (env.VITE_API_URL as string) || (isDev ? "http://localhost:3001" : "");
 
 // selectable avatars: spritesheet key + frame size (walk sheet 8 rows x 6 frames)
 // frame size + frames-per-direction (nf) MUST match the generated walk sheets
