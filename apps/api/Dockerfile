@@ -1,6 +1,12 @@
-FROM node:20-alpine
+FROM node:20-slim
 
 WORKDIR /app/apps/api
+
+# Prisma needs OpenSSL present to load its query/schema engine. Debian slim +
+# openssl avoids the musl/openssl-1.1.x detection failure seen on node:*-alpine.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY apps/api/package*.json ./
 

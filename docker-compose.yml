@@ -35,7 +35,8 @@ services:
     restart: always
     environment:
       - PORT=3001
-      - DATABASE_URL=file:./prod.db
+      # db lives inside the mounted prisma dir so it persists on the named volume
+      - DATABASE_URL=file:./prisma/prod.db
     ports:
       - "3001:3001"
     volumes:
