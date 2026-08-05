@@ -2,7 +2,7 @@ import { Room, Client } from "colyseus";
 import { OfficeState, Player } from "../schema";
 
 const TILE = 32;
-const SPAWN = { x: 15 * TILE + TILE / 2, y: 10 * TILE + TILE / 2 };
+const SPAWN = { x: 15 * TILE + TILE / 2, y: 18 * TILE + TILE / 2 };
 const NEAR_PX = 5 * TILE; // proximity radius (5 tiles)
 
 type MoveMsg = { x: number; y: number; dir: string; moving: boolean };

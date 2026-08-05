@@ -70,9 +70,11 @@ interface Remote {
 
 // ===== Office size: SMALL (S) — 1-10 people — compact 20x15 =====
 const TILE = 32;
-const COLS = 20;
-const ROWS = 15;
-const SPAWN = { x: 9, y: 11 }; // open area near reception/entrance
+const COLS = 32;
+const ROWS = 25;
+const SPAWN = { x: 15, y: 18 }; // entrance hall, just inside the front door
+// building footprint (wall rectangle); interior walkable is x5..26, y4..19
+const BUILD = { x0: 4, y0: 3, x1: 27, y1: 20 };
 const ZOOM_MIN = 1.3, ZOOM_MAX = 4, ZOOM_DEFAULT = 2.2;
 
 // furniture: [key, tileX, tileY, solid?]  (map is 20x15)
@@ -81,48 +83,82 @@ const CHAIR_STYLES = ["chair-1", "chair-2", "chair-3", "chair-4", "chair-5", "ch
 const CHAIR_DIRS = ["south", "south-east", "east", "north-east", "north", "north-west", "west", "south-west"];
 
 const FURNITURE: [string, number, number, boolean][] = [
-  // open desk area (center-left) — 6 seats
-  ["desk", 3, 4, true], ["chair-2-south", 3, 5, false],
-  ["desk", 6, 4, true], ["chair-3-south", 6, 5, false],
-  ["desk-monitor", 9, 4, true], ["chair-4-south", 9, 5, false],
-  ["desk", 3, 8, true], ["chair-5-south", 3, 9, false],
-  ["desk", 6, 8, true], ["chair-6-south", 6, 9, false],
-  ["desk-monitor", 9, 8, true], ["chair-7-south", 9, 9, false],
-  ["rug", 6, 6, false],
+  // --- lounge (top-left, pink carpet) ---
+  ["sofa-yellow", 6, 5, false], ["sofa-pink", 9, 5, false],
+  ["side-table", 7.5, 6, false], ["floor-lamp", 11, 5, false],
+  ["plant-large", 5, 8, true], ["rug-round", 8, 7, false],
 
-  // meeting room (enclosed, top-right, gray carpet) — centered symmetrically at x=16.0
-  ["conference-table", 16.0, 2.5, true],
-  ["chair-1-south", 15.2, 1, false], ["chair-2-south", 16.8, 1, false],
-  ["chair-1-north", 15.2, 4, false], ["chair-2-north", 16.8, 4, false],
-  ["chair-4-east", 14.2, 2, false], ["chair-5-east", 14.2, 3, false],
-  ["chair-6-west", 17.8, 2, false], ["chair-7-west", 17.8, 3, false],
-  ["plant-small", 14.2, 5, false], ["plant-small", 17.8, 5, false],
+  // --- private office (top-center, blue carpet) ---
+  ["bookshelf", 13, 4, true], ["whiteboard", 15, 4, true],
+  ["desk", 14, 6, true], ["chair-4-north", 14, 7, false],
+  ["desk-monitor", 17, 6, true], ["chair-5-north", 17, 7, false],
+  ["plant", 18, 4, true],
 
-  // pantry corner (bottom-left, wood floor) — modern tech startup relaxation lounge
-  ["beverage-cooler", 1, 11, true],
-  ["counter", 2.5, 11, true],
-  ["coffee-machine", 3.5, 11, true],
-  ["water-cooler-modern", 4.5, 11, true],
-  ["lounge-sofa", 2, 13, false],
-  ["lounge-coffee-table", 3.2, 13, false],
-  ["bean-bag", 4.3, 13, false],
+  // --- meeting room (top-right, mint carpet) ---
+  ["conference-table", 23, 6, true],
+  ["chair-1-south", 22, 5, false], ["chair-2-south", 24, 5, false],
+  ["chair-1-north", 22, 8, false], ["chair-2-north", 24, 8, false],
+  ["chair-4-east", 21, 6, false], ["chair-6-west", 25, 6, false],
+  ["plant-small", 20, 4, false], ["plant-small", 26, 4, false],
 
-  // entrance / reception (bottom-center)
-  ["reception-desk", 10, 12, true], ["plant", 12, 12, true],
+  // --- main hall (marble): reception + open desks ---
+  ["reception-desk", 15, 16, true], ["plant", 17, 16, true],
+  ["desk", 8, 12, true], ["chair-6-south", 8, 13, false],
+  ["desk-monitor", 11, 12, true], ["chair-7-south", 11, 13, false],
+  ["desk", 20, 12, true], ["chair-3-south", 20, 13, false],
+  ["desk-monitor", 23, 12, true], ["chair-4-south", 23, 13, false],
+  ["rug", 15, 13, false],
+  ["plant-large", 11, 17, true], ["plant-large", 20, 17, true],
+  ["plant", 5, 11, false], ["plant", 26, 11, false],
 
-  // a few plants & whiteboard
-  ["whiteboard", 7, 1, true],
-  ["plant-small", 18, 13, false], ["plant", 18, 8, true], ["plant-small", 12, 1, false],
+  // --- pantry (bottom-left, plank floor) ---
+  ["kitchen-counter", 6, 15, true], ["coffee-machine", 8, 15, true],
+  ["beverage-cooler", 9, 15, true],
+  ["lounge-sofa", 6, 18, false], ["lounge-coffee-table", 7.5, 18, false], ["bean-bag", 9, 18, false],
+
+  // --- game / chill room (bottom-right, dark wood) ---
+  ["arcade", 22, 16, true], ["gaming-tv", 25, 15, true],
+  ["sofa-teal", 23, 18, false], ["armchair", 21, 18, false], ["plant-large", 26, 18, true],
 ];
 
-// decor overlays drawn ON TOP of walls (windows / glass fronts). [key, tileX, tileY]
+// outdoor props on the grass ring: [key, tileX, tileY, solid?]  (loaded from /assets/outdoor)
+const OUTDOOR: [string, number, number, boolean][] = [
+  ["fountain", 15, 22, true],                                   // front-yard centerpiece
+  // trees around the perimeter (left / right / top / bottom-corners)
+  ["tree", 1, 5, true], ["tree-oval", 2, 11, true], ["pine", 1, 17, true],
+  ["tree-oval", 30, 5, true], ["tree", 29, 11, true], ["pine", 30, 17, true],
+  ["pine", 6, 1, true], ["tree", 11, 1, true], ["tree-oval", 16, 1, true], ["pine", 21, 1, true], ["tree", 25, 1, true],
+  ["tree-oval", 2, 22, true], ["tree", 29, 22, true],
+  // shrubs hugging the building base
+  ["shrub", 5, 2, false], ["shrub", 9, 2, false], ["shrub", 22, 2, false], ["shrub", 26, 2, false],
+  ["shrub", 5, 21, false], ["shrub", 26, 21, false],
+  // entrance furnishings — kept clear of the fountain (which spans x13.5..17.5)
+  ["bench", 8, 23, false], ["bench", 23, 23, false], ["bench-sofa", 2, 15, false],
+  ["planter-box", 12, 21, false], ["planter-round", 19, 21, false],
+  ["lamp-post", 6, 22, true], ["lamp-post", 25, 22, true],
+  ["sign-welcome", 11, 22, false], ["sign-team", 20, 22, false], ["sign-dir", 3, 9, false],
+];
+
+// flat grass decals (flowers / clover / bushes) scattered on the lawn, drawn just above the floor
+const DECALS: [string, number, number][] = [
+  ["flower-yellow", 1, 3], ["clover", 3, 8], ["flower-mixed", 1, 14], ["flower-pink", 3, 19],
+  ["clover", 28, 4], ["flower-yellow", 30, 9], ["flower-mixed", 28, 15], ["flower-pink", 30, 19],
+  ["clover", 8, 1], ["flower-yellow", 14, 2], ["flower-pink", 19, 2], ["flower-mixed", 24, 1],
+  ["bush-blob", 4, 1], ["bush-blob", 27, 1], ["rocks", 5, 23], ["rocks", 26, 23],
+  ["flower-yellow", 10, 24], ["clover", 22, 24], ["flower-mixed", 12, 23], ["flower-pink", 21, 23],
+];
+
+// decor overlays drawn ON TOP of walls (windows / art / signage). [key, tileX, tileY]
 const DECOR: [string, number, number][] = [
-  // windows set into the top wall
-  ["window", 4, 0], ["window", 9, 0],
-  // glass front for the meeting room (along its partition wall y=5)
-  ["glass-panel", 14, 5], ["glass-panel", 16, 5], ["glass-panel", 18, 5],
-  // a wide glass accent on the right border wall
-  ["glass-wide", 19, 3],
+  // arched windows along the front (top) wall
+  ["arched-window", 8, 3], ["arched-window", 15, 3], ["arched-window", 22, 3],
+  // windows on the side walls
+  ["window", 4, 8], ["window", 27, 8],
+  // meeting-room glass front (along the y=10 partition, x20..26)
+  ["glass-panel", 21, 10], ["glass-panel", 25, 10],
+  // wall art & signage mounted on interior walls
+  ["art-landscape", 12, 3], ["art-poster", 6, 10], ["wall-shelf", 10, 10],
+  ["wall-clock", 14, 10], ["corkboard", 17, 10], ["neon-sign", 24, 3],
 ];
 
 export class OfficeScene extends Phaser.Scene {
@@ -176,6 +212,8 @@ export class OfficeScene extends Phaser.Scene {
     const items = new Set(FURNITURE.map((f) => f[0]));
     items.forEach((k) => this.load.image(k, `/assets/furniture/${k}.png`));
     new Set(DECOR.map((d) => d[0])).forEach((k) => this.load.image(k, `/assets/decor/${k}.png`));
+    new Set(OUTDOOR.map((o) => o[0])).forEach((k) => this.load.image(k, `/assets/outdoor/${k}.png`));
+    new Set(DECALS.map((d) => d[0])).forEach((k) => this.load.image(k, `/assets/outdoor/${k}.png`));
     // load all directional chair images for rotation
     for (const style of CHAIR_STYLES) {
       for (const dir of CHAIR_DIRS) {
@@ -189,11 +227,19 @@ export class OfficeScene extends Phaser.Scene {
     const worldW = COLS * TILE;
     const worldH = ROWS * TILE;
 
-    // --- floor zones: 0=cream (default), 1=wood (lounge), 2=gray (meeting room) ---
+    // --- floor zones (atlas index): 0 marble, 1 grass, 2 plank, 3 pink, 4 mint,
+    //     5 blue, 6 dark-wood, 7 path, 8 brick ---
+    const inBuild = (x: number, y: number) => x >= 5 && x <= 26 && y >= 4 && y <= 19;
     const floorAt = (x: number, y: number): number => {
-      if (x >= 14 && x <= 18 && y >= 1 && y <= 4) return 2; // meeting room interior (x=14..18, y=1..4)
-      if (x >= 1 && x <= 5 && y >= 10 && y <= 13) return 1; // pantry corner interior (x=1..5, y=10..13)
-      return 0; // cream
+      if (x >= 14 && x <= 17 && y >= 21 && y <= 22) return 8;  // brick entrance plaza (outdoor)
+      if ((x === 15 || x === 16) && y >= 23) return 7;         // cobble path to the edge
+      if (!inBuild(x, y)) return 1;                            // grass (outdoor)
+      if (x >= 5 && x <= 11 && y >= 4 && y <= 9) return 3;     // lounge (pink)
+      if (x >= 13 && x <= 18 && y >= 4 && y <= 9) return 5;    // private office (blue)
+      if (x >= 20 && x <= 26 && y >= 4 && y <= 9) return 4;    // meeting (mint)
+      if (x >= 5 && x <= 10 && y >= 15 && y <= 19) return 2;   // pantry (plank)
+      if (x >= 21 && x <= 26 && y >= 15 && y <= 19) return 6;  // game room (dark wood)
+      return 0;                                                // marble hall
     };
     const floorData: number[][] = [];
     for (let y = 0; y < ROWS; y++) {
@@ -204,15 +250,19 @@ export class OfficeScene extends Phaser.Scene {
     const floorMap = this.make.tilemap({ data: floorData, tileWidth: TILE, tileHeight: TILE });
     floorMap.createLayer(0, floorMap.addTilesetImage("floors")!, 0, 0)!.setDepth(-1000);
 
-    // --- walls: outer border + meeting-room partition (top-right) ---
+    // --- walls: building perimeter + interior room partitions ---
     const walls = new Set<string>();
     const addWall = (x: number, y: number) => walls.add(`${x},${y}`);
-    for (let x = 0; x < COLS; x++) { addWall(x, 0); addWall(x, ROWS - 1); }
-    for (let y = 0; y < ROWS; y++) { addWall(0, y); addWall(COLS - 1, y); }
-    for (let y = 1; y <= 5; y++) addWall(13, y);        // meeting partition (vertical)
-    for (let x = 13; x < COLS; x++) addWall(x, 5);      // meeting partition (horizontal)
-    walls.delete("10,14"); // entrance door (bottom)
-    walls.delete("13,3");  // meeting room door
+    // building perimeter rectangle
+    for (let x = BUILD.x0; x <= BUILD.x1; x++) { addWall(x, BUILD.y0); addWall(x, BUILD.y1); }
+    for (let y = BUILD.y0; y <= BUILD.y1; y++) { addWall(BUILD.x0, y); addWall(BUILD.x1, y); }
+    // horizontal partition splitting the top rooms from the hall
+    for (let x = 5; x <= 26; x++) addWall(x, 10);
+    // vertical partitions between the three top rooms
+    for (let y = 4; y <= 9; y++) { addWall(12, y); addWall(19, y); }
+    // doors
+    walls.delete("15,20"); walls.delete("16,20");                  // front entrance
+    walls.delete("8,10"); walls.delete("16,10"); walls.delete("23,10"); // lounge / office / meeting
     const isWall = (x: number, y: number) => walls.has(`${x},${y}`);
 
     const data: number[][] = [];
@@ -244,6 +294,24 @@ export class OfficeScene extends Phaser.Scene {
           const m = k.match(/^(chair-\d+)/);
           if (m) this.chairStyles.set(spr, m[1]);
         }
+      }
+    }
+
+    // --- flat grass decals (flowers / clover) drawn just above the floor ---
+    for (const [k, tx, ty] of DECALS) {
+      this.add.image(tx * TILE + TILE / 2, ty * TILE + TILE / 2, k).setDepth(-800);
+    }
+
+    // --- outdoor props (trees / fountain / benches / signs) on the grass ring ---
+    for (const [k, tx, ty, solid] of OUTDOOR) {
+      const px = tx * TILE + TILE / 2;
+      const py = ty * TILE + TILE / 2;
+      if (solid) {
+        const img = solids.create(px, py, k) as Phaser.Physics.Arcade.Sprite;
+        img.setDepth(py);
+        img.refreshBody();
+      } else {
+        this.add.image(px, py, k).setDepth(py);
       }
     }
 

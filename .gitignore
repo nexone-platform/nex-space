@@ -20,3 +20,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
+
+# raw PixelLab asset library (curation source, not deployed/committed)
+apps/web/asset-library/
