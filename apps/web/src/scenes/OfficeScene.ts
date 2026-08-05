@@ -319,6 +319,7 @@ export class OfficeScene extends Phaser.Scene {
       this.toggleSit();
     });
     this.input.keyboard!.on("keydown-M", () => this.setZoom(ZOOM_MIN)); // zoom out fully
+    this.setupInputFocusGuard();
     this.setupZoomControls();
     this.setupInteractives();
 
@@ -1022,6 +1023,23 @@ export class OfficeScene extends Phaser.Scene {
     const f = document.getElementById("modal-frame") as HTMLIFrameElement | null;
     if (f) f.src = "about:blank";
     if (m) m.style.display = "none";
+  }
+
+  // Phaser globally captures WASD + arrow keys for movement (calls preventDefault),
+  // which otherwise stops those letters reaching any HTML field — auth/name inputs,
+  // sidebar search, room chat. Release the keyboard to the DOM while a field is focused.
+  private setupInputFocusGuard() {
+    const kb = this.input.keyboard;
+    if (!kb) return;
+    const editable = (el: EventTarget | null) =>
+      el instanceof HTMLElement &&
+      (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+    const release = () => { kb.enabled = false; kb.disableGlobalCapture(); kb.resetKeys(); };
+    const grab = () => { kb.enabled = true; kb.enableGlobalCapture(); };
+    document.addEventListener("focusin", (e) => { if (editable(e.target)) release(); });
+    document.addEventListener("focusout", (e) => { if (editable(e.target)) grab(); });
+    // a field may already hold focus when the scene boots (e.g. autofilled login)
+    if (editable(document.activeElement)) release();
   }
 
   private setupChat() {
