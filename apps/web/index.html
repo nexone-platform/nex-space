@@ -134,6 +134,13 @@
       #auth-overlay input { width: 100%; box-sizing: border-box; padding: 10px 12px; margin-bottom: 10px;
         border: 1px solid #e2e4ea; border-radius: 10px; font-size: 14px; outline: none; }
       #auth-overlay input:focus { border-color: #2bb3a3; }
+      #auth-overlay .pass-wrap { position: relative; margin-bottom: 10px; }
+      #auth-overlay .pass-wrap input { margin-bottom: 0; padding-right: 42px; }
+      #auth-overlay .pass-eye { position: absolute; right: 4px; top: 0; height: 100%; width: 38px;
+        border: none; background: transparent; cursor: pointer; color: #8a8f98; padding: 0;
+        display: grid; place-items: center; }
+      #auth-overlay .pass-eye:hover { color: #2bb3a3; }
+      #auth-overlay .pass-eye svg { width: 20px; height: 20px; }
       #auth-overlay .primary { width: 100%; padding: 11px; border: none; border-radius: 10px; background: #2bb3a3;
         color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; }
       #auth-overlay .primary:hover { background: #249e90; }
@@ -281,7 +288,10 @@
           <div class="err" id="auth-err"></div>
           <input id="a-name" type="text" placeholder="ชื่อที่แสดง" style="display:none" autocomplete="off" />
           <input id="a-email" type="email" placeholder="อีเมล" autocomplete="username" />
-          <input id="a-pass" type="password" placeholder="รหัสผ่าน (อย่างน้อย 6 ตัว)" autocomplete="current-password" />
+          <div class="pass-wrap">
+            <input id="a-pass" type="password" placeholder="รหัสผ่าน (อย่างน้อย 6 ตัว)" autocomplete="current-password" />
+            <button type="button" id="a-pass-toggle" class="pass-eye" title="แสดงรหัสผ่าน" aria-label="แสดงรหัสผ่าน"></button>
+          </div>
           <button class="primary" id="a-submit">เข้าสู่ระบบ</button>
           <button class="ghost" id="a-guest">ข้ามไปก่อน — เข้าแบบ Guest</button>
         </div>
