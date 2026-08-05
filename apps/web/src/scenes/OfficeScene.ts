@@ -116,9 +116,12 @@ const FURNITURE: [string, number, number, boolean][] = [
   ["beverage-cooler", 9, 15, true],
   ["lounge-sofa", 6, 18, false], ["lounge-coffee-table", 7.5, 18, false], ["bean-bag", 9, 18, false],
 
-  // --- game / chill room (bottom-right, dark wood) ---
-  ["arcade", 22, 16, true], ["gaming-tv", 25, 15, true],
-  ["sofa-teal", 23, 18, false], ["armchair", 21, 18, false], ["plant-large", 26, 18, true],
+  // --- game / chill room (bottom-right, dark wood) — symmetric lounge around x=23.5 ---
+  ["gaming-tv", 23.5, 15, true],
+  ["arcade", 21.5, 16, true], ["plant-large", 25.5, 16, true],
+  ["lounge-coffee-table", 23.5, 17, false],
+  ["sofa-teal", 23.5, 18, false],
+  ["armchair", 21.5, 18.3, false], ["armchair", 25.5, 18.3, false],
 ];
 
 // outdoor props on the grass ring: [key, tileX, tileY, solid?]  (loaded from /assets/outdoor)
