@@ -133,10 +133,10 @@ const OUTDOOR: [string, number, number, boolean][] = [
   ["shrub", 5, 2, false], ["shrub", 9, 2, false], ["shrub", 22, 2, false], ["shrub", 26, 2, false],
   ["shrub", 5, 21, false], ["shrub", 26, 21, false],
   // entrance furnishings — kept clear of the fountain (which spans x13.5..17.5)
-  ["bench", 8, 23, false], ["bench", 23, 23, false], ["bench-sofa", 2, 15, false],
-  ["planter-box", 12, 21, false], ["planter-round", 19, 21, false],
-  ["lamp-post", 6, 22, true], ["lamp-post", 25, 22, true],
-  ["sign-welcome", 11, 22, false], ["sign-team", 20, 22, false], ["sign-dir", 3, 9, false],
+  ["bench", 7, 23, false], ["bench", 24, 23, false], ["bench-sofa", 2, 15, false],
+  ["planter-round", 13, 21, false], ["planter-round", 18, 21, false],
+  ["lamp-post", 5, 22, true], ["lamp-post", 26, 22, true],
+  ["sign-welcome", 10, 22, false], ["sign-team", 21, 22, false], ["sign-dir", 3, 9, false],
 ];
 
 // flat grass decals (flowers / clover / bushes) scattered on the lawn, drawn just above the floor
@@ -145,7 +145,7 @@ const DECALS: [string, number, number][] = [
   ["clover", 28, 4], ["flower-yellow", 30, 9], ["flower-mixed", 28, 15], ["flower-pink", 30, 19],
   ["clover", 8, 1], ["flower-yellow", 14, 2], ["flower-pink", 19, 2], ["flower-mixed", 24, 1],
   ["bush-blob", 4, 1], ["bush-blob", 27, 1], ["rocks", 5, 23], ["rocks", 26, 23],
-  ["flower-yellow", 10, 24], ["clover", 22, 24], ["flower-mixed", 12, 23], ["flower-pink", 21, 23],
+  ["flower-yellow", 9, 24], ["flower-yellow", 22, 24], ["clover", 11, 24], ["clover", 20, 24],
 ];
 
 // decor overlays drawn ON TOP of walls (windows / art / signage). [key, tileX, tileY]
@@ -231,8 +231,7 @@ export class OfficeScene extends Phaser.Scene {
     //     5 blue, 6 dark-wood, 7 path, 8 brick ---
     const inBuild = (x: number, y: number) => x >= 5 && x <= 26 && y >= 4 && y <= 19;
     const floorAt = (x: number, y: number): number => {
-      if (x >= 14 && x <= 17 && y >= 21 && y <= 22) return 8;  // brick entrance plaza (outdoor)
-      if ((x === 15 || x === 16) && y >= 23) return 7;         // cobble path to the edge
+      if (x >= 13 && x <= 18 && y >= 21 && y <= 23) return 8;  // symmetric stone plaza under the fountain
       if (!inBuild(x, y)) return 1;                            // grass (outdoor)
       if (x >= 5 && x <= 11 && y >= 4 && y <= 9) return 3;     // lounge (pink)
       if (x >= 13 && x <= 18 && y >= 4 && y <= 9) return 5;    // private office (blue)
