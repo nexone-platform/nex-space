@@ -9,10 +9,20 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "8mb" })); // maps can be large
 
+// `desk` is stored as a JSON map of workspace -> deskId, so a desk claimed in one
+// workspace doesn't follow the user into another. Older rows hold a bare desk id.
+const parseDesks = (raw: string | null | undefined): Record<string, string> => {
+  if (!raw) return {};
+  try {
+    const v = JSON.parse(raw);
+    return v && typeof v === "object" ? v as Record<string, string> : { main: String(v) };
+  } catch { return { main: raw }; } // legacy: plain desk id
+};
+
 const safeUser = (u: { id: string; email: string; name: string; avatar: string | null; desk?: string | null }) => ({
   id: u.id, email: u.email, name: u.name,
   avatar: u.avatar ? JSON.parse(u.avatar) : null,
-  desk: u.desk ?? null,
+  desks: parseDesks(u.desk),
 });
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
@@ -56,8 +66,16 @@ app.put("/me/avatar", requireAuth, async (req: AuthedRequest, res) => {
 });
 
 app.put("/me/desk", requireAuth, async (req: AuthedRequest, res) => {
-  const desk = String((req.body ?? {}).desk ?? "").slice(0, 32) || null;
-  const user = await prisma.user.update({ where: { id: req.user!.id }, data: { desk } });
+  const { workspace, desk } = req.body ?? {};
+  const ws = String(workspace || "main").slice(0, 32);
+  const id = String(desk ?? "").slice(0, 32);
+  const desks = parseDesks(req.user!.desk);
+  if (id) desks[ws] = id;
+  else delete desks[ws];
+  const user = await prisma.user.update({
+    where: { id: req.user!.id },
+    data: { desk: JSON.stringify(desks) },
+  });
   res.json({ user: safeUser(user) });
 });
 

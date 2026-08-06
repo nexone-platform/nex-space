@@ -42,6 +42,8 @@ const httpServer = createServer(app);
 const gameServer = new Server({
   transport: new WebSocketTransport({ server: httpServer, maxPayload: 4 * 1024 * 1024 }),
 });
-gameServer.define("office", OfficeRoom);
+// one room instance per workspace: joinOrCreate("office", { workspace }) only
+// matches a room created with the same workspace, so spaces stay separate
+gameServer.define("office", OfficeRoom).filterBy(["workspace"]);
 gameServer.listen(port);
 console.log(`[game-server] NexSpace on ws://localhost:${port}  |  LiveKit SFU: ${lkEnabled ? "ON (" + LK_URL + ")" : "OFF → P2P mesh"}`);

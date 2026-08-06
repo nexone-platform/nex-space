@@ -6,6 +6,7 @@ import { LiveKitManager } from "../net/livekit";
 import type { MediaManager } from "../net/media";
 import { buildWalkCanvas, buildSitCanvas, SIT_COLS, SIT_SEATED_COL, decodeAvatar, encodeAvatar, isLpc, avatarKey, defaultDressedConfig, LPC_ROW } from "../avatar/avatarCompose";
 import { openAvatarEditor } from "../avatar/avatarEditor";
+import { WORKSPACE, workspaceLabel, inviteLink, wsKey } from "../workspace";
 
 const LPC_COLS = 9; // LPC walk sheet: 9 frames per direction row
 const LPC_SCALE = 0.5;    // 64px LPC frames render large vs 32px furniture -> scale down
@@ -585,7 +586,8 @@ export class OfficeScene extends Phaser.Scene {
       if (cfg?.enabled) {
         const name = (room.state.players.get(this.mySessionId) as any)?.name ?? this.mySessionId;
         const tk = await fetch(
-          `${HTTP_URL}/livekit/token?room=office&identity=${this.mySessionId}&name=${encodeURIComponent(name)}`
+          // per-workspace LiveKit room, otherwise audio/video would carry across workspaces
+          `${HTTP_URL}/livekit/token?room=${encodeURIComponent("office-" + WORKSPACE)}&identity=${this.mySessionId}&name=${encodeURIComponent(name)}`
         ).then((r) => r.json());
         const lk = new LiveKitManager(tilesEl);
         await lk.connect(tk.url, tk.token);
@@ -602,7 +604,8 @@ export class OfficeScene extends Phaser.Scene {
   private async connectMultiplayer() {
     try {
       const client = new Client(SERVER_URL);
-      const room = await client.joinOrCreate("office", { name: this.myName, avatar: this.myAvatar });
+      // `workspace` is filterBy'd server-side: each workspace gets its own room instance
+      const room = await client.joinOrCreate("office", { workspace: WORKSPACE, name: this.myName, avatar: this.myAvatar });
       this.room = room;
       this.mySessionId = room.sessionId;
       console.log(`[nexspace] joined room ${room.roomId} as ${room.sessionId}`);
@@ -829,11 +832,15 @@ export class OfficeScene extends Phaser.Scene {
     document.getElementById("sb-close")?.addEventListener("click", () => sidebar?.classList.add("closed"));
     document.getElementById("sb-search")?.addEventListener("input", () => this.refreshRoster());
 
+    const title = document.getElementById("sb-title");
+    if (title) title.textContent = workspaceLabel();
+
     // invite: copy the room link
     document.getElementById("btn-invite")?.addEventListener("click", async () => {
       const btn = document.getElementById("btn-invite") as HTMLButtonElement;
-      try { await navigator.clipboard.writeText(location.href); btn.textContent = "✓ คัดลอกลิงก์แล้ว!"; }
-      catch { btn.textContent = location.href; }
+      const link = inviteLink();
+      try { await navigator.clipboard.writeText(link); btn.textContent = "✓ คัดลอกลิงก์แล้ว!"; }
+      catch { btn.textContent = link; }
       setTimeout(() => (btn.textContent = "＋ เชิญ / คัดลอกลิงก์"), 2000);
     });
 
@@ -1417,13 +1424,13 @@ export class OfficeScene extends Phaser.Scene {
 
   /** persist the chosen desk: member -> API, everyone -> localStorage */
   private saveDesk(deskId: string) {
-    try { localStorage.setItem("nexspace-desk", deskId); } catch { /* ignore */ }
+    try { localStorage.setItem(wsKey("nexspace-desk"), deskId); } catch { /* ignore */ }
     const token = localStorage.getItem("nexspace-token");
     if (token) {
       fetch(`${AUTH_API}/me/desk`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-        body: JSON.stringify({ desk: deskId }),
+        body: JSON.stringify({ workspace: WORKSPACE, desk: deskId }),
       }).catch(() => {});
     }
   }

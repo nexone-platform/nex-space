@@ -25,13 +25,13 @@ export async function userFromToken(token?: string) {
 
 // augment Express Request with the authed user
 export interface AuthedRequest extends Request {
-  user?: { id: string; email: string; name: string; avatar: string | null };
+  user?: { id: string; email: string; name: string; avatar: string | null; desk: string | null };
 }
 
 export async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
   const token = req.header("authorization")?.replace(/^Bearer\s+/i, "");
   const user = await userFromToken(token);
   if (!user) return res.status(401).json({ error: "unauthorized" });
-  req.user = { id: user.id, email: user.email, name: user.name, avatar: user.avatar };
+  req.user = { id: user.id, email: user.email, name: user.name, avatar: user.avatar, desk: user.desk };
   next();
 }

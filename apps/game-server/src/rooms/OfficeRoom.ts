@@ -14,8 +14,12 @@ export class OfficeRoom extends Room<OfficeState> {
   autoDispose = false; // keep a single persistent office so everyone joinOrCreate's the SAME room
                        // (rooms auto-disposing while momentarily empty caused clients to split across instances)
 
-  onCreate() {
+  private workspace = "main";
+
+  onCreate(options: { workspace?: string } = {}) {
+    this.workspace = String(options.workspace || "main").slice(0, 32);
     this.setState(new OfficeState());
+    console.log(`[office] room created for workspace "${this.workspace}"`);
 
     // client-authoritative position for Phase 2 MVP (server relays to others).
     // Hardening (server-side simulation/anti-cheat) is a later phase.
@@ -121,11 +125,11 @@ export class OfficeRoom extends Room<OfficeState> {
     p.name = options.name?.slice(0, 24) || `Guest-${client.sessionId.slice(0, 4)}`;
     p.avatar = options.avatar || "1";
     this.state.players.set(client.sessionId, p);
-    console.log(`[office] join ${client.sessionId} (${this.state.players.size} online)`);
+    console.log(`[office:${this.workspace}] join ${client.sessionId} (${this.state.players.size} online)`);
   }
 
   onLeave(client: Client) {
     this.state.players.delete(client.sessionId);
-    console.log(`[office] leave ${client.sessionId} (${this.state.players.size} online)`);
+    console.log(`[office:${this.workspace}] leave ${client.sessionId} (${this.state.players.size} online)`);
   }
 }

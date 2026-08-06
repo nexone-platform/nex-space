@@ -2,6 +2,7 @@
 // persists the JWT in localStorage, and hands {name, avatar} to the game.
 import { openAvatarEditor } from "./avatar/avatarEditor";
 import { encodeAvatar, buildFrameCanvas, defaultDressedConfig, type LpcConfig } from "./avatar/avatarCompose";
+import { WORKSPACE, workspaceLabel, wsKey } from "./workspace";
 
 // In production the app is served by nginx, which reverse-proxies the API on the
 // same origin (/auth, /me). Use same-origin relative URLs there so it works over
@@ -10,7 +11,11 @@ const API = ((import.meta as any).env?.VITE_API_URL as string)
   || ((import.meta as any).env?.DEV ? "http://localhost:3001" : "");
 
 export interface StartInfo { name: string; avatar: string; desk: string; }
-interface User { name: string; email: string; avatar: { avatarId?: string; lpc?: LpcConfig } | null; desk?: string | null; }
+interface User {
+  name: string; email: string;
+  avatar: { avatarId?: string; lpc?: LpcConfig } | null;
+  desks?: Record<string, string> | null; // workspace -> deskId
+}
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T | null;
 
@@ -44,6 +49,10 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
   let customConfig: LpcConfig | null = null;
 
   const setErr = (m: string) => { if (err) err.textContent = m; };
+
+  // tell people opening an invite link which workspace they're joining
+  const sub = document.querySelector<HTMLElement>("#auth-step .sub");
+  if (sub && WORKSPACE !== "main") sub.textContent = `เข้าสู่ workspace: ${workspaceLabel()}`;
 
   const setMode = (m: "login" | "register") => {
     mode = m;
@@ -124,8 +133,8 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       }).catch(() => {});
     }
     if (overlay) overlay.style.display = "none";
-    // member desk comes from their account; guest desk from this device
-    const desk = user?.desk || localStorage.getItem("nexspace-desk") || "";
+    // desk is per workspace: members from their account, guests from this device
+    const desk = user?.desks?.[WORKSPACE] || localStorage.getItem(wsKey("nexspace-desk")) || "";
     onReady({ name, avatar: selected, desk });
   };
 
