@@ -58,7 +58,8 @@ const INTERACTIVES: Interactive[] = [
 
 interface Remote {
   sprite: Phaser.GameObjects.Sprite;
-  label: Phaser.GameObjects.Text;
+  label: Phaser.GameObjects.Container; // rounded name tag (see makeNameTag)
+  name: string;                        // display name (the tag is a container, so keep it here)
   tx: number;
   ty: number;
   dir: string;
@@ -177,11 +178,11 @@ const DESKS: { id: string; x: number; y: number; sx: number; sy: number }[] = [
 
 export class OfficeScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
-  private myLabel?: Phaser.GameObjects.Text; // my own name above my head
+  private myLabel?: Phaser.GameObjects.Container; // my own name tag above my head
   private myDesk = "";                          // id of my claimed home desk ("" = none)
   private deskClaimAt = 0;                      // scene time of my last claim (grace window for state reconcile)
   private toastTimer?: number;                  // pending hide timer for the DOM toast
-  private deskPlates = new Map<string, Phaser.GameObjects.Text>(); // deskId -> owner nameplate
+  private deskPlates = new Map<string, Phaser.GameObjects.Container>(); // deskId -> owner nameplate
   private sitting = false;
   private satChair?: Phaser.GameObjects.Image;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -368,10 +369,8 @@ export class OfficeScene extends Phaser.Scene {
     this.physics.add.collider(this.player, wallLayer);
     this.physics.add.collider(this.player, solids);
 
-    // my own name above my head (same style as remote labels)
-    this.myLabel = this.add.text(this.player.x, this.player.y - 34, this.myName, {
-      fontSize: "9px", color: "#ffffff", stroke: "#1c1b22", strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(100000);
+    // my own name above my head (same tag style as remote players)
+    this.refreshMyLabel();
 
     // --- camera ---
     this.physics.world.setBounds(0, 0, worldW, worldH);
@@ -434,7 +433,7 @@ export class OfficeScene extends Phaser.Scene {
     this.myName = name || "Guest";
     this.myAvatar = isLpc(avatar) || AVATARS[avatar] ? avatar : "1";
     this.myDesk = desk || "";
-    this.myLabel?.setText(this.myName);
+    if (this.player) this.refreshMyLabel();
     if (this.player) void this.applyAvatarBody();
     if (this.created) void this.connectMultiplayer();
     else this.pendingStart = true;
@@ -661,7 +660,7 @@ export class OfficeScene extends Phaser.Scene {
           this.screenPresenter.set(msg.screenId, msg.from);
           const isMe = msg.from === this.mySessionId;
           const stream = isMe ? this.webrtc?.screenMediaStream ?? null : this.webrtc?.getPeerStream(msg.from) ?? null;
-          const name = isMe ? this.myName : (this.remotes.get(msg.from)?.label.text ?? msg.from);
+          const name = isMe ? this.myName : (this.remotes.get(msg.from)?.name ?? msg.from);
           this.activeScreenStream = stream;
           this.activePresenterName = name;
           this.setViewMode("call");
@@ -685,7 +684,7 @@ export class OfficeScene extends Phaser.Scene {
           for (const it of INTERACTIVES) {
             if (it.type === "screen" && this.screenPresenter.get(this.screenId(it)) === peerId) {
               this.activeScreenStream = this.webrtc?.getPeerStream(peerId) ?? null;
-              this.activePresenterName = this.remotes.get(peerId)?.label.text ?? peerId;
+              this.activePresenterName = this.remotes.get(peerId)?.name ?? peerId;
               this.updateScreen(it);
               this.updateCallStageUI();
             }
@@ -1083,7 +1082,7 @@ export class OfficeScene extends Phaser.Scene {
       card.className = "peer-card";
       const lbl = document.createElement("span");
       lbl.className = "peer-label";
-      lbl.textContent = r.label.text || id;
+      lbl.textContent = r.name || id;
       const avatar = document.createElement("div");
       avatar.className = "peer-avatar-fallback";
       avatar.textContent = "👤";
@@ -1195,6 +1194,39 @@ export class OfficeScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Rounded "pill" name tag used for player labels and desk nameplates.
+   * The canvas is pixelArt (NEAREST) and the camera zooms ~2.2x, which turns
+   * plain 8-9px text into a blurry, jagged mess — so render the glyphs at 3x
+   * and let the texture downscale linearly instead.
+   */
+  private makeNameTag(x: number, y: number, label: string, accent = false): Phaser.GameObjects.Container {
+    const t = this.add.text(0, 0, label, {
+      fontFamily: '"Segoe UI", system-ui, sans-serif',
+      fontSize: "9px",
+      color: accent ? "#8ff2e2" : "#f2f5f8",
+      resolution: 3, // must be set at construction: Text only wires frame.source.resolution there
+    }).setOrigin(0.5);
+    t.texture.setFilter(Phaser.Textures.FilterMode.LINEAR); // smooth 3x -> 1x downscale (canvas is NEAREST)
+
+    const w = Math.ceil(t.width) + 10;
+    const h = Math.ceil(t.height) + 5;
+    const r = Math.min(5, h / 2);
+    const g = this.add.graphics();
+    g.fillStyle(0x171a1f, 0.8);
+    g.fillRoundedRect(-w / 2, -h / 2, w, h, r);
+    g.lineStyle(1, accent ? 0x2bb3a3 : 0xffffff, accent ? 0.9 : 0.2);
+    g.strokeRoundedRect(-w / 2, -h / 2, w, h, r);
+
+    return this.add.container(x, y, [g, t]).setDepth(100000);
+  }
+
+  /** (re)build my own name tag — the tag is a container, so a name change rebuilds it */
+  private refreshMyLabel() {
+    this.myLabel?.destroy();
+    this.myLabel = this.makeNameTag(this.player.x, this.player.y - 34, this.myName);
+  }
+
   private addRemote(sessionId: string, player: any) {
     const raw: string = player.avatar || "1";
     const av = isLpc(raw) ? raw : (AVATARS[raw] ? raw : "1");
@@ -1202,10 +1234,9 @@ export class OfficeScene extends Phaser.Scene {
     const startTex = this.textures.exists(this.texKeyFor(av)) ? this.texKeyFor(av) : AVATARS["1"].tex;
     const sprite = this.add.sprite(player.x, player.y, startTex, 0).setDepth(player.y);
     sprite.setScale(isLpc(av) ? LPC_SCALE : PRESET_SCALE);
-    const label = this.add.text(player.x, player.y - 34, player.name ?? "Guest", {
-      fontSize: "9px", color: "#ffffff", stroke: "#1c1b22", strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(100000);
-    this.remotes.set(sessionId, { sprite, label, tx: player.x, ty: player.y, dir: player.dir, moving: player.moving, avatar: av });
+    const name: string = player.name ?? "Guest";
+    const label = this.makeNameTag(player.x, player.y - 34, name);
+    this.remotes.set(sessionId, { sprite, label, name, tx: player.x, ty: player.y, dir: player.dir, moving: player.moving, avatar: av });
     if (isLpc(av)) void this.ensureLpc(av).then((key) => {
       const r = this.remotes.get(sessionId);
       if (key && r) r.sprite.setTexture(key, this.idleFrameFor(av, r.dir));
@@ -1340,10 +1371,7 @@ export class OfficeScene extends Phaser.Scene {
       const owner = owners.get(d.id);
       if (!owner) continue;
       const mine = d.id === this.myDesk;
-      const t = this.add.text(d.x * TILE + TILE / 2, d.y * TILE - 6, owner, {
-        fontSize: "8px", color: mine ? "#8ff0e4" : "#ffffff", stroke: "#1c1b22", strokeThickness: 3,
-        backgroundColor: "#00000055", padding: { x: 3, y: 1 },
-      }).setOrigin(0.5, 1).setDepth(99000);
+      const t = this.makeNameTag(d.x * TILE + TILE / 2, d.y * TILE - 12, owner, mine).setDepth(99000);
       this.deskPlates.set(d.id, t);
     }
   }
