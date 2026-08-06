@@ -1203,21 +1203,25 @@ export class OfficeScene extends Phaser.Scene {
   private makeNameTag(x: number, y: number, label: string, accent = false): Phaser.GameObjects.Container {
     const t = this.add.text(0, 0, label, {
       fontFamily: '"Segoe UI", system-ui, sans-serif',
-      fontSize: "9px",
+      fontSize: "8px",
       color: accent ? "#8ff2e2" : "#f2f5f8",
       resolution: 3, // must be set at construction: Text only wires frame.source.resolution there
-    }).setOrigin(0.5);
+    }).setOrigin(0, 0.5);
     t.texture.setFilter(Phaser.Textures.FilterMode.LINEAR); // smooth 3x -> 1x downscale (canvas is NEAREST)
 
-    const w = Math.ceil(t.width) + 10;
-    const h = Math.ceil(t.height) + 5;
-    const r = Math.min(5, h / 2);
+    const PAD = 3.5, DOT_R = 1.5, GAP = 2.5;
+    const w = PAD * 2 + DOT_R * 2 + GAP + Math.ceil(t.width);
+    const h = Math.ceil(t.height) + 2;
+    const r = Math.min(4, h / 2);
     const g = this.add.graphics();
     g.fillStyle(0x171a1f, 0.8);
     g.fillRoundedRect(-w / 2, -h / 2, w, h, r);
     g.lineStyle(1, accent ? 0x2bb3a3 : 0xffffff, accent ? 0.9 : 0.2);
     g.strokeRoundedRect(-w / 2, -h / 2, w, h, r);
+    g.fillStyle(0x39d353, 1); // online status dot (same green as the av-bar / roster dots)
+    g.fillCircle(-w / 2 + PAD + DOT_R, 0, DOT_R);
 
+    t.setPosition(-w / 2 + PAD + DOT_R * 2 + GAP, 0);
     return this.add.container(x, y, [g, t]).setDepth(100000);
   }
 
