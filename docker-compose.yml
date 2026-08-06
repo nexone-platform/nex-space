@@ -41,6 +41,16 @@ services:
       - PORT=3001
       # db lives inside the mounted prisma dir so it persists on the named volume
       - DATABASE_URL=file:./prisma/prod.db
+      # Google sign-in (optional — the button hides itself when unset).
+      # Authorised redirect URI in Google Cloud: https://<your-host>/auth/google/callback
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      # SMTP for the 6-digit sign-in code (optional — codes are logged when unset)
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-}
     ports:
       - "3001:3001"
     volumes:

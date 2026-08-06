@@ -15,7 +15,9 @@ model User {
   id           String     @id @default(cuid())
   email        String     @unique
   name         String
-  passwordHash String
+  passwordHash String? // null for accounts created via email code / Google
+  googleId     String?    @unique
+  photoUrl     String? // Google profile picture
   avatar       String? // JSON string: { avatarId, skin, hair, top, ... }
   desk         String? // JSON string: { workspaceSlug: deskId }
   createdAt    DateTime   @default(now())
@@ -49,6 +51,18 @@ model Membership {
   createdAt   DateTime  @default(now())
 
   @@unique([userId, workspaceId])
+}
+
+// One-time 6-digit sign-in codes emailed to the user. Stored hashed, single use.
+model LoginCode {
+  id        String   @id @default(cuid())
+  email     String
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
 }
 
 model Session {

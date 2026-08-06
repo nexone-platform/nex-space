@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import { prisma } from "./db";
 import { hashPassword, verifyPassword, createSession, requireAuth, userFromToken, type AuthedRequest } from "./auth";
+import { sendLoginCode, mailEnabled } from "./mailer";
 
 const port = Number(process.env.PORT) || 3001;
 const app = express();
@@ -44,10 +45,131 @@ app.post("/auth/register", async (req, res) => {
 app.post("/auth/login", async (req, res) => {
   const { email, password } = req.body ?? {};
   const user = await prisma.user.findUnique({ where: { email: email ?? "" } });
-  if (!user || !(await verifyPassword(password ?? "", user.passwordHash)))
+  // accounts created via email code / Google have no password to check against
+  if (!user || !user.passwordHash || !(await verifyPassword(password ?? "", user.passwordHash)))
     return res.status(401).json({ error: "invalid credentials" });
   const token = await createSession(user.id);
   res.json({ token, user: safeUser(user) });
+});
+
+// ---- sign in with a 6-digit email code ----
+const CODE_TTL_MS = 10 * 60 * 1000;
+const MAX_CODE_ATTEMPTS = 5;
+const normEmail = (e: unknown) => String(e ?? "").trim().toLowerCase();
+
+app.get("/auth/config", (_req, res) =>
+  res.json({ google: googleEnabled, mail: mailEnabled }));
+
+app.post("/auth/code/request", async (req, res) => {
+  const email = normEmail((req.body ?? {}).email);
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: "invalid email" });
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  await prisma.loginCode.deleteMany({ where: { email } }); // only the newest code is valid
+  await prisma.loginCode.create({
+    data: { email, codeHash: await hashPassword(code), expiresAt: new Date(Date.now() + CODE_TTL_MS) },
+  });
+  try {
+    await sendLoginCode(email, code);
+  } catch (e) {
+    console.error("[auth] failed to send code:", e);
+    return res.status(502).json({ error: "could not send email" });
+  }
+  res.json({ ok: true, delivered: mailEnabled });
+});
+
+app.post("/auth/code/verify", async (req, res) => {
+  const email = normEmail((req.body ?? {}).email);
+  const code = String((req.body ?? {}).code ?? "").trim();
+  const row = await prisma.loginCode.findFirst({ where: { email }, orderBy: { createdAt: "desc" } });
+  if (!row) return res.status(400).json({ error: "no code requested" });
+  if (row.expiresAt < new Date()) {
+    await prisma.loginCode.deleteMany({ where: { email } });
+    return res.status(400).json({ error: "code expired" });
+  }
+  if (row.attempts >= MAX_CODE_ATTEMPTS) {
+    await prisma.loginCode.deleteMany({ where: { email } });
+    return res.status(429).json({ error: "too many attempts" });
+  }
+  if (!(await verifyPassword(code, row.codeHash))) {
+    await prisma.loginCode.update({ where: { id: row.id }, data: { attempts: row.attempts + 1 } });
+    return res.status(401).json({ error: "invalid code" });
+  }
+  await prisma.loginCode.deleteMany({ where: { email } }); // single use
+  const user = await prisma.user.upsert({
+    where: { email },
+    update: {},
+    create: { email, name: email.split("@")[0] },
+  });
+  res.json({ token: await createSession(user.id), user: safeUser(user) });
+});
+
+// ---- sign in with Google ----
+const GOOGLE_ID = process.env.GOOGLE_CLIENT_ID || "";
+const GOOGLE_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
+const googleEnabled = !!(GOOGLE_ID && GOOGLE_SECRET);
+
+/** where Google sends the user back — same origin as the app, proxied to this API */
+const redirectUri = (req: express.Request) =>
+  process.env.OAUTH_REDIRECT_URL ||
+  `${(req.header("x-forwarded-proto") || req.protocol)}://${req.header("x-forwarded-host") || req.get("host")}/auth/google/callback`;
+
+/** where to hand the token back to the web app */
+const appUrl = (req: express.Request) =>
+  process.env.APP_URL ||
+  `${(req.header("x-forwarded-proto") || req.protocol)}://${req.header("x-forwarded-host") || req.get("host")}/`;
+
+app.get("/auth/google", (req, res) => {
+  if (!googleEnabled) return res.status(501).send("Google sign-in is not configured");
+  const params = new URLSearchParams({
+    client_id: GOOGLE_ID,
+    redirect_uri: redirectUri(req),
+    response_type: "code",
+    scope: "openid email profile",
+    prompt: "select_account",
+    state: String(req.query.w || ""), // carry the workspace slug through the round trip
+  });
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+});
+
+app.get("/auth/google/callback", async (req, res) => {
+  if (!googleEnabled) return res.status(501).send("Google sign-in is not configured");
+  const back = appUrl(req);
+  const ws = String(req.query.state || "");
+  try {
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code: String(req.query.code || ""),
+        client_id: GOOGLE_ID,
+        client_secret: GOOGLE_SECRET,
+        redirect_uri: redirectUri(req),
+        grant_type: "authorization_code",
+      }),
+    });
+    const tok = (await tokenRes.json()) as { access_token?: string; error?: string };
+    if (!tok.access_token) throw new Error(tok.error || "token exchange failed");
+
+    const infoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${tok.access_token}` },
+    });
+    const info = (await infoRes.json()) as { sub?: string; email?: string; name?: string; picture?: string };
+    const email = normEmail(info.email);
+    if (!email) throw new Error("google account has no email");
+
+    // link by email so an existing account keeps its workspaces and avatar
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: { googleId: info.sub, photoUrl: info.picture },
+      create: { email, name: info.name || email.split("@")[0], googleId: info.sub, photoUrl: info.picture },
+    });
+    const token = await createSession(user.id);
+    // hash fragment: the token never lands in server logs or the Referer header
+    res.redirect(`${back}${ws ? `?w=${encodeURIComponent(ws)}` : ""}#token=${encodeURIComponent(token)}`);
+  } catch (e) {
+    console.error("[auth] google sign-in failed:", e);
+    res.redirect(`${back}#auth_error=google`);
+  }
 });
 
 app.post("/auth/logout", requireAuth, async (req: AuthedRequest, res) => {
@@ -180,6 +302,74 @@ app.patch("/workspaces/:slug", requireAuth, async (req: AuthedRequest, res) => {
     include: { _count: { select: { members: true } } },
   });
   res.json({ workspace: wsView(updated, m.role) });
+});
+
+/** members of a workspace (any member may see the roster) */
+app.get("/workspaces/:slug/members", requireAuth, async (req: AuthedRequest, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const me = await prisma.membership.findUnique({
+    where: { userId_workspaceId: { userId: req.user!.id, workspaceId: w.id } },
+  });
+  if (!me) return res.status(403).json({ error: "forbidden" });
+  const rows = await prisma.membership.findMany({
+    where: { workspaceId: w.id },
+    include: { user: { select: { id: true, name: true, email: true, photoUrl: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  res.json({
+    myRole: me.role,
+    members: rows.map((m) => ({
+      id: m.user.id, name: m.user.name, email: m.user.email,
+      photoUrl: m.user.photoUrl, role: m.role, isMe: m.user.id === req.user!.id,
+    })),
+  });
+});
+
+/** change a member's role (owner only; the owner's own role is fixed) */
+app.patch("/workspaces/:slug/members/:userId", requireAuth, async (req: AuthedRequest, res) => {
+  const role = String((req.body ?? {}).role ?? "");
+  if (!["admin", "member"].includes(role)) return res.status(400).json({ error: "invalid role" });
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  if (w.ownerId !== req.user!.id) return res.status(403).json({ error: "owner only" });
+  if (req.params.userId === w.ownerId) return res.status(400).json({ error: "cannot change the owner" });
+  await prisma.membership.update({
+    where: { userId_workspaceId: { userId: req.params.userId, workspaceId: w.id } },
+    data: { role },
+  });
+  res.json({ ok: true });
+});
+
+/** remove a member, or leave the workspace yourself */
+app.delete("/workspaces/:slug/members/:userId", requireAuth, async (req: AuthedRequest, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const me = await prisma.membership.findUnique({
+    where: { userId_workspaceId: { userId: req.user!.id, workspaceId: w.id } },
+  });
+  if (!me) return res.status(403).json({ error: "forbidden" });
+  const target = req.params.userId;
+  const removingSelf = target === req.user!.id;
+  const canManage = me.role === "owner" || me.role === "admin";
+  if (!removingSelf && !canManage) return res.status(403).json({ error: "forbidden" });
+  if (target === w.ownerId) return res.status(400).json({ error: "the owner cannot be removed" });
+  await prisma.membership.delete({
+    where: { userId_workspaceId: { userId: target, workspaceId: w.id } },
+  });
+  res.json({ ok: true });
+});
+
+/** roll a new invite code (owner/admin) — revokes links already handed out */
+app.post("/workspaces/:slug/invite/reset", requireAuth, async (req: AuthedRequest, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const me = await prisma.membership.findUnique({
+    where: { userId_workspaceId: { userId: req.user!.id, workspaceId: w.id } },
+  });
+  if (!me || (me.role !== "owner" && me.role !== "admin")) return res.status(403).json({ error: "forbidden" });
+  const updated = await prisma.workspace.update({ where: { id: w.id }, data: { inviteCode: randomCode() } });
+  res.json({ inviteCode: updated.inviteCode });
 });
 
 /** used by the game server to authorise a room join (members, or guests if allowed) */

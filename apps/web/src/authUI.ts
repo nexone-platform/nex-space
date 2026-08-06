@@ -1,12 +1,13 @@
-// Login / register + character-select overlay. Talks to the API (apps/api),
-// persists the JWT in localStorage, and hands {name, avatar} to the game.
+// Sign-in (Google or a 6-digit email code), the spaces dashboard, workspace
+// settings/members, and character select. Persists the session token in
+// localStorage and hands {name, avatar, desk} to the game.
 import { openAvatarEditor } from "./avatar/avatarEditor";
 import { encodeAvatar, buildFrameCanvas, defaultDressedConfig, type LpcConfig } from "./avatar/avatarCompose";
 import { WORKSPACE, HAS_WORKSPACE_PARAM, gotoWorkspace, wsKey } from "./workspace";
 
 // In production the app is served by nginx, which reverse-proxies the API on the
-// same origin (/auth, /me). Use same-origin relative URLs there so it works over
-// any host/port/protocol; fall back to the local API port only in dev.
+// same origin (/auth, /me, /workspaces). Use same-origin relative URLs there so it
+// works over any host/port/protocol; fall back to the local API port only in dev.
 const API = ((import.meta as any).env?.VITE_API_URL as string)
   || ((import.meta as any).env?.DEV ? "http://localhost:3001" : "");
 
@@ -16,147 +17,421 @@ interface User {
   avatar: { avatarId?: string; lpc?: LpcConfig } | null;
   desks?: Record<string, string> | null; // workspace -> deskId
 }
+interface Space { slug: string; name: string; role: string; members?: number; inviteCode?: string }
+interface Member { id: string; name: string; email: string; photoUrl?: string; role: string; isMe: boolean }
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T | null;
+const TOKEN_KEY = "nexspace-token";
+const token = () => localStorage.getItem(TOKEN_KEY);
+const authHeaders = () => ({
+  "Content-Type": "application/json",
+  ...(token() ? { Authorization: "Bearer " + token()! } : {}),
+});
+const initial = (s: string) => (s.trim()[0] ?? "?").toUpperCase();
+const roleLabel = (r: string) => (r === "owner" ? "เจ้าของ" : r === "admin" ? "ผู้ดูแล" : "สมาชิก");
 
 export function runAuthFlow(onReady: (s: StartInfo) => void) {
   const overlay = $("auth-overlay");
-  const err = $("auth-err");
-  const nameInput = $<HTMLInputElement>("a-name");
+  const spaces = $("spaces-overlay");
   const emailInput = $<HTMLInputElement>("a-email");
-  const passInput = $<HTMLInputElement>("a-pass");
-  const submitBtn = $("a-submit");
-  const passToggle = $("a-pass-toggle");
   const cName = $<HTMLInputElement>("c-name");
 
-  // show/hide password toggle (eye icon)
-  const EYE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
-  const EYE_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
-  if (passToggle && passInput) {
-    passToggle.innerHTML = EYE;
-    passToggle.onclick = () => {
-      const show = passInput.type === "password";
-      passInput.type = show ? "text" : "password";
-      passToggle.innerHTML = show ? EYE_OFF : EYE;
-      passToggle.title = show ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน";
-      passInput.focus();
-    };
-  }
-  let mode: "login" | "register" = "login";
   let user: User | null = null;
-  let selected = "1";          // avatar value handed to the game ("1".."7" or "lpc:{...}")
-  let selectedTile = "1";      // which grid tile is highlighted ("1".."7" or "custom")
+  let selected = "1";          // avatar handed to the game ("1".."7" or "lpc:{...}")
+  let selectedTile = "1";
   let customConfig: LpcConfig | null = null;
+  let pendingEmail = "";
+  let mySpaces: Space[] = [];
 
-  const setErr = (m: string) => { if (err) err.textContent = m; };
-  const setWsErr = (m: string) => { const e = $("ws-err"); if (e) e.textContent = m; };
-  const authHeaders = () => {
-    const t = localStorage.getItem("nexspace-token");
-    return { "Content-Type": "application/json", ...(t ? { Authorization: "Bearer " + t } : {}) };
+  const setErr = (id: string, m: string) => { const e = $(id); if (e) e.textContent = m; };
+
+  const showStep = (id: "auth-step" | "code-step" | "char-step") => {
+    for (const s of ["auth-step", "code-step", "char-step"]) {
+      const el = $(s);
+      if (el) el.style.display = s === id ? "block" : "none";
+    }
+    if (overlay) overlay.style.display = "grid";
+    if (spaces) spaces.style.display = "none";
   };
 
-  // tell people opening an invite link which workspace they're joining
+  // ---------------------------------------------------------------- sign in
+  // Google hands the token back in the URL fragment; consume it before anything reads the URL.
+  (() => {
+    const h = new URLSearchParams(location.hash.slice(1));
+    const t = h.get("token");
+    if (t) {
+      localStorage.setItem(TOKEN_KEY, t);
+      history.replaceState(null, "", location.pathname + location.search);
+    } else if (h.get("auth_error")) {
+      history.replaceState(null, "", location.pathname + location.search);
+      setErr("auth-err", "เข้าสู่ระบบด้วย Google ไม่สำเร็จ");
+    }
+  })();
+
+  // hide the Google button unless the server has credentials for it
+  fetch(`${API}/auth/config`).then((r) => r.json()).then((c) => {
+    const g = $("a-google");
+    if (g && !c.google) g.style.display = "none";
+  }).catch(() => {});
+
+  // show which workspace an invite link leads to
   if (HAS_WORKSPACE_PARAM) {
     fetch(`${API}/workspaces/${encodeURIComponent(WORKSPACE)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
+        if (!d?.workspace?.name) return;
         const sub = document.querySelector<HTMLElement>("#auth-step .sub");
-        if (sub && d?.workspace?.name) sub.textContent = `เข้าสู่ workspace: ${d.workspace.name}`;
-        if (d?.workspace?.name) localStorage.setItem(wsKey("nexspace-ws-name"), d.workspace.name);
-      })
-      .catch(() => {});
+        if (sub) sub.textContent = `เข้าสู่ workspace: ${d.workspace.name}`;
+        localStorage.setItem(wsKey("nexspace-ws-name"), d.workspace.name);
+      }).catch(() => {});
   }
 
-  // ---- workspace picker -------------------------------------------------
-  const showStep = (id: "auth-step" | "ws-step" | "char-step") => {
-    for (const s of ["auth-step", "ws-step", "char-step"]) {
-      const el = $(s);
-      if (el) el.style.display = s === id ? "block" : "none";
-    }
+  $("a-google")!.onclick = () => {
+    location.href = `${API}/auth/google${HAS_WORKSPACE_PARAM ? `?w=${encodeURIComponent(WORKSPACE)}` : ""}`;
   };
 
-  const renderWorkspaces = (list: { slug: string; name: string; role: string; members?: number }[]) => {
-    const box = $("ws-list");
-    if (!box) return;
-    box.innerHTML = "";
+  const requestCode = async (email: string) => {
+    const r = await fetch(`${API}/auth/code/request`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || "ส่งรหัสไม่สำเร็จ");
+    return d as { delivered: boolean };
+  };
+
+  $("a-send-code")!.onclick = async () => {
+    const email = emailInput?.value.trim() ?? "";
+    setErr("auth-err", "");
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return setErr("auth-err", "กรอกอีเมลให้ถูกต้อง");
+    try {
+      const d = await requestCode(email);
+      pendingEmail = email;
+      showStep("code-step");
+      setErr("code-err", "");
+      const sub = $("code-sub");
+      if (sub) {
+        sub.textContent = d.delivered
+          ? `เราส่งรหัส 6 หลักไปที่ ${email} แล้ว หากไม่พบให้ตรวจในกล่องสแปม`
+          : `ระบบยังไม่ได้ตั้งค่าอีเมล — ดูรหัสได้ที่ log ของเซิร์ฟเวอร์ (${email})`;
+      }
+      codeInputs()[0]?.focus();
+    } catch (e) { setErr("auth-err", (e as Error).message); }
+  };
+
+  const codeInputs = () => Array.from(document.querySelectorAll<HTMLInputElement>("#code-boxes input"));
+
+  const verifyCode = async () => {
+    const code = codeInputs().map((i) => i.value).join("");
+    if (code.length < 6) return;
+    setErr("code-err", "");
+    try {
+      const r = await fetch(`${API}/auth/code/verify`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pendingEmail, code }),
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        codeInputs().forEach((i) => (i.value = ""));
+        codeInputs()[0]?.focus();
+        return setErr("code-err",
+          d.error === "invalid code" ? "รหัสไม่ถูกต้อง"
+          : d.error === "code expired" ? "รหัสหมดอายุแล้ว — ขอรหัสใหม่"
+          : d.error === "too many attempts" ? "กรอกผิดหลายครั้งเกินไป — ขอรหัสใหม่"
+          : d.error || "ยืนยันรหัสไม่สำเร็จ");
+      }
+      localStorage.setItem(TOKEN_KEY, d.token);
+      user = d.user;
+      afterSignIn();
+    } catch { setErr("code-err", "เชื่อมต่อ API ไม่ได้"); }
+  };
+
+  // 6 single-character boxes that behave like one field
+  codeInputs().forEach((box, i, all) => {
+    box.oninput = () => {
+      box.value = box.value.replace(/\D/g, "").slice(0, 1);
+      if (box.value && i < all.length - 1) all[i + 1].focus();
+      if (all.every((b) => b.value)) void verifyCode();
+    };
+    box.onkeydown = (e) => {
+      if (e.key === "Backspace" && !box.value && i > 0) all[i - 1].focus();
+    };
+    box.onpaste = (e) => {
+      const text = (e.clipboardData?.getData("text") ?? "").replace(/\D/g, "").slice(0, 6);
+      if (!text) return;
+      e.preventDefault();
+      all.forEach((b, k) => (b.value = text[k] ?? ""));
+      all[Math.min(text.length, 5)].focus();
+      if (text.length === 6) void verifyCode();
+    };
+  });
+
+  $("code-resend")!.onclick = async () => {
+    setErr("code-err", "");
+    try { await requestCode(pendingEmail); setErr("code-err", "ส่งรหัสใหม่แล้ว"); }
+    catch (e) { setErr("code-err", (e as Error).message); }
+  };
+  $("code-cancel")!.onclick = () => { codeInputs().forEach((i) => (i.value = "")); showStep("auth-step"); };
+  $("a-guest")!.onclick = () => { user = null; toChar(null); };
+
+  /** after a successful sign-in: invite links go straight in, otherwise pick a space */
+  const afterSignIn = () => { if (HAS_WORKSPACE_PARAM) toChar(user); else void showSpaces(); };
+
+  // ------------------------------------------------------- spaces dashboard
+  const renderSpaces = () => {
+    const grid = $("sp-grid");
+    if (!grid) return;
+    const q = ($<HTMLInputElement>("sp-search")?.value ?? "").toLowerCase();
+    const list = mySpaces.filter((s) => !q || s.name.toLowerCase().includes(q));
+    grid.innerHTML = "";
     if (!list.length) {
       const p = document.createElement("div");
-      p.className = "ws-empty";
-      p.textContent = "ยังไม่ได้อยู่ workspace ไหน — สร้างใหม่หรือใช้รหัสเชิญด้านล่าง";
-      box.appendChild(p);
+      p.className = "sp-empty";
+      p.textContent = mySpaces.length
+        ? "ไม่พบ Space ที่ค้นหา"
+        : "ยังไม่มี Space — กด “＋ สร้าง Space” หรือกรอกรหัสเชิญด้านบน";
+      grid.appendChild(p);
       return;
     }
-    for (const w of list) {
-      const b = document.createElement("button");
-      b.className = "ws-item";
-      const ico = document.createElement("span");
-      ico.className = "ws-ico";
-      ico.textContent = (w.name.trim()[0] ?? "?").toUpperCase();
-      const meta = document.createElement("span");
-      meta.className = "ws-meta";
-      const nm = document.createElement("b"); nm.textContent = w.name;
+    for (const s of list) {
+      const card = document.createElement("div");
+      card.className = "sp-card";
+      const thumb = document.createElement("div");
+      thumb.className = "sp-thumb";
+      thumb.textContent = initial(s.name);
+      thumb.title = "เข้า Space นี้";
+      thumb.onclick = () => enterSpace(s);
+      const foot = document.createElement("div");
+      foot.className = "sp-card-foot";
+      const nm = document.createElement("div");
+      nm.className = "sp-name";
+      const b = document.createElement("b"); b.textContent = s.name;
       const sm = document.createElement("small");
-      sm.textContent = `${w.role === "owner" ? "เจ้าของ" : w.role === "admin" ? "ผู้ดูแล" : "สมาชิก"}`
-        + (w.members ? ` · ${w.members} คน` : "");
-      meta.append(nm, sm);
-      b.append(ico, meta);
-      b.onclick = () => {
-        localStorage.setItem(wsKey("nexspace-ws-name"), w.name);
-        gotoWorkspace(w.slug);
-      };
-      box.appendChild(b);
+      sm.textContent = roleLabel(s.role) + (s.members ? ` · ${s.members} คน` : "");
+      nm.append(b, sm);
+      const menu = document.createElement("button");
+      menu.className = "sp-menu-btn";
+      menu.textContent = "⋮";
+      menu.title = "ตั้งค่า / สมาชิก";
+      menu.onclick = (e) => { e.stopPropagation(); void openSettings(s); };
+      foot.append(nm, menu);
+      card.append(thumb, foot);
+      grid.appendChild(card);
     }
   };
 
-  const toWorkspaces = async () => {
-    showStep("ws-step");
-    setWsErr("");
+  const enterSpace = (s: Space) => {
+    localStorage.setItem(wsKey("nexspace-ws-name"), s.name);
+    gotoWorkspace(s.slug);
+  };
+
+  const showSpaces = async () => {
+    if (overlay) overlay.style.display = "none";
+    if (spaces) spaces.style.display = "flex";
+    const who = $("sp-who");
+    if (who) who.textContent = user?.email ?? "";
+    setErr("sp-err", "");
     try {
       const r = await fetch(`${API}/workspaces`, { headers: authHeaders() });
       const d = await r.json();
-      renderWorkspaces(d.workspaces ?? []);
-    } catch { setWsErr("โหลดรายการ workspace ไม่ได้"); }
+      mySpaces = d.workspaces ?? [];
+      renderSpaces();
+    } catch { setErr("sp-err", "โหลดรายการ Space ไม่ได้"); }
   };
 
-  $("ws-create")!.onclick = async () => {
-    const name = $<HTMLInputElement>("ws-name")?.value.trim() ?? "";
-    const allowGuests = $<HTMLInputElement>("ws-guests")?.checked ?? true;
-    if (!name) return setWsErr("ใส่ชื่อบริษัท/ทีมก่อน");
-    setWsErr("");
+  $("sp-search")!.oninput = renderSpaces;
+
+  $("sp-create")!.onclick = async () => {
+    const name = prompt("ชื่อบริษัท / ทีม")?.trim();
+    if (!name) return;
+    setErr("sp-err", "");
     try {
       const r = await fetch(`${API}/workspaces`, {
-        method: "POST", headers: authHeaders(), body: JSON.stringify({ name, allowGuests }),
+        method: "POST", headers: authHeaders(), body: JSON.stringify({ name, allowGuests: true }),
       });
       const d = await r.json();
-      if (!r.ok) return setWsErr(d.error || "สร้างไม่สำเร็จ");
-      localStorage.setItem(wsKey("nexspace-ws-name"), d.workspace.name);
-      gotoWorkspace(d.workspace.slug);
-    } catch { setWsErr("เชื่อมต่อ API ไม่ได้"); }
+      if (!r.ok) return setErr("sp-err", d.error || "สร้างไม่สำเร็จ");
+      enterSpace(d.workspace);
+    } catch { setErr("sp-err", "เชื่อมต่อ API ไม่ได้"); }
   };
 
-  $("ws-join")!.onclick = async () => {
-    const code = $<HTMLInputElement>("ws-code")?.value.trim() ?? "";
-    if (!code) return setWsErr("ใส่รหัสเชิญก่อน");
-    setWsErr("");
+  $("sp-join")!.onclick = async () => {
+    const code = $<HTMLInputElement>("sp-code")?.value.trim() ?? "";
+    if (!code) return setErr("sp-err", "ใส่รหัสเชิญก่อน");
+    setErr("sp-err", "");
     try {
       const r = await fetch(`${API}/workspaces/join`, {
         method: "POST", headers: authHeaders(), body: JSON.stringify({ code }),
       });
       const d = await r.json();
-      if (!r.ok) return setWsErr(d.error === "workspace not found" ? "ไม่พบรหัสเชิญนี้" : (d.error || "เข้าร่วมไม่สำเร็จ"));
-      gotoWorkspace(d.workspace.slug);
-    } catch { setWsErr("เชื่อมต่อ API ไม่ได้"); }
+      if (!r.ok) return setErr("sp-err", d.error === "workspace not found" ? "ไม่พบรหัสเชิญนี้" : (d.error || "เข้าร่วมไม่สำเร็จ"));
+      enterSpace(d.workspace);
+    } catch { setErr("sp-err", "เชื่อมต่อ API ไม่ได้"); }
   };
 
-  const setMode = (m: "login" | "register") => {
-    mode = m;
-    $("tab-login")?.classList.toggle("active", m === "login");
-    $("tab-register")?.classList.toggle("active", m === "register");
-    if (nameInput) nameInput.style.display = m === "register" ? "block" : "none";
-    if (submitBtn) submitBtn.textContent = m === "register" ? "สมัคร" : "เข้าสู่ระบบ";
-    setErr("");
+  $("sp-logout")!.onclick = async () => {
+    try { await fetch(`${API}/auth/logout`, { method: "POST", headers: authHeaders() }); } catch { /* ignore */ }
+    localStorage.removeItem(TOKEN_KEY);
+    location.href = location.pathname;
   };
 
+  // --------------------------------------------- workspace settings/members
+  let editing: Space | null = null;
+  let myRole = "member";
+
+  const closeModal = () => { const m = $("ws-modal"); if (m) m.style.display = "none"; };
+
+  const renderMembers = (members: Member[]) => {
+    const box = $("wm-members");
+    const count = $("wm-count");
+    if (count) count.textContent = String(members.length);
+    if (!box) return;
+    box.innerHTML = "";
+    const canManage = myRole === "owner" || myRole === "admin";
+    for (const m of members) {
+      const row = document.createElement("div");
+      row.className = "wm-member";
+      const ava = document.createElement("span");
+      ava.className = "wm-ava";
+      if (m.photoUrl) {
+        const img = document.createElement("img");
+        img.src = m.photoUrl; img.alt = "";
+        ava.appendChild(img);
+      } else ava.textContent = initial(m.name);
+      const info = document.createElement("span");
+      info.className = "wm-mi";
+      const b = document.createElement("b"); b.textContent = m.name + (m.isMe ? " (คุณ)" : "");
+      const sm = document.createElement("small"); sm.textContent = m.email;
+      info.append(b, sm);
+      row.append(ava, info);
+
+      if (m.role === "owner") {
+        const tag = document.createElement("small");
+        tag.style.color = "#8a8f98";
+        tag.textContent = roleLabel("owner");
+        row.appendChild(tag);
+      } else if (myRole === "owner") {
+        const sel = document.createElement("select");
+        for (const r of ["admin", "member"]) {
+          const o = document.createElement("option");
+          o.value = r; o.textContent = roleLabel(r); o.selected = m.role === r;
+          sel.appendChild(o);
+        }
+        sel.onchange = async () => {
+          await fetch(`${API}/workspaces/${editing!.slug}/members/${m.id}`, {
+            method: "PATCH", headers: authHeaders(), body: JSON.stringify({ role: sel.value }),
+          });
+          void loadMembers();
+        };
+        row.appendChild(sel);
+      } else {
+        const tag = document.createElement("small");
+        tag.style.color = "#8a8f98";
+        tag.textContent = roleLabel(m.role);
+        row.appendChild(tag);
+      }
+
+      if (m.role !== "owner" && (canManage || m.isMe)) {
+        const x = document.createElement("button");
+        x.className = "wm-x";
+        x.textContent = "✕";
+        x.title = m.isMe ? "ออกจาก workspace" : "นำออก";
+        x.onclick = async () => {
+          if (!confirm(m.isMe ? "ออกจาก workspace นี้?" : `นำ ${m.name} ออกจาก workspace?`)) return;
+          await fetch(`${API}/workspaces/${editing!.slug}/members/${m.id}`, {
+            method: "DELETE", headers: authHeaders(),
+          });
+          if (m.isMe) { closeModal(); void showSpaces(); } else void loadMembers();
+        };
+        row.appendChild(x);
+      }
+      box.appendChild(row);
+    }
+  };
+
+  const loadMembers = async () => {
+    if (!editing) return;
+    try {
+      const r = await fetch(`${API}/workspaces/${editing.slug}/members`, { headers: authHeaders() });
+      const d = await r.json();
+      if (!r.ok) return setErr("wm-err", d.error || "โหลดสมาชิกไม่ได้");
+      myRole = d.myRole;
+      renderMembers(d.members ?? []);
+    } catch { setErr("wm-err", "เชื่อมต่อ API ไม่ได้"); }
+  };
+
+  const openSettings = async (s: Space) => {
+    editing = s;
+    myRole = s.role;
+    setErr("wm-err", "");
+    const m = $("ws-modal");
+    if (m) m.style.display = "grid";
+    $("wm-title")!.textContent = s.name;
+    $("wm-sub")!.textContent = `ลิงก์: ?w=${s.slug}`;
+    // fresh copy so we get the invite code (only returned to members)
+    try {
+      const r = await fetch(`${API}/workspaces/${s.slug}`, { headers: authHeaders() });
+      const d = await r.json();
+      const w = d.workspace ?? s;
+      $<HTMLInputElement>("wm-name")!.value = w.name ?? s.name;
+      $<HTMLInputElement>("wm-guests")!.checked = !!w.allowGuests;
+      $<HTMLInputElement>("wm-invite")!.value = w.inviteCode
+        ? `${location.origin}${location.pathname}?w=${s.slug}` : "—";
+      $<HTMLInputElement>("wm-invite")!.dataset.code = w.inviteCode ?? "";
+    } catch { /* keep what we have */ }
+    const owner = myRole === "owner" || myRole === "admin";
+    for (const id of ["wm-name", "wm-guests"]) $<HTMLInputElement>(id)!.disabled = !owner;
+    $("wm-save")!.style.display = owner ? "" : "none";
+    $("wm-reset")!.style.display = owner ? "" : "none";
+    void loadMembers();
+  };
+
+  $("wm-close")!.onclick = closeModal;
+  $("ws-modal")!.onclick = (e) => { if (e.target === $("ws-modal")) closeModal(); };
+
+  $("wm-copy")!.onclick = async () => {
+    const v = $<HTMLInputElement>("wm-invite")!.value;
+    try { await navigator.clipboard.writeText(v); $("wm-copy")!.textContent = "คัดลอกแล้ว"; }
+    catch { /* ignore */ }
+    setTimeout(() => ($("wm-copy")!.textContent = "คัดลอก"), 1500);
+  };
+
+  $("wm-reset")!.onclick = async () => {
+    if (!editing || !confirm("สร้างรหัสเชิญใหม่? ลิงก์เดิมจะใช้ไม่ได้")) return;
+    const r = await fetch(`${API}/workspaces/${editing.slug}/invite/reset`, { method: "POST", headers: authHeaders() });
+    const d = await r.json();
+    if (r.ok) setErr("wm-err", "สร้างรหัสเชิญใหม่แล้ว");
+    else setErr("wm-err", d.error || "รีเซ็ตไม่สำเร็จ");
+  };
+
+  $("wm-leave")!.onclick = async () => {
+    if (!editing || !confirm("ออกจาก workspace นี้?")) return;
+    const me = (await (await fetch(`${API}/workspaces/${editing.slug}/members`, { headers: authHeaders() })).json())
+      .members?.find((m: Member) => m.isMe);
+    if (!me) return;
+    const r = await fetch(`${API}/workspaces/${editing.slug}/members/${me.id}`, { method: "DELETE", headers: authHeaders() });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return setErr("wm-err", d.error === "the owner cannot be removed" ? "เจ้าของออกเองไม่ได้" : (d.error || "ออกไม่สำเร็จ"));
+    closeModal();
+    void showSpaces();
+  };
+
+  $("wm-save")!.onclick = async () => {
+    if (!editing) return;
+    setErr("wm-err", "");
+    const body = {
+      name: $<HTMLInputElement>("wm-name")!.value.trim(),
+      allowGuests: $<HTMLInputElement>("wm-guests")!.checked,
+    };
+    const r = await fetch(`${API}/workspaces/${editing.slug}`, {
+      method: "PATCH", headers: authHeaders(), body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!r.ok) return setErr("wm-err", d.error || "บันทึกไม่สำเร็จ");
+    closeModal();
+    void showSpaces();
+  };
+
+  // -------------------------------------------------------- character select
   const highlight = (tile: string) => {
     selectedTile = tile;
     document.querySelectorAll<HTMLElement>(".char-opt").forEach((el) =>
@@ -170,8 +445,8 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
   };
 
   const openEditor = async () => {
-    const initial = customConfig ?? await defaultDressedConfig();
-    const cfg = await openAvatarEditor(initial, cName?.value || user?.name || "avatar");
+    const init = customConfig ?? await defaultDressedConfig();
+    const cfg = await openAvatarEditor(init, cName?.value || user?.name || "avatar");
     if (!cfg) return;
     customConfig = cfg;
     selected = encodeAvatar(cfg);
@@ -181,70 +456,41 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
 
   const toChar = (u: User | null) => {
     if (u?.avatar?.lpc) { customConfig = u.avatar.lpc; selected = encodeAvatar(u.avatar.lpc); setCustomThumb(u.avatar.lpc); }
-    else { void defaultDressedConfig().then(setCustomThumb); } // preview a generic avatar on the "create your own" tile
+    else { void defaultDressedConfig().then(setCustomThumb); }
     if (u?.avatar?.avatarId && !u?.avatar?.lpc) selected = u.avatar.avatarId;
     showStep("char-step");
-    const hello = $("char-hello"); if (hello) hello.textContent = u ? `สวัสดี ${u.name}` : "โหมด Guest";
+    const hello = $("char-hello");
+    if (hello) hello.textContent = u ? `สวัสดี ${u.name}` : "โหมด Guest";
     if (cName) cName.value = u?.name ?? "";
     if (u?.avatar?.lpc) highlight("custom"); else selectPreset(selected);
   };
 
-  $("tab-login")!.onclick = () => setMode("login");
-  $("tab-register")!.onclick = () => setMode("register");
   document.querySelectorAll<HTMLElement>(".char-opt").forEach((el) => (el.onclick = () => {
     if (el.dataset.avatar === "custom") void openEditor();
     else selectPreset(el.dataset.avatar || "1");
   }));
 
-  submitBtn!.onclick = async () => {
-    setErr("");
-    const email = emailInput?.value.trim() ?? "";
-    const password = passInput?.value ?? "";
-    const name = nameInput?.value.trim() ?? "";
-    if (!email || !password) return setErr("กรอกอีเมลและรหัสผ่าน");
-    try {
-      const r = await fetch(API + (mode === "register" ? "/auth/register" : "/auth/login"), {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password, name }),
-      });
-      const data = await r.json();
-      if (!r.ok) return setErr(data.error || "เกิดข้อผิดพลาด");
-      localStorage.setItem("nexspace-token", data.token);
-      user = data.user;
-      // arriving via an invite link goes straight in; otherwise pick a workspace
-      if (HAS_WORKSPACE_PARAM) toChar(user); else void toWorkspaces();
-    } catch { setErr("เชื่อมต่อ API ไม่ได้ — ลองเข้าแบบ Guest"); }
-  };
-
-  $("a-guest")!.onclick = () => { user = null; toChar(null); };
-
   $("c-enter")!.onclick = () => {
     const name = cName?.value.trim() || user?.name || "Guest";
-    const token = localStorage.getItem("nexspace-token");
-    if (token) {
+    if (token()) {
       const body = selectedTile === "custom" && customConfig ? { lpc: customConfig } : { avatarId: selected };
-      fetch(API + "/me/avatar", {
-        method: "PUT", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-        body: JSON.stringify(body),
-      }).catch(() => {});
+      fetch(`${API}/me/avatar`, { method: "PUT", headers: authHeaders(), body: JSON.stringify(body) }).catch(() => {});
     }
     if (overlay) overlay.style.display = "none";
+    if (spaces) spaces.style.display = "none";
     // desk is per workspace: members from their account, guests from this device
     const desk = user?.desks?.[WORKSPACE] || localStorage.getItem(wsKey("nexspace-desk")) || "";
     onReady({ name, avatar: selected, desk });
   };
 
-  // auto-resume a saved session
+  // ------------------------------------------------------------- entry point
   (async () => {
-    const token = localStorage.getItem("nexspace-token");
-    if (!token) return;
+    if (!token()) return showStep("auth-step");
     try {
-      const r = await fetch(API + "/me", { headers: { Authorization: "Bearer " + token } });
-      if (r.ok) {
-        user = (await r.json()).user;
-        if (HAS_WORKSPACE_PARAM) toChar(user); else void toWorkspaces();
-      } else localStorage.removeItem("nexspace-token");
-    } catch { /* offline -> stay on login */ }
+      const r = await fetch(`${API}/me`, { headers: authHeaders() });
+      if (!r.ok) { localStorage.removeItem(TOKEN_KEY); return showStep("auth-step"); }
+      user = (await r.json()).user;
+      afterSignIn();
+    } catch { showStep("auth-step"); } // offline -> let them sign in / go guest
   })();
-
-  setMode("login");
 }

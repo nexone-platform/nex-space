@@ -166,6 +166,89 @@
       #auth-overlay .primary:hover { background: #249e90; }
       #auth-overlay .ghost { width: 100%; margin-top: 8px; padding: 8px; border: none; background: transparent; color: #8a8f98; cursor: pointer; font-size: 13px; }
       #auth-overlay .err { color: #e5484d; font-size: 13px; min-height: 18px; margin-bottom: 4px; }
+      /* --- sign in (Google + email code) --- */
+      .auth-logo { width: 54px; height: 54px; margin: 4px auto 16px; border-radius: 15px; background: #1c1b22;
+        color: #fff; display: grid; place-items: center; }
+      .auth-logo svg { width: 30px; height: 30px; }
+      #auth-overlay h1.auth-title { text-align: center; font-size: 18px; }
+      #auth-overlay #auth-step .sub, #auth-overlay #code-step .sub { text-align: center; }
+      .btn-google { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
+        padding: 11px; border: 1px solid #dfe1e6; border-radius: 10px; background: #fff; cursor: pointer;
+        font: 600 14.5px "Segoe UI", sans-serif; color: #24262b; }
+      .btn-google:hover { background: #f7f8fa; }
+      .auth-or { display: flex; align-items: center; gap: 10px; margin: 14px 0; color: #a8adb5; font-size: 12.5px; }
+      .auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: #e7e9ee; }
+      .code-boxes { display: flex; gap: 8px; justify-content: center; margin: 6px 0 14px; }
+      .code-boxes input { width: 44px; height: 52px; margin: 0; padding: 0; text-align: center;
+        font: 700 22px "Segoe UI", sans-serif; color: #1c1b22; border: 1px solid #dfe1e6; border-radius: 10px; }
+      .code-boxes input:focus { border-color: #2bb3a3; box-shadow: 0 0 0 3px #2bb3a322; }
+
+      /* --- spaces dashboard --- */
+      #spaces-overlay { position: fixed; inset: 0; z-index: 61; background: #eceef1; display: none;
+        flex-direction: column; font-family: "Segoe UI", sans-serif; overflow-y: auto; }
+      .sp-head { display: flex; align-items: center; gap: 14px; padding: 14px 24px; background: #fff;
+        border-bottom: 1px solid #e4e6ea; position: sticky; top: 0; z-index: 2; }
+      .sp-logo { width: 34px; height: 34px; border-radius: 10px; background: #1c1b22; color: #fff;
+        display: grid; place-items: center; flex: 0 0 auto; }
+      .sp-logo svg { width: 20px; height: 20px; }
+      .sp-head .sp-spacer { flex: 1; }
+      .sp-head button { border: none; border-radius: 9px; cursor: pointer; font: 600 13.5px "Segoe UI", sans-serif; }
+      #sp-create { background: #4f46e5; color: #fff; padding: 9px 16px; }
+      #sp-create:hover { background: #4338ca; }
+      #sp-logout { background: #f2f3f6; color: #4b5563; padding: 9px 14px; }
+      #sp-logout:hover { background: #e6e8ee; }
+      .sp-who { font-size: 13px; color: #6b7280; }
+      .sp-body { padding: 22px 24px 40px; }
+      #sp-search { width: min(280px, 46vw); padding: 8px 12px; border: 1px solid #dfe1e6; border-radius: 9px;
+        font-size: 13px; outline: none; background: #fff; }
+      .sp-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+      .sp-bar b { font-size: 15px; color: #1c1b22; }
+      .sp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px; }
+      .sp-card { background: #fff; border: 1px solid #e4e6ea; border-radius: 13px; overflow: hidden;
+        display: flex; flex-direction: column; }
+      .sp-thumb { height: 122px; background: linear-gradient(135deg, #dff3ef, #cfe6ff); display: grid;
+        place-items: center; color: #2bb3a3; font: 700 30px "Segoe UI", sans-serif; cursor: pointer; }
+      .sp-card-foot { display: flex; align-items: center; gap: 8px; padding: 11px 12px; }
+      .sp-card-foot .sp-name { flex: 1; min-width: 0; }
+      .sp-card-foot .sp-name b { display: block; font-size: 14px; color: #1c1b22;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .sp-card-foot .sp-name small { font-size: 11.5px; color: #8a8f98; }
+      .sp-menu-btn { border: none; background: transparent; color: #8a8f98; cursor: pointer;
+        width: 28px; height: 28px; border-radius: 7px; font-size: 16px; line-height: 1; }
+      .sp-menu-btn:hover { background: #f0f1f5; color: #333; }
+      .sp-empty { color: #8a8f98; font-size: 14px; padding: 40px 0; text-align: center; }
+
+      /* --- workspace settings / members modal --- */
+      #ws-modal { position: fixed; inset: 0; z-index: 70; background: #0b0b1099; display: none; place-items: center; }
+      #ws-modal .wm-box { width: min(94vw, 520px); max-height: 88vh; overflow-y: auto; background: #fff;
+        border-radius: 15px; padding: 22px 24px; box-shadow: 0 24px 60px #0007; }
+      #ws-modal h2 { margin: 0 0 2px; font-size: 18px; color: #1c1b22; }
+      #ws-modal .wm-sub { margin: 0 0 16px; font-size: 12.5px; color: #8a8f98; }
+      #ws-modal label.wm-l { display: block; font-size: 12.5px; color: #6b7280; margin: 12px 0 5px; font-weight: 600; }
+      #ws-modal input[type="text"] { width: 100%; box-sizing: border-box; padding: 9px 11px;
+        border: 1px solid #e2e4ea; border-radius: 9px; font-size: 14px; outline: none; }
+      .wm-row { display: flex; align-items: center; gap: 9px; font-size: 13px; color: #4b5563; margin-top: 10px; }
+      .wm-invite { display: flex; gap: 8px; margin-top: 5px; }
+      .wm-invite input { flex: 1; font-family: monospace; }
+      .wm-btn { border: none; border-radius: 9px; padding: 9px 14px; cursor: pointer; font: 600 13px "Segoe UI", sans-serif; }
+      .wm-primary { background: #2bb3a3; color: #fff; }
+      .wm-ghost { background: #f2f3f6; color: #4b5563; }
+      .wm-danger { background: #fdecec; color: #d3373d; }
+      .wm-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+      .wm-members { margin-top: 6px; border: 1px solid #eceef2; border-radius: 11px; overflow: hidden; }
+      .wm-member { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid #f1f2f5; }
+      .wm-member:last-child { border-bottom: none; }
+      .wm-ava { width: 30px; height: 30px; border-radius: 50%; background: #2bb3a3; color: #fff;
+        display: grid; place-items: center; font-weight: 700; font-size: 13px; flex: 0 0 auto; overflow: hidden; }
+      .wm-ava img { width: 100%; height: 100%; object-fit: cover; }
+      .wm-mi { flex: 1; min-width: 0; }
+      .wm-mi b { display: block; font-size: 13.5px; color: #1c1b22; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .wm-mi small { font-size: 11.5px; color: #8a8f98; }
+      .wm-member select { border: 1px solid #e2e4ea; border-radius: 7px; padding: 4px 6px; font-size: 12.5px; background: #fff; }
+      .wm-x { border: none; background: transparent; color: #c2c7cf; cursor: pointer; font-size: 15px; padding: 4px 6px; border-radius: 6px; }
+      .wm-x:hover { background: #fdecec; color: #d3373d; }
+      .wm-err { color: #e5484d; font-size: 12.5px; min-height: 16px; }
+
       /* workspace picker */
       #ws-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
       .ws-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 11px;
@@ -316,30 +399,38 @@
     <div id="auth-overlay">
       <div class="card">
         <div id="auth-step">
-          <h1>NexSpace</h1>
-          <p class="sub">ออฟฟิศเสมือนของทีมคุณ</p>
-          <div class="auth-tabs"><button id="tab-login" class="active">เข้าสู่ระบบ</button><button id="tab-register">สมัคร</button></div>
-          <div class="err" id="auth-err"></div>
-          <input id="a-name" type="text" placeholder="ชื่อที่แสดง" style="display:none" autocomplete="off" />
-          <input id="a-email" type="email" placeholder="อีเมล" autocomplete="username" />
-          <div class="pass-wrap">
-            <input id="a-pass" type="password" placeholder="รหัสผ่าน (อย่างน้อย 6 ตัว)" autocomplete="current-password" />
-            <button type="button" id="a-pass-toggle" class="pass-eye" title="แสดงรหัสผ่าน" aria-label="แสดงรหัสผ่าน"></button>
+          <div class="auth-logo">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="4.6" r="2.1"/><circle cx="5.6" cy="9.6" r="2.1"/><circle cx="18.4" cy="9.6" r="2.1"/><circle cx="8.2" cy="17.2" r="2.1"/><circle cx="15.8" cy="17.2" r="2.1"/><path d="M12 6.7v3.1M7.4 11l1.4 4.4M16.6 11l-1.4 4.4M10.3 17.2h3.4" stroke="currentColor" stroke-width="1.3" fill="none"/></svg>
           </div>
-          <button class="primary" id="a-submit">เข้าสู่ระบบ</button>
+          <h1 class="auth-title">เข้าสู่ออฟฟิศของคุณ</h1>
+          <p class="sub">เข้าสู่ระบบหรือสร้างบัญชีใหม่</p>
+          <div class="err" id="auth-err"></div>
+          <button class="btn-google" id="a-google">
+            <svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true"><path fill="#4285F4" d="M17.6 9.2c0-.6-.1-1.2-.2-1.8H9v3.5h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.6 2.7-3.9 2.7-6.6z"/><path fill="#34A853" d="M9 18c2.4 0 4.5-.8 6-2.2l-2.9-2.2c-.8.5-1.8.9-3.1.9-2.4 0-4.4-1.6-5.1-3.8H.9v2.3A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.9 10.7a5.4 5.4 0 0 1 0-3.4V5H.9a9 9 0 0 0 0 8l3-2.3z"/><path fill="#EA4335" d="M9 3.6c1.3 0 2.5.5 3.4 1.3L15 2.3A9 9 0 0 0 .9 5l3 2.3C4.6 5.2 6.6 3.6 9 3.6z"/></svg>
+            <span>เข้าสู่ระบบด้วย Google</span>
+          </button>
+          <div class="auth-or"><span>หรือ</span></div>
+          <input id="a-email" type="email" placeholder="อีเมลของคุณ" autocomplete="email" />
+          <button class="primary" id="a-send-code">ส่งรหัสเข้าอีเมล</button>
           <button class="ghost" id="a-guest">ข้ามไปก่อน — เข้าแบบ Guest</button>
         </div>
-        <div id="ws-step" style="display:none">
-          <h1>เลือก Workspace</h1>
-          <p class="sub">พื้นที่ของบริษัท/ทีมคุณ</p>
-          <div class="err" id="ws-err"></div>
-          <div id="ws-list"></div>
-          <div class="ws-sep">หรือ</div>
-          <input id="ws-name" type="text" placeholder="ชื่อบริษัท / ทีม — สร้างใหม่" autocomplete="off" />
-          <label class="ws-check"><input type="checkbox" id="ws-guests" checked /> ให้คนที่ไม่ได้สมัครสมาชิก (Guest) เข้าได้</label>
-          <button class="primary" id="ws-create">สร้าง Workspace</button>
-          <input id="ws-code" type="text" placeholder="มีรหัสเชิญ? กรอกที่นี่" autocomplete="off" style="margin-top:10px" />
-          <button class="ghost" id="ws-join">เข้าร่วมด้วยรหัสเชิญ</button>
+        <div id="code-step" style="display:none">
+          <div class="auth-logo">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="4.6" r="2.1"/><circle cx="5.6" cy="9.6" r="2.1"/><circle cx="18.4" cy="9.6" r="2.1"/><circle cx="8.2" cy="17.2" r="2.1"/><circle cx="15.8" cy="17.2" r="2.1"/><path d="M12 6.7v3.1M7.4 11l1.4 4.4M16.6 11l-1.4 4.4M10.3 17.2h3.4" stroke="currentColor" stroke-width="1.3" fill="none"/></svg>
+          </div>
+          <h1 class="auth-title">กรอกรหัสของคุณ</h1>
+          <p class="sub" id="code-sub"></p>
+          <div class="err" id="code-err"></div>
+          <div class="code-boxes" id="code-boxes">
+            <input inputmode="numeric" maxlength="1" autocomplete="one-time-code" />
+            <input inputmode="numeric" maxlength="1" />
+            <input inputmode="numeric" maxlength="1" />
+            <input inputmode="numeric" maxlength="1" />
+            <input inputmode="numeric" maxlength="1" />
+            <input inputmode="numeric" maxlength="1" />
+          </div>
+          <button class="ghost" id="code-resend">ส่งรหัสอีกครั้ง</button>
+          <button class="ghost" id="code-cancel">ยกเลิก</button>
         </div>
         <div id="char-step" style="display:none">
           <h1>เลือกตัวละคร</h1>
@@ -359,6 +450,59 @@
         </div>
       </div>
     </div>
+    <div id="spaces-overlay">
+      <header class="sp-head">
+        <span class="sp-logo">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="4.6" r="2.1"/><circle cx="5.6" cy="9.6" r="2.1"/><circle cx="18.4" cy="9.6" r="2.1"/><circle cx="8.2" cy="17.2" r="2.1"/><circle cx="15.8" cy="17.2" r="2.1"/></svg>
+        </span>
+        <b style="font-size:15px;color:#1c1b22">NexSpace</b>
+        <span class="sp-spacer"></span>
+        <span class="sp-who" id="sp-who"></span>
+        <button id="sp-logout">ออกจากระบบ</button>
+        <button id="sp-create">＋ สร้าง Space</button>
+      </header>
+      <div class="sp-body">
+        <div class="sp-bar">
+          <b>Space ของฉัน</b>
+          <span class="sp-spacer"></span>
+          <input id="sp-search" type="text" placeholder="ค้นหา…" autocomplete="off" />
+          <input id="sp-code" type="text" placeholder="รหัสเชิญ" autocomplete="off" style="width:120px" />
+          <button id="sp-join" style="background:#f2f3f6;color:#4b5563;padding:9px 14px;border:none;border-radius:9px;cursor:pointer;font:600 13.5px 'Segoe UI',sans-serif">เข้าร่วม</button>
+        </div>
+        <div class="err" id="sp-err" style="min-height:18px"></div>
+        <div class="sp-grid" id="sp-grid"></div>
+      </div>
+    </div>
+
+    <div id="ws-modal">
+      <div class="wm-box">
+        <h2 id="wm-title">ตั้งค่า Workspace</h2>
+        <p class="wm-sub" id="wm-sub"></p>
+        <div class="wm-err" id="wm-err"></div>
+
+        <label class="wm-l">ชื่อบริษัท / ทีม</label>
+        <input type="text" id="wm-name" />
+
+        <label class="wm-row"><input type="checkbox" id="wm-guests" /> ให้คนที่ไม่ได้สมัครสมาชิก (Guest) เข้าได้</label>
+
+        <label class="wm-l">ลิงก์เชิญ</label>
+        <div class="wm-invite">
+          <input type="text" id="wm-invite" readonly />
+          <button class="wm-btn wm-ghost" id="wm-copy">คัดลอก</button>
+          <button class="wm-btn wm-ghost" id="wm-reset" title="สร้างรหัสใหม่ ลิงก์เดิมจะใช้ไม่ได้">รีเซ็ต</button>
+        </div>
+
+        <label class="wm-l">สมาชิก (<span id="wm-count">0</span>)</label>
+        <div class="wm-members" id="wm-members"></div>
+
+        <div class="wm-actions">
+          <button class="wm-btn wm-danger" id="wm-leave">ออกจาก Workspace</button>
+          <button class="wm-btn wm-ghost" id="wm-close">ปิด</button>
+          <button class="wm-btn wm-primary" id="wm-save">บันทึก</button>
+        </div>
+      </div>
+    </div>
+
     <div class="hint">เดิน: <b>WASD</b>/ลูกศร &nbsp;·&nbsp; เก้าอี้: คลิก+ลาก=หมุน &nbsp;·&nbsp; <b>Enter</b>=แชตกับคนที่อยู่ใกล้ &nbsp;·&nbsp; NexSpace</div>
     <div id="tiles" style="position:fixed; top:12px; right:12px; z-index:20; display:flex; flex-direction:column; gap:8px; width:180px;"></div>
     <div id="av-bar">
