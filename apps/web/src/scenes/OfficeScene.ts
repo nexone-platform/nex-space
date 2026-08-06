@@ -261,7 +261,7 @@ export class OfficeScene extends Phaser.Scene {
     const worldW = COLS * TILE;
     const worldH = ROWS * TILE;
 
-    // --- floor zones (atlas index): 0 marble, 1 grass, 2 plank, 3 pink, 4 mint,
+    // --- floor zones (atlas index): 0 cream, 1 grass, 2 plank, 3 pink, 4 mint,
     //     5 blue, 6 dark-wood, 7 path, 8 brick ---
     const inBuild = (x: number, y: number) => x >= 5 && x <= 26 && y >= 4 && y <= 19;
     const floorAt = (x: number, y: number): number => {
@@ -272,7 +272,7 @@ export class OfficeScene extends Phaser.Scene {
       if (x >= 20 && x <= 26 && y >= 4 && y <= 9) return 4;    // meeting (mint)
       if (x >= 5 && x <= 10 && y >= 15 && y <= 19) return 2;   // pantry (plank)
       if (x >= 21 && x <= 26 && y >= 15 && y <= 19) return 6;  // game room (dark wood)
-      return 0;                                                // marble hall
+      return 0;                                                // cream hall
     };
     const floorData: number[][] = [];
     for (let y = 0; y < ROWS; y++) {
