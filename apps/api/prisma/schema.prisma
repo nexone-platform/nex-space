@@ -17,10 +17,38 @@ model User {
   name         String
   passwordHash String
   avatar       String? // JSON string: { avatarId, skin, hair, top, ... }
-  desk         String? // id of the player's claimed home desk
+  desk         String? // JSON string: { workspaceSlug: deskId }
   createdAt    DateTime   @default(now())
   sessions     Session[]
   maps         SavedMap[]
+  owned        Workspace[]  @relation("OwnedWorkspaces")
+  memberships  Membership[]
+}
+
+// A company / community space. People join via its invite code; the owner
+// decides whether people without an account (guests) may enter.
+model Workspace {
+  id          String       @id @default(cuid())
+  slug        String       @unique // used in ?w=<slug> and as the room key
+  name        String // display name, e.g. "บริษัท A"
+  inviteCode  String       @unique
+  allowGuests Boolean      @default(true)
+  ownerId     String
+  owner       User         @relation("OwnedWorkspaces", fields: [ownerId], references: [id], onDelete: Cascade)
+  members     Membership[]
+  createdAt   DateTime     @default(now())
+}
+
+model Membership {
+  id          String    @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        String    @default("member") // owner | admin | member
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, workspaceId])
 }
 
 model Session {

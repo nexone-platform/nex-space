@@ -5,6 +5,8 @@ const TILE = 32;
 const SPAWN = { x: 15 * TILE + TILE / 2, y: 18 * TILE + TILE / 2 };
 const NEAR_PX = 5 * TILE; // proximity radius (5 tiles)
 const STATUSES = ["online", "afk", "muted", "meeting"];
+const DEFAULT_WORKSPACE = "main";
+const API_URL = process.env.API_URL || "http://localhost:3001";
 
 type MoveMsg = { x: number; y: number; dir: string; moving: boolean };
 type ChatMsg = { text?: string };
@@ -15,6 +17,30 @@ export class OfficeRoom extends Room<OfficeState> {
                        // (rooms auto-disposing while momentarily empty caused clients to split across instances)
 
   private workspace = "main";
+
+  /**
+   * Gate the room on workspace membership. The API is the source of truth:
+   * it answers whether this token is a member, or whether the workspace lets
+   * guests in. Without this the permission model would be advisory only —
+   * anyone could open a socket straight to another company's room.
+   */
+  async onAuth(_client: Client, options: { workspace?: string; token?: string } = {}) {
+    const slug = String(options.workspace || "main").slice(0, 32);
+    if (slug === DEFAULT_WORKSPACE) return true; // the shared public space
+    try {
+      const url = `${API_URL}/workspaces/${encodeURIComponent(slug)}/access`
+        + `?token=${encodeURIComponent(options.token || "")}`;
+      const r = await fetch(url);
+      const d = (await r.json()) as { allowed?: boolean; reason?: string };
+      if (d.allowed) return true;
+      throw new Error(d.reason === "members-only" ? "members-only" : "workspace-not-found");
+    } catch (e) {
+      // a thrown auth error must reach the client; only network faults land here
+      if (e instanceof Error && (e.message === "members-only" || e.message === "workspace-not-found")) throw e;
+      console.error(`[office:${slug}] access check failed:`, e);
+      throw new Error("access-check-failed");
+    }
+  }
 
   onCreate(options: { workspace?: string } = {}) {
     this.workspace = String(options.workspace || "main").slice(0, 32);

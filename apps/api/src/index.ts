@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { prisma } from "./db";
-import { hashPassword, verifyPassword, createSession, requireAuth, type AuthedRequest } from "./auth";
+import { hashPassword, verifyPassword, createSession, requireAuth, userFromToken, type AuthedRequest } from "./auth";
 
 const port = Number(process.env.PORT) || 3001;
 const app = express();
@@ -77,6 +77,123 @@ app.put("/me/desk", requireAuth, async (req: AuthedRequest, res) => {
     data: { desk: JSON.stringify(desks) },
   });
   res.json({ user: safeUser(user) });
+});
+
+// ---- workspaces ----
+// Slugs stay ASCII: they ride in the ?w= URL, key the LiveKit room name, and the
+// client normalises to [a-z0-9-] — a Thai slug would be rewritten there and drop
+// people into the wrong workspace. Display names keep their original script.
+const slugify = (s: string) =>
+  s.toLowerCase().trim().replace(/[^a-z0-9-]+/g, "-").replace(/-+/g, "-")
+    .replace(/^-|-$/g, "").slice(0, 32);
+
+const randomCode = () => Math.random().toString(36).slice(2, 10);
+
+/** first free slug: "acme", "acme-2", "acme-3", ... */
+async function uniqueSlug(base: string): Promise<string> {
+  // a name with no usable ASCII (e.g. "บริษัทเอ") gets a readable random slug
+  let root = slugify(base);
+  if (root.length < 2) root = `space-${randomCode()}`;
+  for (let i = 1; i < 50; i++) {
+    const slug = i === 1 ? root : `${root}-${i}`;
+    if (!(await prisma.workspace.findUnique({ where: { slug } }))) return slug;
+  }
+  return `${root}-${randomCode()}`;
+}
+
+const wsView = (w: any, role?: string) => ({
+  slug: w.slug, name: w.name, allowGuests: w.allowGuests,
+  inviteCode: w.inviteCode, members: w._count?.members ?? undefined, role,
+});
+
+// workspaces I belong to
+app.get("/workspaces", requireAuth, async (req: AuthedRequest, res) => {
+  const rows = await prisma.membership.findMany({
+    where: { userId: req.user!.id },
+    include: { workspace: { include: { _count: { select: { members: true } } } } },
+    orderBy: { createdAt: "asc" },
+  });
+  res.json({ workspaces: rows.map((m) => wsView(m.workspace, m.role)) });
+});
+
+app.post("/workspaces", requireAuth, async (req: AuthedRequest, res) => {
+  const name = String((req.body ?? {}).name ?? "").trim().slice(0, 60);
+  const allowGuests = (req.body ?? {}).allowGuests !== false;
+  if (!name) return res.status(400).json({ error: "name required" });
+  const workspace = await prisma.workspace.create({
+    data: {
+      name, slug: await uniqueSlug(name), inviteCode: randomCode(),
+      allowGuests, ownerId: req.user!.id,
+      members: { create: { userId: req.user!.id, role: "owner" } },
+    },
+    include: { _count: { select: { members: true } } },
+  });
+  res.json({ workspace: wsView(workspace, "owner") });
+});
+
+// join by invite code (or by slug, for an open workspace)
+app.post("/workspaces/join", requireAuth, async (req: AuthedRequest, res) => {
+  const { code, slug } = req.body ?? {};
+  const workspace = code
+    ? await prisma.workspace.findUnique({ where: { inviteCode: String(code).trim() } })
+    : await prisma.workspace.findUnique({ where: { slug: String(slug ?? "").trim() } });
+  if (!workspace) return res.status(404).json({ error: "workspace not found" });
+  await prisma.membership.upsert({
+    where: { userId_workspaceId: { userId: req.user!.id, workspaceId: workspace.id } },
+    create: { userId: req.user!.id, workspaceId: workspace.id, role: "member" },
+    update: {},
+  });
+  res.json({ workspace: wsView(workspace, "member") });
+});
+
+// public-ish info so an invite link can show the space before you commit to it
+app.get("/workspaces/:slug", async (req, res) => {
+  const w = await prisma.workspace.findUnique({
+    where: { slug: req.params.slug },
+    include: { _count: { select: { members: true } } },
+  });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const user = await userFromToken(req.header("authorization")?.replace(/^Bearer\s+/i, ""));
+  const membership = user
+    ? await prisma.membership.findUnique({
+        where: { userId_workspaceId: { userId: user.id, workspaceId: w.id } },
+      })
+    : null;
+  res.json({ workspace: { ...wsView(w, membership?.role), inviteCode: membership ? w.inviteCode : undefined } });
+});
+
+// owner/admin settings (rename, toggle guest access)
+app.patch("/workspaces/:slug", requireAuth, async (req: AuthedRequest, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const m = await prisma.membership.findUnique({
+    where: { userId_workspaceId: { userId: req.user!.id, workspaceId: w.id } },
+  });
+  if (!m || (m.role !== "owner" && m.role !== "admin")) return res.status(403).json({ error: "forbidden" });
+  const { name, allowGuests } = req.body ?? {};
+  const updated = await prisma.workspace.update({
+    where: { id: w.id },
+    data: {
+      ...(typeof name === "string" && name.trim() ? { name: name.trim().slice(0, 60) } : {}),
+      ...(typeof allowGuests === "boolean" ? { allowGuests } : {}),
+    },
+    include: { _count: { select: { members: true } } },
+  });
+  res.json({ workspace: wsView(updated, m.role) });
+});
+
+/** used by the game server to authorise a room join (members, or guests if allowed) */
+app.get("/workspaces/:slug/access", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.json({ allowed: false, reason: "not-found" });
+  const user = await userFromToken(String(req.query.token || "") || undefined);
+  if (!user) return res.json({ allowed: w.allowGuests, reason: w.allowGuests ? "guest" : "members-only", name: w.name });
+  const m = await prisma.membership.findUnique({
+    where: { userId_workspaceId: { userId: user.id, workspaceId: w.id } },
+  });
+  if (m) return res.json({ allowed: true, reason: "member", name: w.name });
+  // logged in but not a member yet — treat like a guest visit
+  res.json({ allowed: w.allowGuests, reason: w.allowGuests ? "guest" : "members-only", name: w.name });
 });
 
 // ---- saved maps ----

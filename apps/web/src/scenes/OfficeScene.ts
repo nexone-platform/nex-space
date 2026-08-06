@@ -6,7 +6,7 @@ import { LiveKitManager } from "../net/livekit";
 import type { MediaManager } from "../net/media";
 import { buildWalkCanvas, buildSitCanvas, SIT_COLS, SIT_SEATED_COL, decodeAvatar, encodeAvatar, isLpc, avatarKey, defaultDressedConfig, LPC_ROW } from "../avatar/avatarCompose";
 import { openAvatarEditor } from "../avatar/avatarEditor";
-import { WORKSPACE, workspaceLabel, inviteLink, wsKey } from "../workspace";
+import { WORKSPACE, IS_DEFAULT_WORKSPACE, workspaceLabel, inviteLink, wsKey } from "../workspace";
 
 const LPC_COLS = 9; // LPC walk sheet: 9 frames per direction row
 const LPC_SCALE = 0.5;    // 64px LPC frames render large vs 32px furniture -> scale down
@@ -604,8 +604,14 @@ export class OfficeScene extends Phaser.Scene {
   private async connectMultiplayer() {
     try {
       const client = new Client(SERVER_URL);
-      // `workspace` is filterBy'd server-side: each workspace gets its own room instance
-      const room = await client.joinOrCreate("office", { workspace: WORKSPACE, name: this.myName, avatar: this.myAvatar });
+      // `workspace` is filterBy'd server-side (own room per workspace); the token
+      // lets the server check membership before letting us in
+      const room = await client.joinOrCreate("office", {
+        workspace: WORKSPACE,
+        token: localStorage.getItem("nexspace-token") ?? "",
+        name: this.myName,
+        avatar: this.myAvatar,
+      });
       this.room = room;
       this.mySessionId = room.sessionId;
       console.log(`[nexspace] joined room ${room.roomId} as ${room.sessionId}`);
@@ -731,6 +737,12 @@ export class OfficeScene extends Phaser.Scene {
         };
       }
     } catch (e) {
+      const msg = String((e as Error)?.message ?? "");
+      if (msg.includes("members-only")) {
+        this.toast("workspace นี้เปิดให้เฉพาะสมาชิก — ขอให้เจ้าของเชิญคุณก่อน", "warn");
+      } else if (msg.includes("workspace-not-found")) {
+        this.toast("ไม่พบ workspace นี้ — ตรวจสอบลิงก์เชิญอีกครั้ง", "warn");
+      }
       console.warn("[nexspace] multiplayer offline — running single-player:", e);
     }
   }
@@ -832,8 +844,21 @@ export class OfficeScene extends Phaser.Scene {
     document.getElementById("sb-close")?.addEventListener("click", () => sidebar?.classList.add("closed"));
     document.getElementById("sb-search")?.addEventListener("input", () => this.refreshRoster());
 
+    // sidebar shows the workspace's display name (falls back to the slug)
     const title = document.getElementById("sb-title");
-    if (title) title.textContent = workspaceLabel();
+    if (title) {
+      title.textContent = localStorage.getItem(wsKey("nexspace-ws-name")) || workspaceLabel();
+      if (!IS_DEFAULT_WORKSPACE) {
+        fetch(`${AUTH_API}/workspaces/${encodeURIComponent(WORKSPACE)}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => {
+            if (!d?.workspace?.name) return;
+            title.textContent = d.workspace.name;
+            localStorage.setItem(wsKey("nexspace-ws-name"), d.workspace.name);
+          })
+          .catch(() => {});
+      }
+    }
 
     // invite: copy the room link
     document.getElementById("btn-invite")?.addEventListener("click", async () => {

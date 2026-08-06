@@ -2,7 +2,7 @@
 // persists the JWT in localStorage, and hands {name, avatar} to the game.
 import { openAvatarEditor } from "./avatar/avatarEditor";
 import { encodeAvatar, buildFrameCanvas, defaultDressedConfig, type LpcConfig } from "./avatar/avatarCompose";
-import { WORKSPACE, workspaceLabel, wsKey } from "./workspace";
+import { WORKSPACE, HAS_WORKSPACE_PARAM, gotoWorkspace, wsKey } from "./workspace";
 
 // In production the app is served by nginx, which reverse-proxies the API on the
 // same origin (/auth, /me). Use same-origin relative URLs there so it works over
@@ -49,10 +49,104 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
   let customConfig: LpcConfig | null = null;
 
   const setErr = (m: string) => { if (err) err.textContent = m; };
+  const setWsErr = (m: string) => { const e = $("ws-err"); if (e) e.textContent = m; };
+  const authHeaders = () => {
+    const t = localStorage.getItem("nexspace-token");
+    return { "Content-Type": "application/json", ...(t ? { Authorization: "Bearer " + t } : {}) };
+  };
 
   // tell people opening an invite link which workspace they're joining
-  const sub = document.querySelector<HTMLElement>("#auth-step .sub");
-  if (sub && WORKSPACE !== "main") sub.textContent = `เข้าสู่ workspace: ${workspaceLabel()}`;
+  if (HAS_WORKSPACE_PARAM) {
+    fetch(`${API}/workspaces/${encodeURIComponent(WORKSPACE)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const sub = document.querySelector<HTMLElement>("#auth-step .sub");
+        if (sub && d?.workspace?.name) sub.textContent = `เข้าสู่ workspace: ${d.workspace.name}`;
+        if (d?.workspace?.name) localStorage.setItem(wsKey("nexspace-ws-name"), d.workspace.name);
+      })
+      .catch(() => {});
+  }
+
+  // ---- workspace picker -------------------------------------------------
+  const showStep = (id: "auth-step" | "ws-step" | "char-step") => {
+    for (const s of ["auth-step", "ws-step", "char-step"]) {
+      const el = $(s);
+      if (el) el.style.display = s === id ? "block" : "none";
+    }
+  };
+
+  const renderWorkspaces = (list: { slug: string; name: string; role: string; members?: number }[]) => {
+    const box = $("ws-list");
+    if (!box) return;
+    box.innerHTML = "";
+    if (!list.length) {
+      const p = document.createElement("div");
+      p.className = "ws-empty";
+      p.textContent = "ยังไม่ได้อยู่ workspace ไหน — สร้างใหม่หรือใช้รหัสเชิญด้านล่าง";
+      box.appendChild(p);
+      return;
+    }
+    for (const w of list) {
+      const b = document.createElement("button");
+      b.className = "ws-item";
+      const ico = document.createElement("span");
+      ico.className = "ws-ico";
+      ico.textContent = (w.name.trim()[0] ?? "?").toUpperCase();
+      const meta = document.createElement("span");
+      meta.className = "ws-meta";
+      const nm = document.createElement("b"); nm.textContent = w.name;
+      const sm = document.createElement("small");
+      sm.textContent = `${w.role === "owner" ? "เจ้าของ" : w.role === "admin" ? "ผู้ดูแล" : "สมาชิก"}`
+        + (w.members ? ` · ${w.members} คน` : "");
+      meta.append(nm, sm);
+      b.append(ico, meta);
+      b.onclick = () => {
+        localStorage.setItem(wsKey("nexspace-ws-name"), w.name);
+        gotoWorkspace(w.slug);
+      };
+      box.appendChild(b);
+    }
+  };
+
+  const toWorkspaces = async () => {
+    showStep("ws-step");
+    setWsErr("");
+    try {
+      const r = await fetch(`${API}/workspaces`, { headers: authHeaders() });
+      const d = await r.json();
+      renderWorkspaces(d.workspaces ?? []);
+    } catch { setWsErr("โหลดรายการ workspace ไม่ได้"); }
+  };
+
+  $("ws-create")!.onclick = async () => {
+    const name = $<HTMLInputElement>("ws-name")?.value.trim() ?? "";
+    const allowGuests = $<HTMLInputElement>("ws-guests")?.checked ?? true;
+    if (!name) return setWsErr("ใส่ชื่อบริษัท/ทีมก่อน");
+    setWsErr("");
+    try {
+      const r = await fetch(`${API}/workspaces`, {
+        method: "POST", headers: authHeaders(), body: JSON.stringify({ name, allowGuests }),
+      });
+      const d = await r.json();
+      if (!r.ok) return setWsErr(d.error || "สร้างไม่สำเร็จ");
+      localStorage.setItem(wsKey("nexspace-ws-name"), d.workspace.name);
+      gotoWorkspace(d.workspace.slug);
+    } catch { setWsErr("เชื่อมต่อ API ไม่ได้"); }
+  };
+
+  $("ws-join")!.onclick = async () => {
+    const code = $<HTMLInputElement>("ws-code")?.value.trim() ?? "";
+    if (!code) return setWsErr("ใส่รหัสเชิญก่อน");
+    setWsErr("");
+    try {
+      const r = await fetch(`${API}/workspaces/join`, {
+        method: "POST", headers: authHeaders(), body: JSON.stringify({ code }),
+      });
+      const d = await r.json();
+      if (!r.ok) return setWsErr(d.error === "workspace not found" ? "ไม่พบรหัสเชิญนี้" : (d.error || "เข้าร่วมไม่สำเร็จ"));
+      gotoWorkspace(d.workspace.slug);
+    } catch { setWsErr("เชื่อมต่อ API ไม่ได้"); }
+  };
 
   const setMode = (m: "login" | "register") => {
     mode = m;
@@ -89,8 +183,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     if (u?.avatar?.lpc) { customConfig = u.avatar.lpc; selected = encodeAvatar(u.avatar.lpc); setCustomThumb(u.avatar.lpc); }
     else { void defaultDressedConfig().then(setCustomThumb); } // preview a generic avatar on the "create your own" tile
     if (u?.avatar?.avatarId && !u?.avatar?.lpc) selected = u.avatar.avatarId;
-    if ($("auth-step")) $("auth-step")!.style.display = "none";
-    if ($("char-step")) $("char-step")!.style.display = "block";
+    showStep("char-step");
     const hello = $("char-hello"); if (hello) hello.textContent = u ? `สวัสดี ${u.name}` : "โหมด Guest";
     if (cName) cName.value = u?.name ?? "";
     if (u?.avatar?.lpc) highlight("custom"); else selectPreset(selected);
@@ -116,7 +209,9 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       const data = await r.json();
       if (!r.ok) return setErr(data.error || "เกิดข้อผิดพลาด");
       localStorage.setItem("nexspace-token", data.token);
-      user = data.user; toChar(user);
+      user = data.user;
+      // arriving via an invite link goes straight in; otherwise pick a workspace
+      if (HAS_WORKSPACE_PARAM) toChar(user); else void toWorkspaces();
     } catch { setErr("เชื่อมต่อ API ไม่ได้ — ลองเข้าแบบ Guest"); }
   };
 
@@ -144,8 +239,10 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     if (!token) return;
     try {
       const r = await fetch(API + "/me", { headers: { Authorization: "Bearer " + token } });
-      if (r.ok) { user = (await r.json()).user; toChar(user); }
-      else localStorage.removeItem("nexspace-token");
+      if (r.ok) {
+        user = (await r.json()).user;
+        if (HAS_WORKSPACE_PARAM) toChar(user); else void toWorkspaces();
+      } else localStorage.removeItem("nexspace-token");
     } catch { /* offline -> stay on login */ }
   })();
 

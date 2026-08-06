@@ -12,10 +12,22 @@ export function normalizeSlug(raw: string): string {
   return raw.toLowerCase().replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-").slice(0, 32) || DEFAULT;
 }
 
-export const WORKSPACE = normalizeSlug(new URLSearchParams(location.search).get("w") ?? "");
+const param = new URLSearchParams(location.search).get("w");
 
-/** label shown in the UI ("main" -> "NexSpace") */
-export const workspaceLabel = () => (WORKSPACE === DEFAULT ? "NexSpace" : WORKSPACE);
+/** true when the URL explicitly names a workspace (i.e. an invite link) */
+export const HAS_WORKSPACE_PARAM = !!param;
+
+export const WORKSPACE = normalizeSlug(param ?? "");
+
+export const IS_DEFAULT_WORKSPACE = WORKSPACE === DEFAULT;
+
+/** label shown in the UI ("main" -> "NexSpace"); replaced by the real name once known */
+export const workspaceLabel = () => (IS_DEFAULT_WORKSPACE ? "NexSpace" : WORKSPACE);
+
+/** switch workspace by reloading with the new slug (constants above are read once) */
+export const gotoWorkspace = (slug: string) => {
+  location.href = `${location.origin}${location.pathname}?w=${encodeURIComponent(normalizeSlug(slug))}`;
+};
 
 /** shareable invite URL for the current workspace */
 export const inviteLink = () =>

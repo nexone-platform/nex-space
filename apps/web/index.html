@@ -166,6 +166,20 @@
       #auth-overlay .primary:hover { background: #249e90; }
       #auth-overlay .ghost { width: 100%; margin-top: 8px; padding: 8px; border: none; background: transparent; color: #8a8f98; cursor: pointer; font-size: 13px; }
       #auth-overlay .err { color: #e5484d; font-size: 13px; min-height: 18px; margin-bottom: 4px; }
+      /* workspace picker */
+      #ws-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+      .ws-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 11px;
+        border: 1px solid #e2e4ea; background: #fbfbfd; cursor: pointer; text-align: left; width: 100%; font: inherit; }
+      .ws-item:hover { border-color: #2bb3a3; background: #f2fbfa; }
+      .ws-item .ws-ico { width: 30px; height: 30px; border-radius: 9px; flex: 0 0 auto; display: grid;
+        place-items: center; background: #2bb3a3; color: #fff; font-weight: 700; font-size: 14px; }
+      .ws-item .ws-meta { display: flex; flex-direction: column; line-height: 1.3; overflow: hidden; }
+      .ws-item .ws-meta b { font-size: 14px; color: #1c1b22; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .ws-item .ws-meta small { font-size: 11.5px; color: #8a8f98; }
+      .ws-empty { font-size: 13px; color: #8a8f98; text-align: center; padding: 6px 0 2px; }
+      .ws-sep { text-align: center; font-size: 12px; color: #a8adb5; margin: 4px 0 10px; }
+      .ws-check { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #6b7280; margin-bottom: 10px; }
+      .ws-check input { width: auto; margin: 0; }
       .char-grid { display: flex; gap: 8px; justify-content: center; margin: 10px 0 16px; flex-wrap: wrap; }
       .char-opt { border: 3px solid transparent; border-radius: 14px; padding: 6px; cursor: pointer; background: #f2f3f6; width: 68px; box-sizing: border-box; }
       .char-opt.sel { border-color: #2bb3a3; background: #e9f7f4; }
@@ -314,6 +328,18 @@
           </div>
           <button class="primary" id="a-submit">เข้าสู่ระบบ</button>
           <button class="ghost" id="a-guest">ข้ามไปก่อน — เข้าแบบ Guest</button>
+        </div>
+        <div id="ws-step" style="display:none">
+          <h1>เลือก Workspace</h1>
+          <p class="sub">พื้นที่ของบริษัท/ทีมคุณ</p>
+          <div class="err" id="ws-err"></div>
+          <div id="ws-list"></div>
+          <div class="ws-sep">หรือ</div>
+          <input id="ws-name" type="text" placeholder="ชื่อบริษัท / ทีม — สร้างใหม่" autocomplete="off" />
+          <label class="ws-check"><input type="checkbox" id="ws-guests" checked /> ให้คนที่ไม่ได้สมัครสมาชิก (Guest) เข้าได้</label>
+          <button class="primary" id="ws-create">สร้าง Workspace</button>
+          <input id="ws-code" type="text" placeholder="มีรหัสเชิญ? กรอกที่นี่" autocomplete="off" style="margin-top:10px" />
+          <button class="ghost" id="ws-join">เข้าร่วมด้วยรหัสเชิญ</button>
         </div>
         <div id="char-step" style="display:none">
           <h1>เลือกตัวละคร</h1>

@@ -18,9 +18,13 @@ services:
       context: .
       dockerfile: apps/game-server/Dockerfile
     container_name: nexspace-game
+    depends_on:
+      - nexspace-api
     restart: always
     environment:
       - PORT=2567
+      # used to check workspace membership before admitting a client to a room
+      - API_URL=http://nexspace-api:3001
       - LIVEKIT_URL=${LIVEKIT_URL:-}
       - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:-}
       - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:-}
