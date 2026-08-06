@@ -357,10 +357,9 @@ export class OfficeScene extends Phaser.Scene {
 
     // --- decor overlays (windows / art / signage) drawn on top of walls ---
     // scale down so wall decor sits proportionally on the wall instead of filling a whole tile
-    const decorScale = (k: string) => (/window|glass/.test(k) ? 0.85 : 0.6);
     for (const [k, tx, ty] of DECOR) {
       this.add.image(tx * TILE + TILE / 2, ty * TILE + TILE / 2, k)
-        .setScale(decorScale(k))
+        .setScale(0.6)
         .setDepth(55);
     }
 
