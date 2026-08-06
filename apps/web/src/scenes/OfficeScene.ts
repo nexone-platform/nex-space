@@ -68,6 +68,7 @@ interface Remote {
   sitting?: boolean;
   ring?: Phaser.GameObjects.Arc;
   deskId?: string;
+  status?: string;
 }
 
 // ===== Office size: SMALL (S) — 1-10 people — compact 20x15 =====
@@ -166,6 +167,17 @@ const DECOR: [string, number, number][] = [
   ["wall-clock", 14, 10], ["corkboard", 17, 10], ["neon-sign", 24, 3],
 ];
 
+// presence: green available, amber away, red mic muted, grey busy/in a meeting
+const STATUS_META: Record<string, { color: number; css: string; label: string }> = {
+  online:  { color: 0x39d353, css: "#39d353", label: "พร้อมคุย" },
+  afk:     { color: 0xf0b429, css: "#f0b429", label: "ไม่อยู่" },
+  muted:   { color: 0xe5484d, css: "#e5484d", label: "ปิดไมค์" },
+  meeting: { color: 0x8b949e, css: "#8b949e", label: "อยู่ในประชุม" },
+};
+const statusMeta = (s: string) => STATUS_META[s] ?? STATUS_META.online;
+const AFK_MS = 180_000;              // no input for 3 min -> away
+const MEETING_ROOM = { x0: 20, x1: 26, y0: 4, y1: 9 }; // mint-carpet room (see floorAt)
+
 // claimable "home desks": id + desk tile + seat tile (chair sits just below the desk)
 const DESKS: { id: string; x: number; y: number; sx: number; sy: number }[] = [
   { id: "office-1", x: 14, y: 6, sx: 14, sy: 7 },
@@ -182,6 +194,9 @@ export class OfficeScene extends Phaser.Scene {
   private myDesk = "";                          // id of my claimed home desk ("" = none)
   private deskClaimAt = 0;                      // scene time of my last claim (grace window for state reconcile)
   private toastTimer?: number;                  // pending hide timer for the DOM toast
+  private myStatus = "online";                  // presence broadcast to peers
+  private lastActiveAt = 0;                     // last real user input (for AFK)
+  private statusCheckAt = 0;                    // throttle for recomputing my status
   private deskPlates = new Map<string, Phaser.GameObjects.Container>(); // deskId -> owner nameplate
   private sitting = false;
   private satChair?: Phaser.GameObjects.Image;
@@ -414,6 +429,7 @@ export class OfficeScene extends Phaser.Scene {
     });
     this.input.keyboard!.on("keydown-M", () => this.setZoom(ZOOM_MIN)); // zoom out fully
     this.setupInputFocusGuard();
+    this.setupPresence();
     this.setupZoomControls();
     this.setupInteractives();
 
@@ -615,6 +631,12 @@ export class OfficeScene extends Phaser.Scene {
             r.tx = player.x; r.ty = player.y; r.dir = player.dir; r.moving = player.moving;
             if (player.avatar && player.avatar !== r.avatar) this.changeRemoteAvatar(sessionId, player.avatar);
             if (player.desk !== r.deskId) { r.deskId = player.desk; this.refreshDeskPlates(); }
+            if (player.status !== r.status) {
+              r.status = player.status;
+              this.setTagStatus(r.label, player.status);
+              this.refreshDeskPlates(); // their desk plate mirrors their status
+              this.refreshRoster();
+            }
           });
         }
         this.refreshRoster();
@@ -849,9 +871,11 @@ export class OfficeScene extends Phaser.Scene {
     const list = document.getElementById("people");
     if (!list || !this.room) return;
     const q = (document.getElementById("sb-search") as HTMLInputElement | null)?.value.toLowerCase() ?? "";
-    const rows: { name: string; self: boolean }[] = [];
-    this.room.state.players.forEach((p: any, id: string) =>
-      rows.push({ name: p.name || "Guest", self: id === this.mySessionId }));
+    const rows: { name: string; self: boolean; status: string }[] = [];
+    this.room.state.players.forEach((p: any, id: string) => {
+      const self = id === this.mySessionId;
+      rows.push({ name: p.name || "Guest", self, status: self ? this.myStatus : (p.status || "online") });
+    });
     rows.sort((a, b) => Number(b.self) - Number(a.self) || a.name.localeCompare(b.name));
     list.innerHTML = "";
     for (const r of rows) {
@@ -860,10 +884,12 @@ export class OfficeScene extends Phaser.Scene {
       const row = document.createElement("div"); row.className = "person";
       const chip = document.createElement("span"); chip.className = "p-chip";
       chip.style.background = color; chip.textContent = initial;
-      const dot = document.createElement("i"); dot.className = "p-dot"; chip.appendChild(dot);
+      const meta = statusMeta(r.status);
+      const dot = document.createElement("i"); dot.className = "p-dot";
+      dot.style.background = meta.css; chip.appendChild(dot);
       const info = document.createElement("span"); info.className = "p-info";
       const nm = document.createElement("b"); nm.textContent = r.name + (r.self ? " (คุณ)" : "");
-      const st = document.createElement("small"); st.textContent = "Active";
+      const st = document.createElement("small"); st.textContent = meta.label;
       info.append(nm, st); row.append(chip, info); list.appendChild(row);
     }
   }
@@ -1218,11 +1244,54 @@ export class OfficeScene extends Phaser.Scene {
     g.fillRoundedRect(-w / 2, -h / 2, w, h, r);
     g.lineStyle(1, accent ? 0x2bb3a3 : 0xffffff, accent ? 0.9 : 0.2);
     g.strokeRoundedRect(-w / 2, -h / 2, w, h, r);
-    g.fillStyle(0x39d353, 1); // online status dot (same green as the av-bar / roster dots)
-    g.fillCircle(-w / 2 + PAD + DOT_R, 0, DOT_R);
+    // status dot lives in its own object so it can be recoloured without rebuilding the tag
+    const dot = this.add.circle(-w / 2 + PAD + DOT_R, 0, DOT_R, STATUS_META.online.color);
 
     t.setPosition(-w / 2 + PAD + DOT_R * 2 + GAP, 0);
-    return this.add.container(x, y, [g, t]).setDepth(100000);
+    const c = this.add.container(x, y, [g, dot, t]).setDepth(100000);
+    c.setData("dot", dot);
+    return c;
+  }
+
+  /** recolour a tag's status dot (online / afk / muted / meeting) */
+  private setTagStatus(tag: Phaser.GameObjects.Container | undefined, status: string) {
+    const dot = tag?.getData("dot") as Phaser.GameObjects.Arc | undefined;
+    dot?.setFillStyle(statusMeta(status).color);
+  }
+
+  /** any real input counts as presence — DOM level so chat/sidebar typing counts too */
+  private setupPresence() {
+    this.lastActiveAt = this.time.now;
+    const seen = () => { this.lastActiveAt = this.time.now; };
+    for (const ev of ["keydown", "pointerdown", "wheel"]) {
+      document.addEventListener(ev, seen, { passive: true });
+    }
+  }
+
+  private inMeetingRoom(): boolean {
+    const tx = this.player.x / TILE, ty = this.player.y / TILE;
+    return tx >= MEETING_ROOM.x0 && tx <= MEETING_ROOM.x1 + 1
+        && ty >= MEETING_ROOM.y0 && ty <= MEETING_ROOM.y1 + 1;
+  }
+
+  /** derive my presence and broadcast it when it changes (called from update, throttled) */
+  private updateMyStatus() {
+    if (this.time.now - this.statusCheckAt < 500) return;
+    this.statusCheckAt = this.time.now;
+    // away wins: if nobody is at the keyboard, the other states don't say much
+    const next =
+      this.time.now - this.lastActiveAt > AFK_MS ? "afk"
+      : (this.myScreenId || this.inMeetingRoom()) ? "meeting"
+      : this.webrtc && !this.webrtc.micOn ? "muted"
+      : "online";
+    if (next === this.myStatus) return;
+    this.myStatus = next;
+    this.setTagStatus(this.myLabel, next);
+    this.refreshDeskPlates();
+    this.refreshRoster();
+    const chipDot = document.querySelector<HTMLElement>("#ava-chip .dot");
+    if (chipDot) chipDot.style.background = statusMeta(next).css;
+    this.room?.send("status", next);
   }
 
   /** (re)build my own name tag — the tag is a container, so a name change rebuilds it */
@@ -1240,7 +1309,9 @@ export class OfficeScene extends Phaser.Scene {
     sprite.setScale(isLpc(av) ? LPC_SCALE : PRESET_SCALE);
     const name: string = player.name ?? "Guest";
     const label = this.makeNameTag(player.x, player.y - 34, name);
-    this.remotes.set(sessionId, { sprite, label, name, tx: player.x, ty: player.y, dir: player.dir, moving: player.moving, avatar: av });
+    const status: string = player.status || "online";
+    this.setTagStatus(label, status);
+    this.remotes.set(sessionId, { sprite, label, name, status, tx: player.x, ty: player.y, dir: player.dir, moving: player.moving, avatar: av });
     if (isLpc(av)) void this.ensureLpc(av).then((key) => {
       const r = this.remotes.get(sessionId);
       if (key && r) r.sprite.setTexture(key, this.idleFrameFor(av, r.dir));
@@ -1363,19 +1434,20 @@ export class OfficeScene extends Phaser.Scene {
     for (const t of this.deskPlates.values()) t.destroy();
     this.deskPlates.clear();
     if (!this.room) return;
-    const owners = new Map<string, string>();
+    const owners = new Map<string, { name: string; status: string }>();
     // peers come from room state; my own claim comes from local state because the
     // server round-trip lags the click (state still holds my previous desk here)
     this.room.state.players.forEach((p: any, sid: string) => {
       if (sid === this.mySessionId) return;
-      if (p.desk) owners.set(p.desk, p.name || "?");
+      if (p.desk) owners.set(p.desk, { name: p.name || "?", status: p.status || "online" });
     });
-    if (this.myDesk) owners.set(this.myDesk, this.myName);
+    if (this.myDesk) owners.set(this.myDesk, { name: this.myName, status: this.myStatus });
     for (const d of DESKS) {
       const owner = owners.get(d.id);
       if (!owner) continue;
       const mine = d.id === this.myDesk;
-      const t = this.makeNameTag(d.x * TILE + TILE / 2, d.y * TILE - 12, owner, mine).setDepth(99000);
+      const t = this.makeNameTag(d.x * TILE + TILE / 2, d.y * TILE - 12, owner.name, mine).setDepth(99000);
+      this.setTagStatus(t, owner.status); // plate mirrors the owner's presence
       this.deskPlates.set(d.id, t);
     }
   }
@@ -1499,6 +1571,7 @@ export class OfficeScene extends Phaser.Scene {
     }
     this.player.setDepth(this.sitting && this.satChair ? this.sitDepth(this.satChair.depth, this.facing) : this.player.y);
     this.myLabel?.setPosition(this.player.x, this.player.y - 34);
+    this.updateMyStatus();
 
     // --- send my state to server (throttled + only when it changes) ---
     const moving = vx !== 0 || vy !== 0;

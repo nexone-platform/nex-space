@@ -4,6 +4,7 @@ import { OfficeState, Player } from "../schema";
 const TILE = 32;
 const SPAWN = { x: 15 * TILE + TILE / 2, y: 18 * TILE + TILE / 2 };
 const NEAR_PX = 5 * TILE; // proximity radius (5 tiles)
+const STATUSES = ["online", "afk", "muted", "meeting"];
 
 type MoveMsg = { x: number; y: number; dir: string; moving: boolean };
 type ChatMsg = { text?: string };
@@ -31,6 +32,12 @@ export class OfficeRoom extends Room<OfficeState> {
     this.onMessage("avatar", (client, avatar: string) => {
       const p = this.state.players.get(client.sessionId);
       if (p && typeof avatar === "string" && avatar.length <= 2000) p.avatar = avatar;
+    });
+
+    // presence status shown as the dot on each player's name tag
+    this.onMessage("status", (client, status: string) => {
+      const p = this.state.players.get(client.sessionId);
+      if (p && STATUSES.includes(status)) p.status = status;
     });
 
     // claim / release a desk. "" releases. Refuse if another online player owns it.

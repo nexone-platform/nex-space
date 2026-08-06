@@ -8,6 +8,7 @@ export class Player extends Schema {
   @type("string") name = "";
   @type("string") avatar = "1";
   @type("string") desk = ""; // id of the desk this player has claimed ("" = none)
+  @type("string") status = "online"; // online | afk | muted | meeting
 }
 
 export class OfficeState extends Schema {
