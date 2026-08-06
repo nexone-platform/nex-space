@@ -114,6 +114,26 @@
         background: #1c1b22e6; color: #fff; padding: 8px 14px; border-radius: 20px; font: 13px "Segoe UI", sans-serif;
         display: none; align-items: center; gap: 8px; box-shadow: 0 3px 12px #0004; }
       #interact-hint kbd { background: #2bb3a3; border-radius: 6px; padding: 2px 8px; font-weight: 700; font-family: inherit; }
+      /* transient notifications (desk claim, hints) — DOM so text stays crisp
+         instead of being scaled by the pixel-art canvas */
+      #toast { position: fixed; left: 50%; bottom: 120px; z-index: 50;
+        transform: translateX(-50%) translateY(10px) scale(.97);
+        display: none; align-items: center; gap: 11px;
+        max-width: min(80vw, 430px); padding: 11px 18px 11px 13px;
+        border-radius: 14px; background: #23262ef5; color: #f3f5f8;
+        font: 500 14px/1.4 "Segoe UI", sans-serif; letter-spacing: .1px;
+        border: 1px solid #ffffff1c; border-left: 3px solid #2bb3a3;
+        box-shadow: 0 12px 34px #0008, inset 0 1px 0 #ffffff12;
+        backdrop-filter: blur(10px); pointer-events: none; opacity: 0;
+        transition: opacity .2s ease, transform .24s cubic-bezier(.2,.85,.3,1); }
+      #toast.show { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+      #toast .t-ico { flex: 0 0 auto; width: 27px; height: 27px; border-radius: 50%;
+        display: grid; place-items: center; font-size: 14px; font-weight: 700;
+        background: #2bb3a333; color: #5fdccb; }
+      #toast.warn { border-left-color: #f0a13c; }
+      #toast.warn .t-ico { background: #f0a13c30; color: #f7c078; }
+      #toast.info { border-left-color: #6f7ce0; }
+      #toast.info .t-ico { background: #6f7ce030; color: #a6afef; }
       #modal { position: fixed; inset: 0; z-index: 45; background: #0b0b10cc; display: none; place-items: center; }
       #modal .modal-box { width: min(90vw, 1000px); height: min(85vh, 700px); background: #fff; border-radius: 14px;
         overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 12px 40px #0007; }
@@ -340,6 +360,7 @@
     </div>
     <div id="left-overlay"><div>ออกจากห้องแล้ว<br/><button id="btn-rejoin">กลับเข้าห้อง</button></div></div>
     <div id="interact-hint"><kbd>E</kbd> <span id="interact-label"></span></div>
+    <div id="toast"><span class="t-ico"></span><span class="t-msg"></span></div>
     <div id="modal">
       <div class="modal-box">
         <div class="modal-head"><span id="modal-title"></span><button id="modal-close" title="ปิด">✕</button></div>

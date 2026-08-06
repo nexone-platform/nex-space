@@ -180,6 +180,7 @@ export class OfficeScene extends Phaser.Scene {
   private myLabel?: Phaser.GameObjects.Text; // my own name above my head
   private myDesk = "";                          // id of my claimed home desk ("" = none)
   private deskClaimAt = 0;                      // scene time of my last claim (grace window for state reconcile)
+  private toastTimer?: number;                  // pending hide timer for the DOM toast
   private deskPlates = new Map<string, Phaser.GameObjects.Text>(); // deskId -> owner nameplate
   private sitting = false;
   private satChair?: Phaser.GameObjects.Image;
@@ -1298,14 +1299,15 @@ export class OfficeScene extends Phaser.Scene {
       this.room.state.players.forEach((p: any, sid: string) => {
         if (sid !== this.mySessionId && p.desk === deskId) taken = true;
       });
-      if (taken) { this.toast("โต๊ะนี้มีเจ้าของแล้ว"); return; }
+      if (taken) { this.toast("โต๊ะนี้มีเจ้าของแล้ว", "warn"); return; }
     }
     this.myDesk = next;
     this.deskClaimAt = this.time.now;
     this.room.send("claimDesk", next);
     this.saveDesk(next);
     this.refreshDeskPlates();
-    this.toast(next ? "จองโต๊ะนี้เป็นโต๊ะของคุณแล้ว 🪑" : "ยกเลิกการจองโต๊ะแล้ว");
+    if (next) this.toast("จองโต๊ะนี้เป็นโต๊ะของคุณแล้ว", "success");
+    else this.toast("ยกเลิกการจองโต๊ะแล้ว", "info");
   }
 
   /** persist the chosen desk: member -> API, everyone -> localStorage */
@@ -1348,7 +1350,7 @@ export class OfficeScene extends Phaser.Scene {
 
   /** teleport to my desk's seat and sit down */
   private goToMyDesk() {
-    if (!this.myDesk) { this.toast("ยังไม่ได้เลือกโต๊ะ — คลิกที่โต๊ะเพื่อจอง"); return; }
+    if (!this.myDesk) { this.toast("ยังไม่ได้เลือกโต๊ะ — คลิกที่โต๊ะเพื่อจอง", "info"); return; }
     const d = DESKS.find((x) => x.id === this.myDesk);
     if (!d) return;
     const tx = d.sx * TILE + TILE / 2, ty = d.sy * TILE + TILE / 2;
@@ -1365,12 +1367,22 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   /** brief screen-anchored message */
-  private toast(msg: string) {
-    const cam = this.cameras.main;
-    const t = this.add.text(cam.width / 2, cam.height - 92, msg, {
-      fontSize: "13px", color: "#fff", backgroundColor: "#1c1b22e6", padding: { x: 12, y: 7 },
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(200000);
-    this.tweens.add({ targets: t, alpha: 0, delay: 1300, duration: 500, onComplete: () => t.destroy() });
+  private toast(msg: string, kind: "success" | "warn" | "info" = "success") {
+    const el = document.getElementById("toast");
+    const ico = el?.querySelector<HTMLElement>(".t-ico");
+    const txt = el?.querySelector<HTMLElement>(".t-msg");
+    if (!el || !ico || !txt) return;
+    ico.textContent = kind === "success" ? "✓" : kind === "warn" ? "!" : "🪑";
+    txt.textContent = msg;
+    el.className = kind;          // resets .show so the enter animation replays
+    el.style.display = "flex";
+    void el.offsetWidth;          // flush styles so the transition restarts
+    el.classList.add("show");
+    if (this.toastTimer !== undefined) window.clearTimeout(this.toastTimer);
+    this.toastTimer = window.setTimeout(() => {
+      el.classList.remove("show");
+      window.setTimeout(() => { if (!el.classList.contains("show")) el.style.display = "none"; }, 260);
+    }, 2300);
   }
 
   /** Get the current direction index of a directional chair from its texture key */
