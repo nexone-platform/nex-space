@@ -3,7 +3,7 @@
 // localStorage and hands {name, avatar, desk} to the game.
 import { openAvatarEditor } from "./avatar/avatarEditor";
 import { encodeAvatar, buildFrameCanvas, defaultDressedConfig, type LpcConfig } from "./avatar/avatarCompose";
-import { WORKSPACE, HAS_WORKSPACE_PARAM, gotoWorkspace, wsKey } from "./workspace";
+import { WORKSPACE, HAS_WORKSPACE_PARAM, gotoWorkspace, wsKey, wsKeyFor } from "./workspace";
 
 // In production the app is served by nginx, which reverse-proxies the API on the
 // same origin (/auth, /me, /workspaces). Use same-origin relative URLs there so it
@@ -90,12 +90,23 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     location.href = `${API}/auth/google${HAS_WORKSPACE_PARAM ? `?w=${encodeURIComponent(WORKSPACE)}` : ""}`;
   };
 
+  /** a thrown TypeError from fetch means the API is unreachable, not a bad request */
+  const NET_ERR = "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจสอบว่า API ทำงานอยู่";
+
   const requestCode = async (email: string) => {
-    const r = await fetch(`${API}/auth/code/request`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }),
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.error || "ส่งรหัสไม่สำเร็จ");
+    let r: Response;
+    try {
+      r = await fetch(`${API}/auth/code/request`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }),
+      });
+    } catch { throw new Error(NET_ERR); }
+    const d = await r.json().catch(() => ({} as any));
+    if (!r.ok) {
+      throw new Error(
+        d.error === "invalid email" ? "อีเมลไม่ถูกต้อง"
+        : d.error === "could not send email" ? "ส่งอีเมลไม่สำเร็จ — ตรวจการตั้งค่า SMTP"
+        : d.error || "ส่งรหัสไม่สำเร็จ");
+    }
     return d as { delivered: boolean };
   };
 
@@ -220,7 +231,8 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
   };
 
   const enterSpace = (s: Space) => {
-    localStorage.setItem(wsKey("nexspace-ws-name"), s.name);
+    // cache under the TARGET slug — we're still on the previous workspace's page here
+    localStorage.setItem(wsKeyFor(s.slug, "nexspace-ws-name"), s.name);
     gotoWorkspace(s.slug);
   };
 
@@ -241,8 +253,9 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
   $("sp-search")!.oninput = renderSpaces;
 
   $("sp-create")!.onclick = async () => {
-    const name = prompt("ชื่อบริษัท / ทีม")?.trim();
-    if (!name) return;
+    const field = $<HTMLInputElement>("sp-newname");
+    const name = field?.value.trim() ?? "";
+    if (!name) { setErr("sp-err", "ใส่ชื่อ Space ที่ต้องการสร้างก่อน"); field?.focus(); return; }
     setErr("sp-err", "");
     try {
       const r = await fetch(`${API}/workspaces`, {

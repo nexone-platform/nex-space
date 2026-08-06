@@ -35,3 +35,6 @@ export const inviteLink = () =>
 
 /** per-workspace localStorage key, so a guest's desk in one space doesn't leak to another */
 export const wsKey = (key: string) => `${key}:${WORKSPACE}`;
+
+/** same, but for a workspace other than the current page's (e.g. before navigating there) */
+export const wsKeyFor = (slug: string, key: string) => `${key}:${normalizeSlug(slug)}`;

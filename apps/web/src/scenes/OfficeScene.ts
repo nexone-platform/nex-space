@@ -847,7 +847,9 @@ export class OfficeScene extends Phaser.Scene {
     // sidebar shows the workspace's display name (falls back to the slug)
     const title = document.getElementById("sb-title");
     if (title) {
-      title.textContent = localStorage.getItem(wsKey("nexspace-ws-name")) || workspaceLabel();
+      // the default space has no stored name — always show the product name there
+      title.textContent = (!IS_DEFAULT_WORKSPACE && localStorage.getItem(wsKey("nexspace-ws-name")))
+        || workspaceLabel();
       if (!IS_DEFAULT_WORKSPACE) {
         fetch(`${AUTH_API}/workspaces/${encodeURIComponent(WORKSPACE)}`)
           .then((r) => (r.ok ? r.json() : null))
