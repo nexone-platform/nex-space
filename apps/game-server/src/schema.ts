@@ -7,6 +7,7 @@ export class Player extends Schema {
   @type("boolean") moving = false;
   @type("string") name = "";
   @type("string") avatar = "1";
+  @type("string") desk = ""; // id of the desk this player has claimed ("" = none)
 }
 
 export class OfficeState extends Schema {

@@ -9,8 +9,8 @@ import { encodeAvatar, buildFrameCanvas, defaultDressedConfig, type LpcConfig } 
 const API = ((import.meta as any).env?.VITE_API_URL as string)
   || ((import.meta as any).env?.DEV ? "http://localhost:3001" : "");
 
-export interface StartInfo { name: string; avatar: string; }
-interface User { name: string; email: string; avatar: { avatarId?: string; lpc?: LpcConfig } | null; }
+export interface StartInfo { name: string; avatar: string; desk: string; }
+interface User { name: string; email: string; avatar: { avatarId?: string; lpc?: LpcConfig } | null; desk?: string | null; }
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T | null;
 
@@ -124,7 +124,9 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       }).catch(() => {});
     }
     if (overlay) overlay.style.display = "none";
-    onReady({ name, avatar: selected });
+    // member desk comes from their account; guest desk from this device
+    const desk = user?.desk || localStorage.getItem("nexspace-desk") || "";
+    onReady({ name, avatar: selected, desk });
   };
 
   // auto-resume a saved session

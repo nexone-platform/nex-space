@@ -25,6 +25,6 @@ const game = new Phaser.Game({
 (window as unknown as { game: Phaser.Game }).game = game;
 
 // login / character select, then start the multiplayer session
-runAuthFlow(({ name, avatar }) => {
-  (game.scene.getScene("office") as OfficeScene).startSession(name, avatar);
+runAuthFlow(({ name, avatar, desk }) => {
+  (game.scene.getScene("office") as OfficeScene).startSession(name, avatar, desk);
 });

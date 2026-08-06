@@ -17,6 +17,7 @@ model User {
   name         String
   passwordHash String
   avatar       String? // JSON string: { avatarId, skin, hair, top, ... }
+  desk         String? // id of the player's claimed home desk
   createdAt    DateTime   @default(now())
   sessions     Session[]
   maps         SavedMap[]

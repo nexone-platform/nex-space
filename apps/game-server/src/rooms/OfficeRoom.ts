@@ -33,6 +33,19 @@ export class OfficeRoom extends Room<OfficeState> {
       if (p && typeof avatar === "string" && avatar.length <= 2000) p.avatar = avatar;
     });
 
+    // claim / release a desk. "" releases. Refuse if another online player owns it.
+    this.onMessage("claimDesk", (client, deskId: string) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p) return;
+      const id = String(deskId ?? "").slice(0, 32);
+      if (id) {
+        for (const [sid, other] of this.state.players) {
+          if (sid !== client.sessionId && other.desk === id) return; // already taken
+        }
+      }
+      p.desk = id;
+    });
+
 
     // proximity text chat: only players within NEAR_PX (+ sender) receive it
     this.onMessage("chat", (client, msg: ChatMsg) => {

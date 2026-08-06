@@ -9,9 +9,10 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "8mb" })); // maps can be large
 
-const safeUser = (u: { id: string; email: string; name: string; avatar: string | null }) => ({
+const safeUser = (u: { id: string; email: string; name: string; avatar: string | null; desk?: string | null }) => ({
   id: u.id, email: u.email, name: u.name,
   avatar: u.avatar ? JSON.parse(u.avatar) : null,
+  desk: u.desk ?? null,
 });
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
@@ -51,6 +52,12 @@ app.get("/me", requireAuth, (req: AuthedRequest, res) => res.json({ user: safeUs
 app.put("/me/avatar", requireAuth, async (req: AuthedRequest, res) => {
   const avatar = JSON.stringify(req.body ?? {});
   const user = await prisma.user.update({ where: { id: req.user!.id }, data: { avatar } });
+  res.json({ user: safeUser(user) });
+});
+
+app.put("/me/desk", requireAuth, async (req: AuthedRequest, res) => {
+  const desk = String((req.body ?? {}).desk ?? "").slice(0, 32) || null;
+  const user = await prisma.user.update({ where: { id: req.user!.id }, data: { desk } });
   res.json({ user: safeUser(user) });
 });
 

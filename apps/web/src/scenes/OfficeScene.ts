@@ -66,6 +66,7 @@ interface Remote {
   avatar: string;
   sitting?: boolean;
   ring?: Phaser.GameObjects.Arc;
+  deskId?: string;
 }
 
 // ===== Office size: SMALL (S) — 1-10 people — compact 20x15 =====
@@ -164,9 +165,21 @@ const DECOR: [string, number, number][] = [
   ["wall-clock", 14, 10], ["corkboard", 17, 10], ["neon-sign", 24, 3],
 ];
 
+// claimable "home desks": id + desk tile + seat tile (chair sits just below the desk)
+const DESKS: { id: string; x: number; y: number; sx: number; sy: number }[] = [
+  { id: "office-1", x: 14, y: 6, sx: 14, sy: 7 },
+  { id: "office-2", x: 17, y: 6, sx: 17, sy: 7 },
+  { id: "hall-1", x: 8, y: 12, sx: 8, sy: 13 },
+  { id: "hall-2", x: 11, y: 12, sx: 11, sy: 13 },
+  { id: "hall-3", x: 20, y: 12, sx: 20, sy: 13 },
+  { id: "hall-4", x: 23, y: 12, sx: 23, sy: 13 },
+];
+
 export class OfficeScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
   private myLabel?: Phaser.GameObjects.Text; // my own name above my head
+  private myDesk = "";                          // id of my claimed home desk ("" = none)
+  private deskPlates = new Map<string, Phaser.GameObjects.Text>(); // deskId -> owner nameplate
   private sitting = false;
   private satChair?: Phaser.GameObjects.Image;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -287,6 +300,11 @@ export class OfficeScene extends Phaser.Scene {
         const img = solids.create(px, py, k) as Phaser.Physics.Arcade.Sprite;
         img.setDepth(py);
         img.refreshBody();
+        const desk = DESKS.find((d) => d.x === tx && d.y === ty);
+        if (desk) {
+          img.setInteractive({ useHandCursor: true });
+          img.on("pointerdown", () => this.claimDesk(desk.id));
+        }
       } else {
         const spr = this.add.image(px, py, k).setDepth(k.startsWith("rug") ? -900 : py);
         if (k.includes("chair") || k === "stool" || k.includes("sofa") || k.includes("bean-bag")) {
@@ -410,9 +428,10 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   /** called by the auth flow once the user has logged in / picked a character */
-  startSession(name: string, avatar: string) {
+  startSession(name: string, avatar: string, desk = "") {
     this.myName = name || "Guest";
     this.myAvatar = isLpc(avatar) || AVATARS[avatar] ? avatar : "1";
+    this.myDesk = desk || "";
     this.myLabel?.setText(this.myName);
     if (this.player) void this.applyAvatarBody();
     if (this.created) void this.connectMultiplayer();
@@ -584,11 +603,25 @@ export class OfficeScene extends Phaser.Scene {
             if (!r) return;
             r.tx = player.x; r.ty = player.y; r.dir = player.dir; r.moving = player.moving;
             if (player.avatar && player.avatar !== r.avatar) this.changeRemoteAvatar(sessionId, player.avatar);
+            if (player.desk !== r.deskId) { r.deskId = player.desk; this.refreshDeskPlates(); }
           });
         }
         this.refreshRoster();
+        this.refreshDeskPlates();
       });
-      $(room.state).players.onRemove((_p: any, sessionId: string) => { this.removeRemote(sessionId); this.refreshRoster(); });
+      $(room.state).players.onRemove((_p: any, sessionId: string) => { this.removeRemote(sessionId); this.refreshRoster(); this.refreshDeskPlates(); });
+
+      // apply my saved desk: claim it and spawn seated there
+      if (this.myDesk) {
+        room.send("claimDesk", this.myDesk);
+        const d = DESKS.find((x) => x.id === this.myDesk);
+        if (d) {
+          const dx = d.sx * TILE + TILE / 2, dy = d.sy * TILE + TILE / 2;
+          this.player.setPosition(dx, dy);
+          this.player.body!.reset(dx, dy);
+          this.time.delayedCall(200, () => { if (!this.sitting) this.toggleSit(); });
+        }
+      }
 
       room.onMessage("chat", (msg: { from: string; text: string }) => this.showBubble(msg.from, msg.text));
       room.onMessage("roomchat", (msg: { from: string; name: string; text: string }) => this.appendChatLog(msg.from, msg.name, msg.text));
@@ -890,12 +923,14 @@ export class OfficeScene extends Phaser.Scene {
       in: svg(`<path d="M12 5v14M5 12h14"/>`),
       out: svg(`<path d="M5 12h14"/>`),
       fully: svg(`<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>`),
+      desk: svg(`<path d="M3 10h18M4 10v8M20 10v8M6 10V7h12v3"/><path d="M8 18v2M16 18v2"/>`),
     };
     const b = (id: string, html: string, fn: () => void) => {
       const el = document.getElementById(id) as HTMLButtonElement | null;
       if (el) { el.innerHTML = html; el.onclick = fn; }
     };
     b("zb-locate", icons.locate, () => { this.setZoom(ZOOM_DEFAULT); this.cameras.main.startFollow(this.player, true, 0.12, 0.12); });
+    b("zb-desk", icons.desk, () => this.goToMyDesk());
     b("zb-in", icons.in, () => this.zoomBy(1.2));
     b("zb-out", icons.out, () => this.zoomBy(1 / 1.2));
     b("zb-fully", icons.fully, () => this.setZoom(ZOOM_MIN));
@@ -1239,6 +1274,84 @@ export class OfficeScene extends Phaser.Scene {
       if (this.textures.exists(wk)) this.player.setTexture(wk, this.idleFrameFor(this.myAvatar, this.facing));
     }
     this.room?.send("sit", { on: false, dir: this.facing });
+  }
+
+  // ---- home desks ----------------------------------------------------------
+  /** click a desk to claim it (or click your own again to release) */
+  private claimDesk(deskId: string) {
+    if (!this.room) return;
+    const next = this.myDesk === deskId ? "" : deskId;
+    if (next) {
+      let taken = false;
+      this.room.state.players.forEach((p: any, sid: string) => {
+        if (sid !== this.mySessionId && p.desk === deskId) taken = true;
+      });
+      if (taken) { this.toast("โต๊ะนี้มีเจ้าของแล้ว"); return; }
+    }
+    this.myDesk = next;
+    this.room.send("claimDesk", next);
+    this.saveDesk(next);
+    this.refreshDeskPlates();
+    this.toast(next ? "จองโต๊ะนี้เป็นโต๊ะของคุณแล้ว 🪑" : "ยกเลิกการจองโต๊ะแล้ว");
+  }
+
+  /** persist the chosen desk: member -> API, everyone -> localStorage */
+  private saveDesk(deskId: string) {
+    try { localStorage.setItem("nexspace-desk", deskId); } catch { /* ignore */ }
+    const token = localStorage.getItem("nexspace-token");
+    if (token) {
+      fetch(`${AUTH_API}/me/desk`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ desk: deskId }),
+      }).catch(() => {});
+    }
+  }
+
+  /** redraw owner nameplates over every claimed desk (shared: reads room state) */
+  private refreshDeskPlates() {
+    for (const t of this.deskPlates.values()) t.destroy();
+    this.deskPlates.clear();
+    if (!this.room) return;
+    const owners = new Map<string, string>();
+    this.room.state.players.forEach((p: any) => { if (p.desk) owners.set(p.desk, p.name || "?"); });
+    for (const d of DESKS) {
+      const owner = owners.get(d.id);
+      if (!owner) continue;
+      const mine = d.id === this.myDesk;
+      const t = this.add.text(d.x * TILE + TILE / 2, d.y * TILE - 6, owner, {
+        fontSize: "8px", color: mine ? "#8ff0e4" : "#ffffff", stroke: "#1c1b22", strokeThickness: 3,
+        backgroundColor: "#00000055", padding: { x: 3, y: 1 },
+      }).setOrigin(0.5, 1).setDepth(99000);
+      this.deskPlates.set(d.id, t);
+    }
+  }
+
+  /** teleport to my desk's seat and sit down */
+  private goToMyDesk() {
+    if (!this.myDesk) { this.toast("ยังไม่ได้เลือกโต๊ะ — คลิกที่โต๊ะเพื่อจอง"); return; }
+    const d = DESKS.find((x) => x.id === this.myDesk);
+    if (!d) return;
+    const tx = d.sx * TILE + TILE / 2, ty = d.sy * TILE + TILE / 2;
+    const cam = this.cameras.main;
+    cam.fadeOut(120);
+    cam.once("camerafadeoutcomplete", () => {
+      if (this.sitting) this.standUp();
+      this.player.setPosition(tx, ty);
+      this.player.body!.reset(tx, ty);
+      cam.fadeIn(150);
+      cam.startFollow(this.player, true, 0.12, 0.12);
+      this.time.delayedCall(90, () => { if (!this.sitting) this.toggleSit(); });
+    });
+  }
+
+  /** brief screen-anchored message */
+  private toast(msg: string) {
+    const cam = this.cameras.main;
+    const t = this.add.text(cam.width / 2, cam.height - 92, msg, {
+      fontSize: "13px", color: "#fff", backgroundColor: "#1c1b22e6", padding: { x: 12, y: 7 },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(200000);
+    this.tweens.add({ targets: t, alpha: 0, delay: 1300, duration: 500, onComplete: () => t.destroy() });
   }
 
   /** Get the current direction index of a directional chair from its texture key */
