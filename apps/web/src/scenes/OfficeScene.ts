@@ -179,6 +179,7 @@ export class OfficeScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
   private myLabel?: Phaser.GameObjects.Text; // my own name above my head
   private myDesk = "";                          // id of my claimed home desk ("" = none)
+  private deskClaimAt = 0;                      // scene time of my last claim (grace window for state reconcile)
   private deskPlates = new Map<string, Phaser.GameObjects.Text>(); // deskId -> owner nameplate
   private sitting = false;
   private satChair?: Phaser.GameObjects.Image;
@@ -596,6 +597,16 @@ export class OfficeScene extends Phaser.Scene {
       $(room.state).players.onAdd((player: any, sessionId: string) => {
         if (sessionId === this.mySessionId) {
           this.setAvatarChip(player.name);
+          // the server is authoritative: it may reject a claim (desk already taken),
+          // so reconcile my local desk with whatever it settled on
+          $(player).onChange(() => {
+            if (player.desk === this.myDesk) return;
+            // a patch generated before the server handled my claim still carries the
+            // old desk — ignore mismatches briefly so an in-flight claim isn't undone
+            if (this.time.now - this.deskClaimAt < 1500) return;
+            this.myDesk = player.desk;
+            this.refreshDeskPlates();
+          });
         } else {
           this.addRemote(sessionId, player);
           $(player).onChange(() => {
@@ -613,6 +624,7 @@ export class OfficeScene extends Phaser.Scene {
 
       // apply my saved desk: claim it and spawn seated there
       if (this.myDesk) {
+        this.deskClaimAt = this.time.now;
         room.send("claimDesk", this.myDesk);
         const d = DESKS.find((x) => x.id === this.myDesk);
         if (d) {
@@ -1289,6 +1301,7 @@ export class OfficeScene extends Phaser.Scene {
       if (taken) { this.toast("โต๊ะนี้มีเจ้าของแล้ว"); return; }
     }
     this.myDesk = next;
+    this.deskClaimAt = this.time.now;
     this.room.send("claimDesk", next);
     this.saveDesk(next);
     this.refreshDeskPlates();
@@ -1314,7 +1327,13 @@ export class OfficeScene extends Phaser.Scene {
     this.deskPlates.clear();
     if (!this.room) return;
     const owners = new Map<string, string>();
-    this.room.state.players.forEach((p: any) => { if (p.desk) owners.set(p.desk, p.name || "?"); });
+    // peers come from room state; my own claim comes from local state because the
+    // server round-trip lags the click (state still holds my previous desk here)
+    this.room.state.players.forEach((p: any, sid: string) => {
+      if (sid === this.mySessionId) return;
+      if (p.desk) owners.set(p.desk, p.name || "?");
+    });
+    if (this.myDesk) owners.set(this.myDesk, this.myName);
     for (const d of DESKS) {
       const owner = owners.get(d.id);
       if (!owner) continue;
