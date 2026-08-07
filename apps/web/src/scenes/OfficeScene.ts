@@ -83,7 +83,13 @@ const ZOOM_MIN = 1.3, ZOOM_MAX = 4, ZOOM_DEFAULT = 2.2;
 
 // furniture: [key, tileX, tileY, solid?]  (map is 20x15)
 // new directional chair styles from assets/office_chair
-const CHAIR_STYLES = ["chair-1", "chair-2", "chair-3", "chair-4", "chair-5", "chair-6", "chair-7", "chair-8"];
+// Chair styles available in assets/furniture as chair-<n>-<dir>.png (8 directions each).
+// Place one by using its key in FURNITURE; preload picks up whatever the map uses.
+//   1-8  the original teal office chair (all eight are the same art)
+//   9    mesh, black back + teal seat      13  dusty rose
+//   10   executive cognac leather          14  sage green
+//   11   minimal light grey                15  acrylic light blue
+//   12   mustard yellow                    16  gaming, black + red
 const CHAIR_DIRS = ["south", "south-east", "east", "north-east", "north", "north-west", "west", "south-west"];
 
 const FURNITURE: [string, number, number, boolean][] = [
@@ -94,23 +100,25 @@ const FURNITURE: [string, number, number, boolean][] = [
 
   // --- private office (top-center, blue carpet) ---
   ["bookshelf", 13, 4, true], ["whiteboard", 15, 4, true],
-  ["desk", 14, 6, true], ["chair-4-north", 14, 7, false],
-  ["desk-monitor", 17, 6, true], ["chair-5-north", 17, 7, false],
+  ["desk", 14, 6, true], ["chair-9-north", 14, 7, false],
+  ["desk-monitor", 17, 6, true], ["chair-11-north", 17, 7, false],
   ["plant", 18, 4, true],
 
   // --- meeting room (top-right, mint carpet) ---
   ["conference-table", 23, 6, true],
-  ["chair-1-south", 22, 5, false], ["chair-2-south", 24, 5, false],
-  ["chair-1-north", 22, 8, false], ["chair-2-north", 24, 8, false],
-  ["chair-4-east", 21, 6, false], ["chair-6-west", 25, 6, false],
+  // matched executive set — a boardroom reads better with one style
+  ["chair-10-south", 22, 5, false], ["chair-10-south", 24, 5, false],
+  ["chair-10-north", 22, 8, false], ["chair-10-north", 24, 8, false],
+  ["chair-10-east", 21, 6, false], ["chair-10-west", 25, 6, false],
   ["plant-small", 20, 4, false], ["plant-small", 26, 4, false],
 
   // --- main hall (marble): reception + open desks ---
   ["reception-desk", 15, 16, true], ["plant", 17, 16, true],
-  ["desk", 8, 12, true], ["chair-6-south", 8, 13, false],
-  ["desk-monitor", 11, 12, true], ["chair-7-south", 11, 13, false],
-  ["desk", 20, 12, true], ["chair-3-south", 20, 13, false],
-  ["desk-monitor", 23, 12, true], ["chair-4-south", 23, 13, false],
+  // open-plan desks: a different colour each, so the hall doesn't read as one block
+  ["desk", 8, 12, true], ["chair-12-south", 8, 13, false],
+  ["desk-monitor", 11, 12, true], ["chair-13-south", 11, 13, false],
+  ["desk", 20, 12, true], ["chair-14-south", 20, 13, false],
+  ["desk-monitor", 23, 12, true], ["chair-15-south", 23, 13, false],
   ["rug", 15, 13, false],
   ["plant-large", 11, 17, true], ["plant-large", 20, 17, true],
   ["plant", 5, 11, false], ["plant", 26, 11, false],
@@ -123,6 +131,7 @@ const FURNITURE: [string, number, number, boolean][] = [
   // --- game / chill room (bottom-right, dark wood) — symmetric lounge around x=23.5 ---
   ["gaming-tv", 23.5, 15, true],
   ["arcade", 21.5, 16, true], ["plant-large", 25.5, 16, true],
+  ["chair-16-north", 21.5, 17, false], // gaming chair pulled up to the arcade
   ["lounge-coffee-table", 23.5, 17, false],
   ["sofa-teal", 23.5, 18, false],
   ["armchair", 21.5, 18.3, false], ["armchair", 25.5, 18.3, false],
@@ -249,8 +258,13 @@ export class OfficeScene extends Phaser.Scene {
     new Set(DECOR.map((d) => d[0])).forEach((k) => this.load.image(k, `/assets/decor/${k}.png`));
     new Set(OUTDOOR.map((o) => o[0])).forEach((k) => this.load.image(k, `/assets/outdoor/${k}.png`));
     new Set(DECALS.map((d) => d[0])).forEach((k) => this.load.image(k, `/assets/outdoor/${k}.png`));
-    // load all directional chair images for rotation
-    for (const style of CHAIR_STYLES) {
+    // Chairs can be rotated in-game, so every direction of a placed chair has to be
+    // preloaded — but only for the styles the map actually uses. Loading all 16
+    // styles would fetch 128 images for the ~8 that appear.
+    const placedStyles = new Set(
+      [...items].map((k) => k.match(/^(chair-\d+)/)?.[1]).filter(Boolean) as string[],
+    );
+    for (const style of placedStyles) {
       for (const dir of CHAIR_DIRS) {
         const key = `${style}-${dir}`;
         if (!items.has(key)) this.load.image(key, `/assets/furniture/${key}.png`);
