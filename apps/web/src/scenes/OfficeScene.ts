@@ -114,11 +114,13 @@ const FURNITURE: [string, number, number, boolean][] = [
 
   // --- main hall (marble): reception + open desks ---
   ["reception-desk", 15, 16, true], ["plant", 17, 16, true],
-  // open-plan desks: a different colour each, so the hall doesn't read as one block
-  ["desk", 8, 12, true], ["chair-12-south", 8, 13, false],
-  ["desk-monitor", 11, 12, true], ["chair-13-south", 11, 13, false],
-  ["desk", 20, 12, true], ["chair-14-south", 20, 13, false],
-  ["desk-monitor", 23, 12, true], ["chair-15-south", 23, 13, false],
+  // open-plan desks: a different colour each, so the hall doesn't read as one block.
+  // "-north" turns each chair to face its desk (its back to the camera), matching
+  // the private office — "-south" had them facing away from the desk.
+  ["desk", 8, 12, true], ["chair-12-north", 8, 13, false],
+  ["desk-monitor", 11, 12, true], ["chair-13-north", 11, 13, false],
+  ["desk", 20, 12, true], ["chair-14-north", 20, 13, false],
+  ["desk-monitor", 23, 12, true], ["chair-15-north", 23, 13, false],
   ["rug", 15, 13, false],
   ["plant-large", 11, 17, true], ["plant-large", 20, 17, true],
   ["plant", 5, 11, false], ["plant", 26, 11, false],
@@ -179,7 +181,7 @@ const DECOR: [string, number, number][] = [
 
 // presence: green available, amber away, red mic muted, grey busy/in a meeting
 const STATUS_META: Record<string, { color: number; css: string; label: string }> = {
-  online:  { color: 0x39d353, css: "#39d353", label: "พร้อมคุย" },
+  online:  { color: 0x39d353, css: "#39d353", label: "กำลังใช้งาน" },
   afk:     { color: 0xf0b429, css: "#f0b429", label: "ไม่อยู่" },
   muted:   { color: 0xe5484d, css: "#e5484d", label: "ปิดไมค์" },
   meeting: { color: 0x8b949e, css: "#8b949e", label: "อยู่ในประชุม" },
@@ -207,6 +209,7 @@ export class OfficeScene extends Phaser.Scene {
   private myStatus = "online";                  // presence broadcast to peers
   private lastActiveAt = 0;                     // last real user input (for AFK)
   private statusCheckAt = 0;                    // throttle for recomputing my status
+  private micEverOn = false;                    // muted only counts once you've actually unmuted
   private deskPlates = new Map<string, Phaser.GameObjects.Container>(); // deskId -> owner nameplate
   private sitting = false;
   private satChair?: Phaser.GameObjects.Image;
@@ -1324,11 +1327,15 @@ export class OfficeScene extends Phaser.Scene {
   private updateMyStatus() {
     if (this.time.now - this.statusCheckAt < 500) return;
     this.statusCheckAt = this.time.now;
+    // The mic starts off, so treating "mic off" as muted painted everyone red the
+    // moment they joined. Red now means you were talking and muted yourself;
+    // being present and active reads green.
+    if (this.webrtc?.micOn) this.micEverOn = true;
     // away wins: if nobody is at the keyboard, the other states don't say much
     const next =
       this.time.now - this.lastActiveAt > AFK_MS ? "afk"
       : (this.myScreenId || this.inMeetingRoom()) ? "meeting"
-      : this.webrtc && !this.webrtc.micOn ? "muted"
+      : this.micEverOn && this.webrtc && !this.webrtc.micOn ? "muted"
       : "online";
     if (next === this.myStatus) return;
     this.myStatus = next;
