@@ -39,10 +39,6 @@
         background: #2e3238f2; border-radius: 12px; padding: 5px; display: none; gap: 2px; box-shadow: 0 6px 20px #0006; }
       #emoji-pop button { border: none; background: transparent; font-size: 20px; cursor: pointer; padding: 4px 7px; border-radius: 8px; }
       #emoji-pop button:hover { background: #ffffff1f; }
-      #left-overlay { position: fixed; inset: 0; z-index: 40; display: none; place-items: center;
-        background: #1c1b22e6; color: #e6e9ee; font: 16px "Segoe UI", sans-serif; text-align: center; }
-      #left-overlay button { margin-top: 14px; padding: 10px 22px; border: none; border-radius: 22px;
-        background: #2bb3a3; color: #fff; font-size: 15px; cursor: pointer; }
       /* zoom controls (right, vertical) */
       #zoom-bar { position: fixed; right: 12px; top: 50%; transform: translateY(-50%); z-index: 20;
         display: flex; flex-direction: column; gap: 6px; }
@@ -581,7 +577,6 @@
       </div>
       <button id="zb-fully" class="zb" title="ซูมออกสุด (M)"></button>
     </div>
-    <div id="left-overlay"><div>ออกจากห้องแล้ว<br/><button id="btn-rejoin">กลับเข้าห้อง</button></div></div>
     <div id="interact-hint"><kbd>E</kbd> <span id="interact-label"></span></div>
     <div id="toast"><span class="t-ico"></span><span class="t-msg"></span></div>
     <div id="modal">

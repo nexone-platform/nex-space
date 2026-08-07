@@ -801,9 +801,8 @@ export class OfficeScene extends Phaser.Scene {
     if (leave) leave.onclick = () => {
       this.webrtc?.dispose();
       this.room?.leave();
-      const ov = document.getElementById("left-overlay");
-      if (ov) ov.style.display = "grid";
-      document.getElementById("btn-rejoin")?.addEventListener("click", () => location.reload());
+      // drop the ?w= slug so the app opens the spaces dashboard rather than a room
+      location.href = location.pathname;
     };
   }
 
