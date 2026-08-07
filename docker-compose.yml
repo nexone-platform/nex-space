@@ -45,6 +45,10 @@ services:
       # Authorised redirect URI in Google Cloud: https://<your-host>/auth/google/callback
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      # Both are derived from the forwarded host by default. Set them only if the
+      # app sits behind extra proxies and the derived URLs come out wrong.
+      - APP_URL=${APP_URL:-}
+      - OAUTH_REDIRECT_URL=${OAUTH_REDIRECT_URL:-}
       # SMTP for the 6-digit sign-in code (optional — codes are logged when unset)
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
