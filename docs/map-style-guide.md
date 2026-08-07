@@ -214,6 +214,71 @@ Layer ที่ใช้ (ล่าง→บน):
 
 ---
 
+## 7.5 เก้าอี้ (chairs) — PixelLab prompts
+
+**ปัญหาปัจจุบัน:** `chair-1` … `chair-8` เป็นเก้าอี้ออฟฟิศสี teal ทรงเดียวกันหมด
+ต่างกันแทบไม่เห็น ทำให้ห้องดูจำเจ → ชุดใหม่ต้องต่างกันที่ **ทรง (silhouette)** ก่อน
+แล้วค่อยต่างที่สี
+
+### ข้อกำหนดที่ต้องตรง (ไม่ตรงแล้วใช้กับระบบหมุนเก้าอี้ไม่ได้)
+
+| หัวข้อ | ค่า |
+|---|---|
+| จำนวนทิศ | **8 ทิศ** — PixelLab ตั้ง `directions: 8` |
+| ชื่อทิศ | `south, south-east, east, north-east, north, north-west, west, south-west` (PixelLab ตั้งชื่อแบบนี้อยู่แล้ว) |
+| ขนาด | **32×32** — เท่าเก้าอี้เดิม (ถ้าใหญ่กว่านี้จะล้นโต๊ะและจุดนั่งเพี้ยน) |
+| ชื่อไฟล์ปลายทาง | `chair-<เลข>-<ทิศ>.png` เช่น `chair-9-south.png` |
+| โฟลเดอร์ | `apps/web/public/assets/furniture/` |
+| พื้นหลัง | โปร่งใส |
+
+> เก้าอี้ที่ **ไม่ต้องหมุน** (อาร์มแชร์/บีนแบ็ก/ม้านั่ง) ทำทิศเดียว (`south`) ขนาด 32×32
+> หรือ 64×64 ถ้าเป็นตัวใหญ่ก็ได้ — ไม่ต้องเข้าระบบหมุน
+
+### Style suffix — ต่อท้ายทุก prompt (เหมือนเดิมทั้งโปรเจกต์)
+```
+top-down 3/4 view, 32x32 pixel grid, soft pastel color palette,
+clean thin outline, subtle shadow with light from top-left,
+cozy modern office aesthetic, Gather Town style, transparent background
+```
+
+### A. เก้าอี้ทำงาน (หมุนได้ — ทำ 8 ทิศ, 32×32)
+```
+1.  ergonomic mesh office chair with black mesh back and five-star caster base, seat facing viewer
+2.  executive high-back leather office chair, warm cognac brown, chrome base
+3.  minimal office chair with light grey fabric seat and thin white frame
+4.  office chair with mustard yellow cushioned seat and light wood legs
+5.  office chair with dusty rose pink upholstered seat and matte black base
+6.  office chair with sage green padded seat and slim brass legs
+7.  transparent acrylic office chair with soft blue seat pad, modern
+8.  gaming chair with black and red racing-style high back, on casters
+```
+
+### B. เก้าอี้ห้องประชุม / โต๊ะอาหาร (หมุนได้ — 8 ทิศ, 32×32)
+```
+9.  wooden dining chair, oak, vertical slat back, no wheels
+10. scandinavian chair with beige woven seat and tapered light wood legs
+11. clear-back conference chair, white shell with cream cushion
+12. bentwood cafe chair, walnut brown, round back
+```
+
+### C. ที่นั่งชิลล์ (ทิศเดียว `south` ก็พอ — 32×32 หรือ 64×64)
+```
+13. cozy accent armchair with terracotta orange fabric and short wooden legs
+14. round papasan lounge chair with cream cushion
+15. small wooden bench with soft grey seat pad, two-seater
+16. floor bean bag, deep teal, slouched
+17. bar stool with round walnut seat and thin black metal legs
+18. rocking chair, light wood with knitted throw over the back
+```
+
+### วิธีนำเข้าโปรเจกต์
+1. PixelLab → export ชุด 8 ทิศ (ได้ `south.png`, `east.png`, …)
+2. เปลี่ยนชื่อเป็น `chair-9-south.png`, `chair-9-east.png`, … (เลขไม่ซ้ำของเดิม)
+3. วางที่ `apps/web/public/assets/furniture/`
+4. เพิ่มเลขใหม่ใน `CHAIR_STYLES` ใน `apps/web/src/scenes/OfficeScene.ts`
+   (โค้ดจะ preload ทุกทิศให้เอง และระบบคลิก-ลากหมุนใช้ได้ทันที)
+5. เปลี่ยนเก้าอี้ในแมพโดยแก้ key ใน `FURNITURE` เช่น `chair-4-south` → `chair-9-south`
+
 ## 8. ลำดับแนะนำ
 
 1. ✅ เอกสารนี้ (style guide + prompts)
