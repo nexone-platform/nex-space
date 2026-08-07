@@ -16,6 +16,8 @@ interface User {
   name: string; email: string;
   avatar: { avatarId?: string; lpc?: LpcConfig } | null;
   desks?: Record<string, string> | null; // workspace -> deskId
+  role?: string | null;                  // onboarding answers, used to prefill the wizard
+  companySize?: string | null;
 }
 interface Space { slug: string; name: string; role: string; members?: number; inviteCode?: string }
 interface Member { id: string; name: string; email: string; photoUrl?: string; role: string; isMe: boolean }
@@ -252,19 +254,145 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
 
   $("sp-search")!.oninput = renderSpaces;
 
-  $("sp-create")!.onclick = async () => {
-    const field = $<HTMLInputElement>("sp-newname");
-    const name = field?.value.trim() ?? "";
-    if (!name) { setErr("sp-err", "ใส่ชื่อ Space ที่ต้องการสร้างก่อน"); field?.focus(); return; }
-    setErr("sp-err", "");
+  $("sp-create")!.onclick = () => startWizard($<HTMLInputElement>("sp-newname")?.value.trim() ?? "");
+
+  // ------------------------------------------------------ create-space wizard
+  type Step =
+    | { key: "role" | "companySize" | "useCase"; q: string; opts: string[]; other?: boolean }
+    | { key: "name"; q: string };
+
+  const STEPS: Step[] = [
+    { key: "role", q: "บทบาทของคุณตรงกับข้อไหนมากที่สุด?",
+      opts: ["ผู้ก่อตั้ง", "ผู้บริหาร", "ผู้อำนวยการ", "ผู้จัดการ", "สมาชิกทีม"] },
+    { key: "companySize", q: "บริษัทของคุณมีขนาดเท่าไหร่?",
+      opts: ["1 - 10", "11 - 50", "51 - 200", "201 - 1,000", "1,000+"] },
+    { key: "useCase", q: "คุณจะใช้ออฟฟิศเสมือนนี้เป็นหลักอย่างไร?", other: true,
+      opts: ["พื้นที่ทำงานประจำวันของทีม", "พื้นที่ทำงานสัปดาห์ละ 1-2 ครั้ง",
+             "อีเวนต์ครั้งเดียว (เช่น Hackathon)", "อีเวนต์ประจำ (เช่น Workshop)", "อื่น ๆ (ระบุ)"] },
+    { key: "name", q: "ตั้งชื่อ Space ของคุณ" },
+  ];
+
+  const answers: Record<string, string> = {};
+  const otherKey = (key: string) => `${key}__other`;
+  const isOther = (v: string) => v.startsWith("อื่น ๆ");
+  let stepIx = 0;
+  let allowGuests = true;
+
+  const wizEls = () => ({
+    overlay: $("wiz-overlay")!, bar: $("wiz-bar")!, q: $("wiz-q")!,
+    opts: $("wiz-opts")!, other: $<HTMLInputElement>("wiz-other")!,
+    back: $("wiz-back")!, next: $<HTMLButtonElement>("wiz-next")!,
+  });
+
+  const startWizard = (presetName = "") => {
+    stepIx = 0;
+    answers.name = presetName;
+    // questions about the person are asked once — reuse what the account already knows
+    if (user?.role) answers.role = user.role;
+    if (user?.companySize) answers.companySize = user.companySize;
+    if (spaces) spaces.style.display = "none";
+    wizEls().overlay.style.display = "flex";
+    // skip straight past any question already answered
+    while (stepIx < STEPS.length - 1 && answers[STEPS[stepIx].key]) stepIx++;
+    renderStep();
+  };
+
+  const closeWizard = () => {
+    wizEls().overlay.style.display = "none";
+    void showSpaces();
+  };
+
+  const renderStep = () => {
+    const e = wizEls();
+    const step = STEPS[stepIx];
+    setErr("wiz-err", "");
+    e.bar.style.width = `${(stepIx / STEPS.length) * 100}%`;
+    e.q.textContent = step.q;
+    e.back.style.visibility = stepIx === 0 ? "hidden" : "visible";
+    e.opts.innerHTML = "";
+    e.other.style.display = "none";
+    e.other.value = "";
+
+    if (step.key === "name") {
+      // final step: name + guest access
+      const input = document.createElement("input");
+      input.type = "text";
+      input.id = "wiz-name";
+      input.placeholder = "เช่น บริษัท A";
+      input.value = answers.name ?? "";
+      input.style.cssText = "width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #dfe1e6;border-radius:10px;font-size:14px;outline:none";
+      input.oninput = () => { answers.name = input.value.trim(); e.next.disabled = !answers.name; };
+      const label = document.createElement("label");
+      label.className = "wiz-check";
+      const cb = document.createElement("input");
+      cb.type = "checkbox"; cb.checked = allowGuests;
+      cb.onchange = () => (allowGuests = cb.checked);
+      label.append(cb, document.createTextNode("ให้คนที่ไม่ได้สมัครสมาชิก (Guest) เข้าได้"));
+      e.opts.append(input, label);
+      e.next.textContent = "สร้าง Space";
+      e.next.disabled = !answers.name;
+      input.focus();
+      return;
+    }
+
+    e.next.textContent = "ถัดไป →";
+    for (const opt of step.opts) {
+      const b = document.createElement("button");
+      b.className = "wiz-opt" + (answers[step.key] === opt ? " on" : "");
+      b.textContent = opt;
+      b.onclick = () => {
+        answers[step.key] = opt;
+        e.opts.querySelectorAll(".wiz-opt").forEach((x) => x.classList.remove("on"));
+        b.classList.add("on");
+        if (step.other && isOther(opt)) { e.other.style.display = "block"; e.other.focus(); }
+        else e.other.style.display = "none";
+        e.next.disabled = false;
+      };
+      e.opts.appendChild(b);
+    }
+    // going back must restore both the highlighted pill and any typed detail,
+    // so the detail is kept alongside the chosen label rather than replacing it
+    if (step.other && answers[step.key] && isOther(answers[step.key])) {
+      e.other.style.display = "block";
+      e.other.value = answers[otherKey(step.key)] ?? "";
+    }
+    e.next.disabled = !answers[step.key];
+  };
+
+  $("wiz-back")!.onclick = () => { if (stepIx > 0) { stepIx--; renderStep(); } };
+  $("wiz-cancel")!.onclick = closeWizard;
+
+  $("wiz-next")!.onclick = async () => {
+    const step = STEPS[stepIx];
+    if (step.key !== "name") {
+      // keep the typed detail next to the chosen label so Back can restore both
+      if (wizEls().other.style.display !== "none") {
+        answers[otherKey(step.key)] = wizEls().other.value.trim();
+      }
+      stepIx++;
+      return renderStep();
+    }
+    if (!answers.name) return setErr("wiz-err", "ใส่ชื่อ Space ก่อน");
+    const btn = wizEls().next;
+    btn.disabled = true;
+    setErr("wiz-err", "");
     try {
       const r = await fetch(`${API}/workspaces`, {
-        method: "POST", headers: authHeaders(), body: JSON.stringify({ name, allowGuests: true }),
+        method: "POST", headers: authHeaders(),
+        body: JSON.stringify({
+          name: answers.name, allowGuests,
+          role: answers.role, companySize: answers.companySize,
+          // an "other" pick is reported as what they actually typed
+          useCase: isOther(answers.useCase ?? "")
+            ? (answers[otherKey("useCase")] || answers.useCase)
+            : answers.useCase,
+        }),
       });
       const d = await r.json();
-      if (!r.ok) return setErr("sp-err", d.error || "สร้างไม่สำเร็จ");
+      if (!r.ok) { btn.disabled = false; return setErr("wiz-err", d.error || "สร้างไม่สำเร็จ"); }
+      wizEls().bar.style.width = "100%";
       enterSpace(d.workspace);
-    } catch { setErr("sp-err", "เชื่อมต่อ API ไม่ได้"); }
+    } catch { btn.disabled = false; setErr("wiz-err", "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้"); }
   };
 
   $("sp-join")!.onclick = async () => {

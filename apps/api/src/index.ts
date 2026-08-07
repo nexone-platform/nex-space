@@ -20,10 +20,16 @@ const parseDesks = (raw: string | null | undefined): Record<string, string> => {
   } catch { return { main: raw }; } // legacy: plain desk id
 };
 
-const safeUser = (u: { id: string; email: string; name: string; avatar: string | null; desk?: string | null }) => ({
+const safeUser = (u: {
+  id: string; email: string; name: string; avatar: string | null;
+  desk?: string | null; photoUrl?: string | null; role?: string | null; companySize?: string | null;
+}) => ({
   id: u.id, email: u.email, name: u.name,
   avatar: u.avatar ? JSON.parse(u.avatar) : null,
   desks: parseDesks(u.desk),
+  photoUrl: u.photoUrl ?? null,
+  role: u.role ?? null,          // onboarding answers, used to prefill the wizard
+  companySize: u.companySize ?? null,
 });
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
@@ -239,13 +245,25 @@ app.get("/workspaces", requireAuth, async (req: AuthedRequest, res) => {
 });
 
 app.post("/workspaces", requireAuth, async (req: AuthedRequest, res) => {
-  const name = String((req.body ?? {}).name ?? "").trim().slice(0, 60);
-  const allowGuests = (req.body ?? {}).allowGuests !== false;
+  const { name: rawName, allowGuests: guests, role, companySize, useCase } = req.body ?? {};
+  const name = String(rawName ?? "").trim().slice(0, 60);
   if (!name) return res.status(400).json({ error: "name required" });
+  const trim = (v: unknown) => (v ? String(v).slice(0, 60) : undefined);
+
+  // the onboarding answers about the person are kept on the account, so creating
+  // another space later can skip straight past those questions
+  const profile = { role: trim(role), companySize: trim(companySize) };
+  if (profile.role || profile.companySize) {
+    await prisma.user.update({
+      where: { id: req.user!.id },
+      data: { ...(profile.role ? { role: profile.role } : {}), ...(profile.companySize ? { companySize: profile.companySize } : {}) },
+    });
+  }
+
   const workspace = await prisma.workspace.create({
     data: {
       name, slug: await uniqueSlug(name), inviteCode: randomCode(),
-      allowGuests, ownerId: req.user!.id,
+      allowGuests: guests !== false, useCase: trim(useCase), ownerId: req.user!.id,
       members: { create: { userId: req.user!.id, role: "owner" } },
     },
     include: { _count: { select: { members: true } } },

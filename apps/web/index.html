@@ -220,6 +220,41 @@
       .sp-menu-btn:hover { background: #f0f1f5; color: #333; }
       .sp-empty { color: #8a8f98; font-size: 14px; padding: 40px 0; text-align: center; }
 
+      /* --- create-space wizard --- */
+      #wiz-overlay { position: fixed; inset: 0; z-index: 65; background: #fff; display: none;
+        flex-direction: column; font-family: "Segoe UI", sans-serif; }
+      .wiz-head { display: flex; align-items: center; gap: 12px; padding: 18px 22px 12px; }
+      .wiz-head b { font-size: 16px; color: #1c1b22; }
+      .wiz-progress { height: 6px; margin: 0 22px; border-radius: 4px; background: #eceef2; overflow: hidden; }
+      .wiz-progress i { display: block; height: 100%; width: 0; border-radius: 4px;
+        background: linear-gradient(90deg, #4f46e5, #6d63ec); transition: width .25s ease; }
+      .wiz-body { flex: 1; display: grid; place-items: center; padding: 24px; overflow-y: auto; }
+      .wiz-card { width: min(92vw, 430px); }
+      .wiz-back { border: none; background: transparent; color: #6b7280; cursor: pointer;
+        font: 600 13.5px "Segoe UI", sans-serif; padding: 4px 0; margin-bottom: 12px; }
+      .wiz-back:hover { color: #1c1b22; }
+      .wiz-card h2 { margin: 0 0 18px; font-size: 19px; color: #1c1b22; line-height: 1.35; }
+      .wiz-opts { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; }
+      .wiz-opt { border: 1px solid #dfe1e6; background: #fff; border-radius: 22px; padding: 9px 18px;
+        cursor: pointer; font: 500 14px "Segoe UI", sans-serif; color: #24262b; text-align: left; }
+      .wiz-opt:hover { border-color: #b9bcc4; background: #fafbfc; }
+      .wiz-opt.on { border-color: #4f46e5; background: #eef0ff; color: #3730a3; font-weight: 600; }
+      #wiz-other { width: 100%; box-sizing: border-box; margin-top: 12px; padding: 10px 12px;
+        border: 1px solid #dfe1e6; border-radius: 10px; font-size: 14px; outline: none; }
+      #wiz-other:focus { border-color: #4f46e5; }
+      .wiz-err { color: #e5484d; font-size: 12.5px; min-height: 18px; margin-top: 8px; }
+      .wiz-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+      .wiz-next { border: none; border-radius: 22px; padding: 10px 22px; cursor: pointer;
+        background: #4f46e5; color: #fff; font: 600 14px "Segoe UI", sans-serif; }
+      .wiz-next:hover:not(:disabled) { background: #4338ca; }
+      .wiz-next:disabled { background: #eceef2; color: #a8adb5; cursor: default; }
+      .wiz-cancel { border: none; background: transparent; color: #8a8f98; cursor: pointer;
+        font: 500 13.5px "Segoe UI", sans-serif; }
+      .wiz-cancel:hover { color: #4b5563; }
+      .wiz-check { display: flex; align-items: center; gap: 8px; margin-top: 12px;
+        font-size: 13px; color: #4b5563; }
+      .wiz-check input { width: auto; margin: 0; }
+
       /* --- workspace settings / members modal --- */
       #ws-modal { position: fixed; inset: 0; z-index: 70; background: #0b0b1099; display: none; place-items: center; }
       #ws-modal .wm-box { width: min(94vw, 520px); max-height: 88vh; overflow-y: auto; background: #fff;
@@ -468,6 +503,27 @@
         </div>
         <div class="err" id="sp-err" style="min-height:18px"></div>
         <div class="sp-grid" id="sp-grid"></div>
+      </div>
+    </div>
+
+    <div id="wiz-overlay">
+      <header class="wiz-head">
+        <span class="sp-logo">N</span>
+        <b>เริ่มต้นใช้งาน</b>
+      </header>
+      <div class="wiz-progress"><i id="wiz-bar"></i></div>
+      <div class="wiz-body">
+        <div class="wiz-card">
+          <button class="wiz-back" id="wiz-back">← ย้อนกลับ</button>
+          <h2 id="wiz-q"></h2>
+          <div class="wiz-opts" id="wiz-opts"></div>
+          <input type="text" id="wiz-other" placeholder="ระบุเพิ่มเติม…" style="display:none" />
+          <div class="wiz-err" id="wiz-err"></div>
+          <div class="wiz-actions">
+            <button class="wiz-cancel" id="wiz-cancel">ยกเลิก</button>
+            <button class="wiz-next" id="wiz-next" disabled>ถัดไป →</button>
+          </div>
+        </div>
       </div>
     </div>
 

@@ -18,6 +18,8 @@ model User {
   passwordHash String? // null for accounts created via email code / Google
   googleId     String?    @unique
   photoUrl     String? // Google profile picture
+  role         String? // onboarding: Founder / Director / Manager / ...
+  companySize  String? // onboarding: "1-10", "11-50", ...
   avatar       String? // JSON string: { avatarId, skin, hair, top, ... }
   desk         String? // JSON string: { workspaceSlug: deskId }
   createdAt    DateTime   @default(now())
@@ -35,6 +37,7 @@ model Workspace {
   name        String // display name, e.g. "บริษัท A"
   inviteCode  String       @unique
   allowGuests Boolean      @default(true)
+  useCase     String? // onboarding: how the team plans to use this space
   ownerId     String
   owner       User         @relation("OwnedWorkspaces", fields: [ownerId], references: [id], onDelete: Cascade)
   members     Membership[]
