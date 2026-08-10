@@ -146,6 +146,31 @@ written to the API log instead of emailed — fine for testing, not for real use
 docker compose logs -f nexspace-api | grep "sign-in code"
 ```
 
+### Authenticator app (2FA)
+
+Works with no configuration — codes are verified locally, nothing is sent
+anywhere. The only optional setting is the name shown inside the user's
+authenticator app:
+
+```dotenv
+TOTP_ISSUER=NexSpace
+```
+
+Users turn it on themselves from **ความปลอดภัย** in the dashboard header. Notes
+worth knowing before support questions arrive:
+
+- Enrolment shows **8 recovery codes once**. They are stored bcrypt-hashed, so a
+  user who loses both their phone and those codes cannot be recovered — there is
+  no admin override. Clearing it by hand takes a database write:
+  ```bash
+  docker compose exec nexspace-api npx prisma studio   # or the SQL below
+  # UPDATE User SET totpSecret=NULL, totpEnabledAt=NULL, recoveryCodes=NULL WHERE email='...';
+  ```
+- A code is accepted for one 30s step either side of the server clock, and never
+  twice. If the server clock drifts more than ~30s from real time every code
+  looks wrong — keep NTP running on the host.
+- Five wrong codes throw the half-finished sign-in away and the user starts over.
+
 ### LiveKit (voice/video SFU)
 ```dotenv
 LIVEKIT_URL=wss://...
@@ -168,6 +193,10 @@ rooms but degrades past roughly a handful of people.
 5. Open the invite link (`?w=<slug>`) in a private window — it should show the
    workspace name, and a member-only space must refuse a non-member.
 6. Press the leave button — you should return to the dashboard.
+7. **ความปลอดภัย** → เปิดใช้งาน → scan the QR with any authenticator app, enter the
+   code, and save the recovery codes. Sign out and back in: the 2FA screen must
+   appear, the app's code must let you through, and a second use of that same code
+   must be refused.
 
 ## Notes
 

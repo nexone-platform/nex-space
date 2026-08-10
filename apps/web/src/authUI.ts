@@ -18,6 +18,8 @@ interface User {
   desks?: Record<string, string> | null; // workspace -> deskId
   role?: string | null;                  // onboarding answers, used to prefill the wizard
   companySize?: string | null;
+  totpEnabled?: boolean;                 // authenticator app required at sign-in
+  recoveryLeft?: number;
 }
 interface Space { slug: string; name: string; role: string; members?: number; inviteCode?: string }
 interface Member { id: string; name: string; email: string; photoUrl?: string; role: string; isMe: boolean }
@@ -30,6 +32,35 @@ const authHeaders = () => ({
   ...(token() ? { Authorization: "Bearer " + token()! } : {}),
 });
 const initial = (s: string) => (s.trim()[0] ?? "?").toUpperCase();
+
+/**
+ * A row of single-character boxes that behaves like one field: digits advance,
+ * backspace steps back, a pasted code spreads across them, and `onComplete`
+ * fires as soon as the last box is filled. Shared by the email code, the
+ * authenticator step, and enrolment.
+ */
+function wireCodeBoxes(boxes: HTMLInputElement[], onComplete: (code: string) => void) {
+  const last = boxes.length - 1;
+  boxes.forEach((box, i) => {
+    box.oninput = () => {
+      box.value = box.value.replace(/\D/g, "").slice(0, 1);
+      if (box.value && i < last) boxes[i + 1].focus();
+      if (boxes.every((b) => b.value)) onComplete(boxes.map((b) => b.value).join(""));
+    };
+    box.onkeydown = (e) => {
+      if (e.key === "Backspace" && !box.value && i > 0) boxes[i - 1].focus();
+    };
+    box.onpaste = (e) => {
+      const text = (e.clipboardData?.getData("text") ?? "").replace(/\D/g, "").slice(0, boxes.length);
+      if (!text) return;
+      e.preventDefault();
+      boxes.forEach((b, k) => (b.value = text[k] ?? ""));
+      boxes[Math.min(text.length, last)].focus();
+      if (text.length === boxes.length) onComplete(text);
+    };
+  });
+}
+
 const roleLabel = (r: string) => (r === "owner" ? "เจ้าของ" : r === "admin" ? "ผู้ดูแล" : "สมาชิก");
 
 export function runAuthFlow(onReady: (s: StartInfo) => void) {
@@ -43,12 +74,13 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
   let selectedTile = "1";
   let customConfig: LpcConfig | null = null;
   let pendingEmail = "";
+  let pendingTotp = "";        // session token awaiting an authenticator code
   let mySpaces: Space[] = [];
 
   const setErr = (id: string, m: string) => { const e = $(id); if (e) e.textContent = m; };
 
-  const showStep = (id: "auth-step" | "code-step" | "char-step") => {
-    for (const s of ["auth-step", "code-step", "char-step"]) {
+  const showStep = (id: "auth-step" | "code-step" | "totp-step" | "char-step") => {
+    for (const s of ["auth-step", "code-step", "totp-step", "char-step"]) {
       const el = $(s);
       if (el) el.style.display = s === id ? "block" : "none";
     }
@@ -61,8 +93,14 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
   (() => {
     const h = new URLSearchParams(location.hash.slice(1));
     const t = h.get("token");
+    // `totp` means Google verified the account but it also has an authenticator:
+    // this token stays out of localStorage until the code step promotes it.
+    const half = h.get("totp");
     if (t) {
       localStorage.setItem(TOKEN_KEY, t);
+      history.replaceState(null, "", location.pathname + location.search);
+    } else if (half) {
+      pendingTotp = half;
       history.replaceState(null, "", location.pathname + location.search);
     } else if (h.get("auth_error")) {
       const reason = h.get("auth_error") ?? "";
@@ -165,31 +203,14 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
           : d.error === "too many attempts" ? "กรอกผิดหลายครั้งเกินไป — ขอรหัสใหม่"
           : d.error || "ยืนยันรหัสไม่สำเร็จ");
       }
+      if (d.totpRequired) return toTotp(d.pendingToken);
       localStorage.setItem(TOKEN_KEY, d.token);
       user = d.user;
       afterSignIn();
     } catch { setErr("code-err", "เชื่อมต่อ API ไม่ได้"); }
   };
 
-  // 6 single-character boxes that behave like one field
-  codeInputs().forEach((box, i, all) => {
-    box.oninput = () => {
-      box.value = box.value.replace(/\D/g, "").slice(0, 1);
-      if (box.value && i < all.length - 1) all[i + 1].focus();
-      if (all.every((b) => b.value)) void verifyCode();
-    };
-    box.onkeydown = (e) => {
-      if (e.key === "Backspace" && !box.value && i > 0) all[i - 1].focus();
-    };
-    box.onpaste = (e) => {
-      const text = (e.clipboardData?.getData("text") ?? "").replace(/\D/g, "").slice(0, 6);
-      if (!text) return;
-      e.preventDefault();
-      all.forEach((b, k) => (b.value = text[k] ?? ""));
-      all[Math.min(text.length, 5)].focus();
-      if (text.length === 6) void verifyCode();
-    };
-  });
+  wireCodeBoxes(codeInputs(), () => void verifyCode());
 
   $("code-resend")!.onclick = async () => {
     setErr("code-err", "");
@@ -198,6 +219,78 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
   };
   $("code-cancel")!.onclick = () => { codeInputs().forEach((i) => (i.value = "")); showStep("auth-step"); };
   $("a-guest")!.onclick = () => { user = null; toChar(null); };
+
+  // -------------------------------------------- second factor: authenticator app
+  const totpBoxes = () => Array.from(document.querySelectorAll<HTMLInputElement>("#totp-boxes input"));
+
+  /** the 6 boxes and the recovery-code field are two ways to answer the same step */
+  const showRecoveryField = (on: boolean) => {
+    $("totp-boxes")!.style.display = on ? "none" : "flex";
+    $("totp-rc")!.style.display = on ? "block" : "none";
+    $("totp-rc-go")!.style.display = on ? "block" : "none";
+    $("totp-rc-toggle")!.textContent = on ? "กลับไปใช้รหัสจากแอป" : "ทำโทรศัพท์หาย? ใช้รหัสสำรอง";
+    $("totp-sub")!.textContent = on
+      ? "กรอกรหัสสำรองที่คุณเก็บไว้ตอนเปิดใช้งาน — ใช้ได้รหัสละครั้ง"
+      : "กรอกรหัส 6 หลักจากแอป Authenticator ของคุณ";
+    setErr("totp-err", "");
+    (on ? $<HTMLInputElement>("totp-rc") : totpBoxes()[0])?.focus();
+  };
+
+  const toTotp = (pending: string) => {
+    pendingTotp = pending;
+    totpBoxes().forEach((i) => (i.value = ""));
+    const rc = $<HTMLInputElement>("totp-rc");
+    if (rc) rc.value = "";
+    showStep("totp-step");
+    showRecoveryField(false);
+  };
+
+  const submitTotp = async (code: string) => {
+    if (!code) return;
+    // a reload during this step drops the pending token — start over rather than
+    // sit there doing nothing when the button is pressed
+    if (!pendingTotp) {
+      setErr("auth-err", "หมดเวลายืนยันตัวตน — เข้าสู่ระบบใหม่อีกครั้ง");
+      return showStep("auth-step");
+    }
+    setErr("totp-err", "");
+    try {
+      const r = await fetch(`${API}/auth/totp/verify`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: pendingTotp, code }),
+      });
+      const d = await r.json().catch(() => ({} as any));
+      if (!r.ok) {
+        totpBoxes().forEach((i) => (i.value = ""));
+        totpBoxes()[0]?.focus();
+        // a spent pending token is gone for good — send them back to the start
+        if (r.status === 429 || d.error === "session expired") {
+          pendingTotp = "";
+          setErr("auth-err", r.status === 429
+            ? "กรอกรหัสผิดหลายครั้งเกินไป — เข้าสู่ระบบใหม่อีกครั้ง"
+            : "หมดเวลายืนยันตัวตน — เข้าสู่ระบบใหม่อีกครั้ง");
+          return showStep("auth-step");
+        }
+        const left = typeof d.attemptsLeft === "number" ? ` (เหลือ ${d.attemptsLeft} ครั้ง)` : "";
+        return setErr("totp-err",
+          d.reused ? "รหัสนี้ถูกใช้ไปแล้ว — รอรหัสถัดไปในแอป"
+          : `รหัสไม่ถูกต้อง${left}`);
+      }
+      localStorage.setItem(TOKEN_KEY, d.token);
+      pendingTotp = "";
+      user = d.user;
+      afterSignIn();
+    } catch { setErr("totp-err", "เชื่อมต่อ API ไม่ได้"); }
+  };
+
+  wireCodeBoxes(totpBoxes(), (code) => void submitTotp(code));
+
+  $("totp-rc-toggle")!.onclick = () => showRecoveryField($("totp-rc")!.style.display === "none");
+  $("totp-rc-go")!.onclick = () => void submitTotp($<HTMLInputElement>("totp-rc")?.value.trim() ?? "");
+  $<HTMLInputElement>("totp-rc")!.onkeydown = (e) => {
+    if (e.key === "Enter") void submitTotp(($("totp-rc") as HTMLInputElement).value.trim());
+  };
+  $("totp-cancel")!.onclick = () => { pendingTotp = ""; showStep("auth-step"); };
 
   /** after a successful sign-in: invite links go straight in, otherwise pick a space */
   const afterSignIn = () => { if (HAS_WORKSPACE_PARAM) toChar(user); else void showSpaces(); };
@@ -428,6 +521,151 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     location.href = location.pathname;
   };
 
+  // ----------------------------------------------- 2FA settings (account level)
+  // Four states share one dialog: off -> scanning -> codes shown -> on.
+  type SecState = "off" | "scan" | "codes" | "on";
+  let secCodes: string[] = [];
+
+  const secBoxes = () => Array.from(document.querySelectorAll<HTMLInputElement>("#sec-boxes input"));
+
+  const setSecState = (s: SecState) => {
+    const vis: Record<SecState, string[]> = {
+      off:   ["sec-off", "sec-start"],
+      scan:  ["sec-scan", "sec-confirm"],
+      codes: ["sec-codes", "sec-done"],
+      on:    ["sec-on", "sec-disable", "sec-regen"],
+    };
+    for (const id of ["sec-off", "sec-scan", "sec-codes", "sec-on",
+                      "sec-start", "sec-confirm", "sec-done", "sec-disable", "sec-regen"]) {
+      const el = $(id);
+      if (el) el.style.display = vis[s].includes(id) ? "" : "none";
+    }
+    // once the codes are on screen, closing without reading them is the mistake
+    $("sec-close")!.style.display = s === "codes" ? "none" : "";
+    setErr("sec-err", "");
+  };
+
+  const renderSecCodes = () => {
+    const box = $("sec-codes-list");
+    if (!box) return;
+    box.innerHTML = "";
+    for (const c of secCodes) {
+      const span = document.createElement("span");
+      span.textContent = c;
+      box.appendChild(span);
+    }
+  };
+
+  const openSecurity = () => {
+    const m = $("sec-modal");
+    if (m) m.style.display = "grid";
+    const ask = $<HTMLInputElement>("sec-ask");
+    if (ask) ask.value = "";
+    secBoxes().forEach((i) => (i.value = ""));
+    if (user?.totpEnabled) {
+      $("sec-left")!.textContent = String(user.recoveryLeft ?? 0);
+      setSecState("on");
+    } else setSecState("off");
+  };
+
+  /** refresh the cached profile so the dialog and the badge agree */
+  const applyUser = (u: User | undefined) => { if (u) user = { ...user, ...u } as User; };
+
+  const secCall = async (path: string, body?: unknown) => {
+    const r = await fetch(`${API}/me/totp/${path}`, {
+      method: "POST", headers: authHeaders(), body: JSON.stringify(body ?? {}),
+    });
+    const d = await r.json().catch(() => ({} as any));
+    if (!r.ok) {
+      throw new Error(
+        d.error === "invalid code" ? "รหัสไม่ถูกต้อง"
+        : d.error === "already enabled" ? "เปิดใช้งานอยู่แล้ว"
+        : d.error === "start setup first" ? "เริ่มขั้นตอนตั้งค่าใหม่อีกครั้ง"
+        : d.error || "ทำรายการไม่สำเร็จ");
+    }
+    return d;
+  };
+
+  $("sp-security")!.onclick = openSecurity;
+  $("sec-close")!.onclick = () => { const m = $("sec-modal"); if (m) m.style.display = "none"; };
+
+  $("sec-start")!.onclick = async () => {
+    setErr("sec-err", "");
+    try {
+      const d = await secCall("setup");
+      $<HTMLImageElement>("sec-qr")!.src = d.qr;
+      // grouped in fours: much easier to type by hand than a 32-char run
+      $<HTMLInputElement>("sec-secret")!.value = (d.secret as string).replace(/(.{4})(?=.)/g, "$1 ");
+      setSecState("scan");
+      secBoxes()[0]?.focus();
+    } catch (e) { setErr("sec-err", (e as Error).message); }
+  };
+
+  $("sec-copy")!.onclick = () => {
+    void navigator.clipboard?.writeText($<HTMLInputElement>("sec-secret")!.value.replace(/\s/g, ""));
+    setErr("sec-err", "คัดลอกรหัสแล้ว");
+  };
+
+  const confirmEnable = async (code: string) => {
+    setErr("sec-err", "");
+    try {
+      const d = await secCall("enable", { code });
+      applyUser(d.user);
+      secCodes = d.recoveryCodes ?? [];
+      renderSecCodes();
+      setSecState("codes");
+    } catch (e) {
+      secBoxes().forEach((i) => (i.value = ""));
+      secBoxes()[0]?.focus();
+      setErr("sec-err", (e as Error).message);
+    }
+  };
+
+  wireCodeBoxes(secBoxes(), (code) => void confirmEnable(code));
+  $("sec-confirm")!.onclick = () => void confirmEnable(secBoxes().map((b) => b.value).join(""));
+
+  $("sec-codes-copy")!.onclick = () => {
+    void navigator.clipboard?.writeText(secCodes.join("\n"));
+    setErr("sec-err", "คัดลอกรหัสสำรองแล้ว");
+  };
+
+  $("sec-codes-save")!.onclick = () => {
+    const text = `รหัสสำรอง NexSpace — ${user?.email ?? ""}\n`
+      + `ใช้ได้รหัสละ 1 ครั้ง เมื่อไม่มีแอป Authenticator\n\n${secCodes.join("\n")}\n`;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+    a.download = "nexspace-recovery-codes.txt";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  $("sec-done")!.onclick = () => {
+    secCodes = [];
+    $("sec-left")!.textContent = String(user?.recoveryLeft ?? 0);
+    setSecState("on");
+  };
+
+  $("sec-disable")!.onclick = async () => {
+    const code = $<HTMLInputElement>("sec-ask")?.value.trim() ?? "";
+    if (!code) return setErr("sec-err", "กรอกรหัสเพื่อยืนยัน");
+    try {
+      applyUser((await secCall("disable", { code })).user);
+      setSecState("off");
+    } catch (e) { setErr("sec-err", (e as Error).message); }
+  };
+
+  $("sec-regen")!.onclick = async () => {
+    const code = $<HTMLInputElement>("sec-ask")?.value.trim() ?? "";
+    if (!code) return setErr("sec-err", "กรอกรหัสเพื่อยืนยัน");
+    try {
+      const d = await secCall("recovery", { code });
+      applyUser(d.user);
+      secCodes = d.recoveryCodes ?? [];
+      renderSecCodes();
+      setSecState("codes");
+    } catch (e) { setErr("sec-err", (e as Error).message); }
+  };
+
   // --------------------------------------------- workspace settings/members
   let editing: Space | null = null;
   let myRole = "member";
@@ -639,6 +877,8 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
 
   // ------------------------------------------------------------- entry point
   (async () => {
+    // Google signed us in but the account also has an authenticator
+    if (pendingTotp) return toTotp(pendingTotp);
     if (!token()) return showStep("auth-step");
     try {
       const r = await fetch(`${API}/me`, { headers: authHeaders() });

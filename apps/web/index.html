@@ -252,13 +252,13 @@
       .wiz-check input { width: auto; margin: 0; }
 
       /* --- workspace settings / members modal --- */
-      #ws-modal { position: fixed; inset: 0; z-index: 70; background: #0b0b1099; display: none; place-items: center; }
-      #ws-modal .wm-box { width: min(94vw, 520px); max-height: 88vh; overflow-y: auto; background: #fff;
+      #ws-modal, #sec-modal { position: fixed; inset: 0; z-index: 70; background: #0b0b1099; display: none; place-items: center; }
+      #ws-modal .wm-box, #sec-modal .wm-box { width: min(94vw, 520px); max-height: 88vh; overflow-y: auto; background: #fff;
         border-radius: 15px; padding: 22px 24px; box-shadow: 0 24px 60px #0007; }
-      #ws-modal h2 { margin: 0 0 2px; font-size: 18px; color: #1c1b22; }
-      #ws-modal .wm-sub { margin: 0 0 16px; font-size: 12.5px; color: #8a8f98; }
-      #ws-modal label.wm-l { display: block; font-size: 12.5px; color: #6b7280; margin: 12px 0 5px; font-weight: 600; }
-      #ws-modal input[type="text"] { width: 100%; box-sizing: border-box; padding: 9px 11px;
+      #ws-modal h2, #sec-modal h2 { margin: 0 0 2px; font-size: 18px; color: #1c1b22; }
+      #ws-modal .wm-sub, #sec-modal .wm-sub { margin: 0 0 16px; font-size: 12.5px; color: #8a8f98; }
+      #ws-modal label.wm-l, #sec-modal label.wm-l { display: block; font-size: 12.5px; color: #6b7280; margin: 12px 0 5px; font-weight: 600; }
+      #ws-modal input[type="text"], #sec-modal input[type="text"] { width: 100%; box-sizing: border-box; padding: 9px 11px;
         border: 1px solid #e2e4ea; border-radius: 9px; font-size: 14px; outline: none; }
       .wm-row { display: flex; align-items: center; gap: 9px; font-size: 13px; color: #4b5563; margin-top: 10px; }
       .wm-invite { display: flex; gap: 8px; margin-top: 5px; }
@@ -281,6 +281,22 @@
       .wm-x { border: none; background: transparent; color: #c2c7cf; cursor: pointer; font-size: 15px; padding: 4px 6px; border-radius: 6px; }
       .wm-x:hover { background: #fdecec; color: #d3373d; }
       .wm-err { color: #e5484d; font-size: 12.5px; min-height: 16px; }
+
+      /* two-factor (authenticator app) */
+      .sec-p { font-size: 13px; color: #4b5563; line-height: 1.65; margin: 4px 0 0; }
+      .sec-steps { margin: 4px 0 14px; padding-left: 20px; font-size: 13px; color: #4b5563; line-height: 1.7; }
+      .sec-qr { display: grid; place-items: center; padding: 14px; background: #f7f8fa;
+        border: 1px solid #eceef2; border-radius: 13px; }
+      .sec-qr img { width: 178px; height: 178px; image-rendering: pixelated; border-radius: 6px; background: #fff; }
+      .sec-warn { background: #fff8e6; border: 1px solid #f5e2b0; border-radius: 11px; padding: 10px 12px; color: #7a5b12; }
+      .sec-ok { color: #1a9c8b; }
+      .sec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 10px; margin: 12px 0 4px;
+        padding: 13px; background: #f7f8fa; border: 1px solid #eceef2; border-radius: 11px;
+        font: 600 13.5px ui-monospace, "Consolas", monospace; color: #1c1b22; letter-spacing: .4px; }
+      .sec-grid span.used { color: #b9bec7; text-decoration: line-through; }
+      .sec-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+        font: 600 12px "Segoe UI", sans-serif; background: #e7f7f4; color: #16897a; }
+      .sec-badge.off { background: #f2f3f6; color: #6b7280; }
 
       /* workspace picker */
       #ws-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
@@ -461,6 +477,24 @@
           <button class="ghost" id="code-resend">ส่งรหัสอีกครั้ง</button>
           <button class="ghost" id="code-cancel">ยกเลิก</button>
         </div>
+        <div id="totp-step" style="display:none">
+          <div class="auth-logo">N</div>
+          <h1 class="auth-title">ยืนยัน 2 ชั้น</h1>
+          <p class="sub" id="totp-sub">กรอกรหัส 6 หลักจากแอป Authenticator ของคุณ</p>
+          <div class="err" id="totp-err"></div>
+          <div class="code-boxes" id="totp-boxes">
+            <input inputmode="numeric" maxlength="1" autocomplete="one-time-code" />
+            <input inputmode="numeric" maxlength="1" />
+            <input inputmode="numeric" maxlength="1" />
+            <input inputmode="numeric" maxlength="1" />
+            <input inputmode="numeric" maxlength="1" />
+            <input inputmode="numeric" maxlength="1" />
+          </div>
+          <input id="totp-rc" type="text" placeholder="รหัสสำรอง เช่น a1b2c-3d4e5" autocomplete="off" style="display:none" />
+          <button class="primary" id="totp-rc-go" style="display:none">ยืนยันด้วยรหัสสำรอง</button>
+          <button class="ghost" id="totp-rc-toggle">ทำโทรศัพท์หาย? ใช้รหัสสำรอง</button>
+          <button class="ghost" id="totp-cancel">ยกเลิก</button>
+        </div>
         <div id="char-step" style="display:none">
           <h1>เลือกตัวละคร</h1>
           <p class="sub" id="char-hello"></p>
@@ -485,6 +519,7 @@
         <b style="font-size:15px;color:#1c1b22">NexSpace</b>
         <span class="sp-spacer"></span>
         <span class="sp-who" id="sp-who"></span>
+        <button id="sp-security" title="ยืนยันตัวตน 2 ชั้น">ความปลอดภัย</button>
         <button id="sp-logout">ออกจากระบบ</button>
         <button id="sp-create">＋ สร้าง Space</button>
       </header>
@@ -548,6 +583,68 @@
           <button class="wm-btn wm-danger" id="wm-leave">ออกจาก Workspace</button>
           <button class="wm-btn wm-ghost" id="wm-close">ปิด</button>
           <button class="wm-btn wm-primary" id="wm-save">บันทึก</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="sec-modal">
+      <div class="wm-box">
+        <h2>ยืนยันตัวตน 2 ชั้น (2FA)</h2>
+        <p class="wm-sub" id="sec-sub">ขอรหัส 6 หลักจากแอป Authenticator เพิ่มทุกครั้งที่เข้าสู่ระบบ</p>
+        <div class="wm-err" id="sec-err"></div>
+
+        <div id="sec-off">
+          <span class="sec-badge off">● ยังไม่ได้เปิดใช้งาน</span>
+          <p class="sec-p">ใช้ได้กับ Google Authenticator, Microsoft Authenticator, Authy, 1Password
+            และแอปอื่นที่รองรับมาตรฐาน TOTP</p>
+        </div>
+
+        <div id="sec-scan" style="display:none">
+          <ol class="sec-steps">
+            <li>เปิดแอป Authenticator แล้วสแกน QR นี้</li>
+            <li>กรอกรหัส 6 หลักที่แอปแสดงเพื่อยืนยัน</li>
+          </ol>
+          <div class="sec-qr"><img id="sec-qr" alt="QR code สำหรับแอป Authenticator" /></div>
+          <label class="wm-l">สแกนไม่ได้? ใส่รหัสนี้ในแอปด้วยมือ</label>
+          <div class="wm-invite">
+            <input type="text" id="sec-secret" readonly />
+            <button class="wm-btn wm-ghost" id="sec-copy">คัดลอก</button>
+          </div>
+          <label class="wm-l">รหัสจากแอป</label>
+          <div class="code-boxes" id="sec-boxes">
+            <input inputmode="numeric" maxlength="1" autocomplete="one-time-code" />
+            <input inputmode="numeric" maxlength="1" />
+            <input inputmode="numeric" maxlength="1" />
+            <input inputmode="numeric" maxlength="1" />
+            <input inputmode="numeric" maxlength="1" />
+            <input inputmode="numeric" maxlength="1" />
+          </div>
+        </div>
+
+        <div id="sec-codes" style="display:none">
+          <p class="sec-p sec-warn">เก็บรหัสสำรองนี้ไว้ในที่ปลอดภัย ใช้ได้รหัสละ 1 ครั้ง สำหรับตอนที่ไม่มีโทรศัพท์
+            — <b>จะแสดงเพียงครั้งเดียวเท่านั้น</b></p>
+          <div class="sec-grid" id="sec-codes-list"></div>
+          <div class="wm-row">
+            <button class="wm-btn wm-ghost" id="sec-codes-copy">คัดลอกทั้งหมด</button>
+            <button class="wm-btn wm-ghost" id="sec-codes-save">ดาวน์โหลด .txt</button>
+          </div>
+        </div>
+
+        <div id="sec-on" style="display:none">
+          <span class="sec-badge">● เปิดใช้งานอยู่</span>
+          <p class="sec-p">เหลือรหัสสำรอง <b id="sec-left">0</b> รหัส</p>
+          <label class="wm-l" for="sec-ask">กรอกรหัสจากแอป (หรือรหัสสำรอง) เพื่อยืนยันว่าเป็นคุณ</label>
+          <input type="text" id="sec-ask" placeholder="123456" autocomplete="off" />
+        </div>
+
+        <div class="wm-actions">
+          <button class="wm-btn wm-danger" id="sec-disable" style="display:none">ปิดใช้งาน</button>
+          <button class="wm-btn wm-ghost" id="sec-regen" style="display:none">ออกรหัสสำรองใหม่</button>
+          <button class="wm-btn wm-ghost" id="sec-close">ปิด</button>
+          <button class="wm-btn wm-primary" id="sec-start">เปิดใช้งาน</button>
+          <button class="wm-btn wm-primary" id="sec-confirm" style="display:none">ยืนยัน</button>
+          <button class="wm-btn wm-primary" id="sec-done" style="display:none">บันทึกแล้ว</button>
         </div>
       </div>
     </div>

@@ -2,8 +2,15 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { prisma } from "./db";
-import { hashPassword, verifyPassword, createSession, requireAuth, userFromToken, type AuthedRequest } from "./auth";
+import {
+  hashPassword, verifyPassword, createSession, activateSession, sessionFromToken,
+  requireAuth, userFromToken, type AuthedRequest,
+} from "./auth";
 import { sendLoginCode, mailEnabled } from "./mailer";
+import {
+  newTotpSecret, otpauthUri, qrDataUrl, checkTotp,
+  newRecoveryCodes, hashRecoveryCodes, countRecoveryCodes, spendRecoveryCode,
+} from "./totp";
 
 const port = Number(process.env.PORT) || 3001;
 const app = express();
@@ -44,6 +51,7 @@ const parseDesks = (raw: string | null | undefined): Record<string, string> => {
 const safeUser = (u: {
   id: string; email: string; name: string; avatar: string | null;
   desk?: string | null; photoUrl?: string | null; role?: string | null; companySize?: string | null;
+  totpEnabledAt?: Date | null; recoveryCodes?: string | null;
 }) => ({
   id: u.id, email: u.email, name: u.name,
   avatar: u.avatar ? JSON.parse(u.avatar) : null,
@@ -51,7 +59,21 @@ const safeUser = (u: {
   photoUrl: u.photoUrl ?? null,
   role: u.role ?? null,          // onboarding answers, used to prefill the wizard
   companySize: u.companySize ?? null,
+  totpEnabled: !!u.totpEnabledAt,
+  recoveryLeft: countRecoveryCodes(u.recoveryCodes),
 });
+
+/**
+ * Every sign-in path ends here. With an authenticator enrolled the caller gets a
+ * pending token that unlocks nothing until /auth/totp/verify accepts a code, and
+ * no profile data comes back before that.
+ */
+async function issueLogin(
+  user: { id: string; totpEnabledAt: Date | null },
+): Promise<{ token?: string; totpRequired?: true; pendingToken?: string }> {
+  if (!user.totpEnabledAt) return { token: await createSession(user.id) };
+  return { totpRequired: true, pendingToken: await createSession(user.id, true) };
+}
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
@@ -75,8 +97,8 @@ app.post("/auth/login", async (req, res) => {
   // accounts created via email code / Google have no password to check against
   if (!user || !user.passwordHash || !(await verifyPassword(password ?? "", user.passwordHash)))
     return res.status(401).json({ error: "invalid credentials" });
-  const token = await createSession(user.id);
-  res.json({ token, user: safeUser(user) });
+  const login = await issueLogin(user);
+  res.json(login.token ? { ...login, user: safeUser(user) } : login);
 });
 
 // ---- sign in with a 6-digit email code ----
@@ -127,7 +149,8 @@ app.post("/auth/code/verify", async (req, res) => {
     update: {},
     create: { email, name: email.split("@")[0] },
   });
-  res.json({ token: await createSession(user.id), user: safeUser(user) });
+  const login = await issueLogin(user);
+  res.json(login.token ? { ...login, user: safeUser(user) } : login);
 });
 
 // ---- sign in with Google ----
@@ -223,14 +246,126 @@ app.get("/auth/google/callback", async (req, res) => {
         photoUrl,
       },
     });
-    const token = await createSession(user.id);
+    const login = await issueLogin(user);
     console.log("[auth] google user linked successfully:", user.email);
-    // hash fragment: the token never lands in server logs or the Referer header
-    res.redirect(`${back}${ws ? `?w=${encodeURIComponent(ws)}` : ""}#token=${encodeURIComponent(token)}`);
+    // hash fragment: the token never lands in server logs or the Referer header.
+    // `totp=` tells the web app the sign-in still needs an authenticator code.
+    const frag = login.token ? `token=${encodeURIComponent(login.token)}`
+                             : `totp=${encodeURIComponent(login.pendingToken!)}`;
+    res.redirect(`${back}${ws ? `?w=${encodeURIComponent(ws)}` : ""}#${frag}`);
   } catch (e: any) {
     console.error("[auth] google sign-in failed detailed error:", e?.message || e);
     fail(e?.message === "google account has no email" ? "no_email" : "google");
   }
+});
+
+// ---- authenticator app (TOTP) ----
+const MAX_TOTP_ATTEMPTS = 5;
+
+/** second step of a sign-in: exchange a pending token for a real session */
+app.post("/auth/totp/verify", async (req, res) => {
+  const token = String((req.body ?? {}).token ?? "");
+  const code = String((req.body ?? {}).code ?? "");
+  const s = await sessionFromToken(token);
+  if (!s || !s.pendingTotp) return res.status(401).json({ error: "session expired" });
+
+  const user = s.user;
+  // 2FA turned off from another device while this sign-in was in flight
+  if (!user.totpSecret || !user.totpEnabledAt) {
+    await activateSession(token);
+    return res.json({ token, user: safeUser(user) });
+  }
+  if (s.totpAttempts >= MAX_TOTP_ATTEMPTS) {
+    await prisma.session.delete({ where: { token } }).catch(() => {});
+    return res.status(429).json({ error: "too many attempts" });
+  }
+
+  const totp = await checkTotp(user.totpSecret, code, user.totpLastStep);
+  // a recovery code is accepted here too: it is the way back in without the phone
+  const remaining = totp.valid ? null : await spendRecoveryCode(user.recoveryCodes, code);
+  if (!totp.valid && !remaining) {
+    await prisma.session.update({ where: { token }, data: { totpAttempts: s.totpAttempts + 1 } });
+    const left = MAX_TOTP_ATTEMPTS - (s.totpAttempts + 1);
+    return res.status(401).json({
+      error: totp.reused ? "code already used" : "invalid code",
+      reused: totp.reused,
+      attemptsLeft: Math.max(0, left),
+    });
+  }
+
+  const fresh = await prisma.user.update({
+    where: { id: user.id },
+    // record the spent step / used recovery code so neither works a second time
+    data: totp.valid ? { totpLastStep: totp.timeStep } : { recoveryCodes: remaining },
+  });
+  await activateSession(token);
+  res.json({ token, user: safeUser(fresh), usedRecoveryCode: !totp.valid });
+});
+
+/** begin enrolment: mints a secret and returns the QR to scan (not yet active) */
+app.post("/me/totp/setup", requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user!.totpEnabledAt) return res.status(409).json({ error: "already enabled" });
+  const secret = newTotpSecret();
+  await prisma.user.update({ where: { id: req.user!.id }, data: { totpSecret: secret } });
+  const uri = otpauthUri(secret, req.user!.email);
+  res.json({ secret, uri, qr: await qrDataUrl(uri) });
+});
+
+/** confirm enrolment with a code from the app, then hand over the recovery codes */
+app.post("/me/totp/enable", requireAuth, async (req: AuthedRequest, res) => {
+  const me = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!me?.totpSecret) return res.status(400).json({ error: "start setup first" });
+  if (me.totpEnabledAt) return res.status(409).json({ error: "already enabled" });
+  const r = await checkTotp(me.totpSecret, (req.body ?? {}).code);
+  if (!r.valid) return res.status(401).json({ error: "invalid code" });
+  const codes = newRecoveryCodes();
+  const user = await prisma.user.update({
+    where: { id: me.id },
+    data: {
+      totpEnabledAt: new Date(),
+      totpLastStep: r.timeStep,
+      recoveryCodes: await hashRecoveryCodes(codes),
+    },
+  });
+  // the only time the plaintext codes exist outside the user's hands
+  res.json({ ok: true, recoveryCodes: codes, user: safeUser(user) });
+});
+
+/** proving current possession stops a stolen session from stripping 2FA off */
+async function proveTotp(userId: string, code: unknown) {
+  const me = await prisma.user.findUnique({ where: { id: userId } });
+  if (!me?.totpEnabledAt || !me.totpSecret) return null;
+  const totp = await checkTotp(me.totpSecret, code, me.totpLastStep);
+  if (totp.valid) return { me, spentStep: totp.timeStep, remaining: null as string | null };
+  const remaining = await spendRecoveryCode(me.recoveryCodes, code);
+  return remaining ? { me, spentStep: null, remaining } : null;
+}
+
+app.post("/me/totp/disable", requireAuth, async (req: AuthedRequest, res) => {
+  if (!req.user!.totpEnabledAt) return res.json({ ok: true, user: safeUser(req.user!) });
+  const proof = await proveTotp(req.user!.id, (req.body ?? {}).code);
+  if (!proof) return res.status(401).json({ error: "invalid code" });
+  const user = await prisma.user.update({
+    where: { id: req.user!.id },
+    data: { totpSecret: null, totpEnabledAt: null, totpLastStep: null, recoveryCodes: null },
+  });
+  res.json({ ok: true, user: safeUser(user) });
+});
+
+/** fresh set of recovery codes; the old ones stop working immediately */
+app.post("/me/totp/recovery", requireAuth, async (req: AuthedRequest, res) => {
+  if (!req.user!.totpEnabledAt) return res.status(400).json({ error: "2fa not enabled" });
+  const proof = await proveTotp(req.user!.id, (req.body ?? {}).code);
+  if (!proof) return res.status(401).json({ error: "invalid code" });
+  const codes = newRecoveryCodes();
+  const user = await prisma.user.update({
+    where: { id: req.user!.id },
+    data: {
+      recoveryCodes: await hashRecoveryCodes(codes),
+      ...(proof.spentStep ? { totpLastStep: proof.spentStep } : {}),
+    },
+  });
+  res.json({ ok: true, recoveryCodes: codes, user: safeUser(user) });
 });
 
 app.post("/auth/logout", requireAuth, async (req: AuthedRequest, res) => {

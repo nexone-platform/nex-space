@@ -4,29 +4,61 @@ import type { Request, Response, NextFunction } from "express";
 import { prisma } from "./db";
 
 const SESSION_DAYS = 7;
+/** a sign-in waiting on its authenticator code is short-lived on purpose */
+const PENDING_MINUTES = 10;
+
+const sessionExpiry = (pending: boolean) =>
+  new Date(Date.now() + (pending ? PENDING_MINUTES * 6e4 : SESSION_DAYS * 864e5));
 
 export const hashPassword = (pw: string) => bcrypt.hash(pw, 10);
 export const verifyPassword = (pw: string, hash: string) => bcrypt.compare(pw, hash);
 
-export async function createSession(userId: string) {
+/**
+ * `pendingTotp` marks a half-finished sign-in: the first factor passed but the
+ * authenticator code has not been given yet. Such a token is rejected by
+ * requireAuth and is only accepted by /auth/totp/verify.
+ */
+export async function createSession(userId: string, pendingTotp = false) {
   const token = randomBytes(32).toString("hex");
-  const expiresAt = new Date(Date.now() + SESSION_DAYS * 864e5);
-  await prisma.session.create({ data: { token, userId, expiresAt } });
+  await prisma.session.create({
+    data: { token, userId, pendingTotp, expiresAt: sessionExpiry(pendingTotp) },
+  });
   return token;
 }
 
-export async function userFromToken(token?: string) {
+/** promote a pending session to a full one once the second factor checks out */
+export async function activateSession(token: string) {
+  await prisma.session.update({
+    where: { token },
+    data: { pendingTotp: false, totpAttempts: 0, expiresAt: sessionExpiry(false) },
+  });
+}
+
+/** the session row itself, pending or not — only the 2FA step should use this */
+export async function sessionFromToken(token?: string) {
   if (!token) return null;
   const s = await prisma.session.findUnique({ where: { token }, include: { user: true } });
   if (!s) return null;
   if (s.expiresAt < new Date()) { await prisma.session.delete({ where: { token } }).catch(() => {}); return null; }
+  return s;
+}
+
+export async function userFromToken(token?: string) {
+  const s = await sessionFromToken(token);
+  if (!s || s.pendingTotp) return null; // half-finished sign-in authorises nothing
   return s.user;
 }
 
 // augment Express Request with the authed user.
-// Carry the whole row (minus the password hash) — cherry-picking columns here
-// meant new fields silently arrived as undefined in /me.
-type AuthedUser = Omit<NonNullable<Awaited<ReturnType<typeof userFromToken>>>, "passwordHash">;
+// Carry the whole row apart from the secrets — cherry-picking columns here meant
+// new fields silently arrived as undefined in /me. totpSecret is dropped because
+// it alone can mint valid codes; handlers that need it re-read the row.
+// recoveryCodes stays because it holds bcrypt hashes, and /me reports how many
+// are left — it is never serialised as-is.
+type AuthedUser = Omit<
+  NonNullable<Awaited<ReturnType<typeof userFromToken>>>,
+  "passwordHash" | "totpSecret"
+>;
 
 export interface AuthedRequest extends Request {
   user?: AuthedUser;
@@ -36,7 +68,7 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
   const token = req.header("authorization")?.replace(/^Bearer\s+/i, "");
   const user = await userFromToken(token);
   if (!user) return res.status(401).json({ error: "unauthorized" });
-  const { passwordHash: _omit, ...safe } = user;
+  const { passwordHash: _pw, totpSecret: _s, ...safe } = user;
   req.user = safe;
   next();
 }

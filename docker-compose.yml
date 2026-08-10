@@ -54,6 +54,8 @@ services:
       # app sits behind extra proxies and the derived URLs come out wrong.
       - APP_URL=${APP_URL:-}
       - OAUTH_REDIRECT_URL=${OAUTH_REDIRECT_URL:-}
+      # name shown inside the user's authenticator app (2FA needs nothing else)
+      - TOTP_ISSUER=${TOTP_ISSUER:-NexSpace}
       # SMTP for the 6-digit sign-in code (optional — codes are logged when unset)
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
