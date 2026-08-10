@@ -1,0 +1,31 @@
+# Every Dockerfile here runs `npm install` and then `COPY apps/<svc> ./`.
+# Without this file that COPY drops the host's node_modules on top of the freshly
+# installed one — which is how a stale @prisma/client ended up in the API image,
+# leaving prisma.loginCode/prisma.membership undefined at runtime even though the
+# database was in sync.
+node_modules
+**/node_modules
+
+# build output — images build their own
+dist
+**/dist
+build
+
+# local-only state that must never reach an image
+**/.env
+**/.env.local
+*.db
+*.db-journal
+**/*.db
+**/*.db-journal
+
+# raw PixelLab source library (curation input, not shipped)
+apps/web/asset-library
+
+# not needed inside the build context
+.git
+.gitignore
+.claude
+docs
+*.md
+!DEPLOY.md

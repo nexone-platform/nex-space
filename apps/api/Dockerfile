@@ -14,7 +14,11 @@ RUN npm install
 
 COPY apps/api ./
 
-RUN npx prisma generate
+# Prisma keeps a generation cache in node_modules/.cache. If one ever reaches the
+# build context it makes `prisma generate` a no-op, and the client silently stays
+# on the previous schema — new models come back undefined at runtime. .dockerignore
+# already keeps node_modules out; clear the cache too so a stale one can't win.
+RUN rm -rf node_modules/.cache && npx prisma generate
 
 ENV PORT=3001
 ENV DATABASE_URL="file:./prisma/prod.db"
