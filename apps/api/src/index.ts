@@ -189,17 +189,30 @@ app.get("/auth/google/callback", async (req, res) => {
     const email = normEmail(info.email);
     if (!email) throw new Error("google account has no email");
 
+    const googleId = info.sub || null;
+    const photoUrl = info.picture || null;
+    const name = info.name || email.split("@")[0];
+
     // link by email so an existing account keeps its workspaces and avatar
     const user = await prisma.user.upsert({
       where: { email },
-      update: { googleId: info.sub, photoUrl: info.picture },
-      create: { email, name: info.name || email.split("@")[0], googleId: info.sub, photoUrl: info.picture },
+      update: {
+        googleId,
+        photoUrl,
+      },
+      create: {
+        email,
+        name,
+        googleId,
+        photoUrl,
+      },
     });
     const token = await createSession(user.id);
+    console.log("[auth] google user linked successfully:", user.email);
     // hash fragment: the token never lands in server logs or the Referer header
     res.redirect(`${back}${ws ? `?w=${encodeURIComponent(ws)}` : ""}#token=${encodeURIComponent(token)}`);
-  } catch (e) {
-    console.error("[auth] google sign-in failed:", e);
+  } catch (e: any) {
+    console.error("[auth] google sign-in failed detailed error:", e?.message || e);
     res.redirect(`${back}#auth_error=google`);
   }
 });
