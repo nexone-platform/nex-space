@@ -10,6 +10,27 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "8mb" })); // maps can be large
 
+// Express 4 does not catch rejections thrown inside async handlers: a single
+// failing query would take the whole process down, and every request would 502
+// until the container restarted. Wrap the handlers once here so failures reach
+// the error middleware below instead of killing the server.
+for (const method of ["get", "post", "put", "patch", "delete"] as const) {
+  const original = app[method].bind(app);
+  (app as any)[method] = (path: string, ...handlers: any[]) =>
+    original(
+      path,
+      ...handlers.map((h) =>
+        typeof h === "function"
+          ? (req: any, res: any, next: any) => Promise.resolve(h(req, res, next)).catch(next)
+          : h,
+      ),
+    );
+}
+
+// last-resort net: log instead of letting Node terminate on a stray rejection
+process.on("unhandledRejection", (e) => console.error("[api] unhandled rejection:", e));
+process.on("uncaughtException", (e) => console.error("[api] uncaught exception:", e));
+
 // `desk` is stored as a JSON map of workspace -> deskId, so a desk claimed in one
 // workspace doesn't follow the user into another. Older rows hold a bare desk id.
 const parseDesks = (raw: string | null | undefined): Record<string, string> => {
@@ -438,6 +459,13 @@ app.put("/maps/:id", requireAuth, async (req: AuthedRequest, res) => {
     data: { ...(name ? { name } : {}), ...(data !== undefined ? { data: JSON.stringify(data) } : {}) },
   });
   res.json({ id: map.id, updatedAt: map.updatedAt });
+});
+
+// Anything the wrapper above forwards lands here: report it and stay alive, so a
+// bad request can't take the API down for everyone else.
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error("[api] request failed:", err);
+  if (!res.headersSent) res.status(500).json({ error: "internal error" });
 });
 
 app.listen(port, () => console.log(`[api] NexSpace API on http://localhost:${port}  (db: ${process.env.DATABASE_URL})`));
