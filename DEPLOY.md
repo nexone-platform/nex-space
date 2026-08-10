@@ -56,29 +56,41 @@ Put these in a `.env` next to `docker-compose.yml`. **Everything below is
 optional** — without it the app still runs, it just loses that feature.
 
 ### Google sign-in
-Create an OAuth client at <https://console.cloud.google.com/apis/credentials>
-and add this authorised redirect URI:
 
-```
-https://<your-host>/auth/google/callback
-```
+1. Open <https://console.cloud.google.com/apis/credentials> and create an
+   **OAuth client ID** of type *Web application*.
+2. Under **Authorised redirect URIs** add exactly this — it must match
+   character for character, including the scheme:
+
+   ```
+   https://nexspace.xy789.click/auth/google/callback
+   ```
+
+   (For a local run add `http://localhost:3001/auth/google/callback` too.)
+3. Put the client id and secret in the `.env` next to `docker-compose.yml`:
+
+   ```dotenv
+   GOOGLE_CLIENT_ID=...apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=...
+   ```
+4. `docker compose up -d --build nexspace-api nexspace-web` and reload the site.
+   The "Continue with Google" button appears once `/auth/config` reports
+   `{"google":true}` — it hides itself while the credentials are blank.
+
+The redirect URI is derived from the `X-Forwarded-Proto` / `X-Forwarded-Host`
+headers. nginx passes through whatever the outer proxy sent and only falls back
+to its own `$scheme`, which matters here because TLS terminates upstream: taking
+`$scheme` directly would build an `http://` redirect that Google rejects.
+
+If a different proxy chain still produces the wrong URI, pin it:
 
 ```dotenv
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
+APP_URL=https://nexspace.xy789.click/
+OAUTH_REDIRECT_URL=https://nexspace.xy789.click/auth/google/callback
 ```
 
-Left blank, the "Continue with Google" button hides itself (`/auth/config`
-tells the client whether it is configured).
-
-The redirect URI is derived from the `X-Forwarded-Host` / `X-Forwarded-Proto`
-headers nginx sends. If extra proxies sit in front and Google rejects the
-redirect, pin it explicitly:
-
-```dotenv
-APP_URL=https://your-host/
-OAUTH_REDIRECT_URL=https://your-host/auth/google/callback
-```
+Signing in with Google matches on email address, so an account that already
+exists keeps its workspaces, desks and avatar.
 
 ### Email sign-in codes
 ```dotenv
