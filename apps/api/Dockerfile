@@ -21,7 +21,9 @@ COPY apps/api ./
 RUN rm -rf node_modules/.cache && npx prisma generate
 
 ENV PORT=3001
-ENV DATABASE_URL="file:./prisma/prod.db"
+# compose overrides this; keep it out of apps/api/prisma so a data volume mounted
+# there can never shadow schema.prisma (see docker-compose.yml)
+ENV DATABASE_URL="file:/app/apps/api/data/prisma/prod.db"
 EXPOSE 3001
 
 CMD ["sh", "-c", "npx prisma db push && npx tsx src/index.ts"]

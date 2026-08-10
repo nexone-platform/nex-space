@@ -39,8 +39,13 @@ services:
     restart: always
     environment:
       - PORT=3001
-      # db lives inside the mounted prisma dir so it persists on the named volume
-      - DATABASE_URL=file:./prisma/prod.db
+      # Absolute path into the data volume. It must NOT sit inside apps/api/prisma:
+      # mounting a volume there hides the image's schema.prisma behind the copy
+      # Docker seeded on the first deploy, so `prisma db push` and `prisma
+      # generate` keep reading a stale schema and the client never learns about
+      # new columns. The volume now mounts at ./data instead, and the database
+      # keeps the prisma/prod.db path it already had inside that volume.
+      - DATABASE_URL=file:/app/apps/api/data/prisma/prod.db
       # Google sign-in (optional — the button hides itself when unset).
       # Authorised redirect URI in Google Cloud: https://<your-host>/auth/google/callback
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
@@ -58,7 +63,8 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      - nexspace-api-data:/app/apps/api/prisma
+      # same volume as before, mounted somewhere that shadows nothing in the image
+      - nexspace-api-data:/app/apps/api/data
 
 volumes:
   nexspace-api-data:

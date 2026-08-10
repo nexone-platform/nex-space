@@ -33,10 +33,48 @@ The API runs `prisma db push` on every start, so schema changes apply
 themselves. Adding tables and nullable columns is non-destructive; **renaming or
 dropping** a column is not — dump the volume first if you ever do that.
 
-> Do not change `DATABASE_URL` in `docker-compose.yml`. Prisma resolves the
-> relative SQLite path against the schema folder, so the live database sits at
-> `prisma/prisma/prod.db` inside the `nexspace-api-data` volume. Repointing it
-> silently starts a brand-new empty database.
+### The data volume must not cover apps/api/prisma
+
+`nexspace-api-data` mounts at **`/app/apps/api/data`**, deliberately not at
+`/app/apps/api/prisma`.
+
+A volume mounted over the prisma directory hides the image's `schema.prisma`
+behind the copy Docker seeds into the volume on the very first deploy. Every
+later start then reads that frozen schema: `prisma db push` reports "already in
+sync" (old schema vs old database — quite true), and the runtime
+`prisma generate` overwrites the correct client built into the image with one
+generated from the stale file. New columns simply do not exist as far as the
+running code is concerned, and requests fail with things like
+`Argument 'passwordHash' is missing`. Rebuilding, even `--no-cache`, cannot fix
+it, because the damage happens at container start.
+
+**One-time move for an existing deployment.** The database is already at
+`prisma/prod.db` *inside* the volume, so remounting the same volume at `./data`
+leaves it exactly where `DATABASE_URL` now points — no copying needed. Confirm
+before and after:
+
+```bash
+# before: where is the live database?
+docker compose exec nexspace-api ls -l /app/apps/api/prisma/prisma/
+
+# take a backup anyway
+docker compose cp nexspace-api:/app/apps/api/prisma/prisma/prod.db ./prod.db.backup
+
+git pull && docker compose up -d --build nexspace-api
+
+# after: same file, now reached through ./data
+docker compose exec nexspace-api ls -l /app/apps/api/data/prisma/
+```
+
+Then check the client actually matches the schema — this is the thing that was
+silently wrong:
+
+```bash
+docker compose exec nexspace-api node -e "const{Prisma}=require('@prisma/client');console.log(Prisma.dmmf.datamodel.models.find(m=>m.name==='User').fields.map(f=>f.name).join(', '))"
+```
+
+It must list `googleId`, `photoUrl`, `role`, `companySize` and `desk`. If it
+stops at `avatar, createdAt`, something is still shadowing the schema.
 
 ## Check it came up
 
