@@ -163,6 +163,8 @@ app.get("/auth/google/callback", async (req, res) => {
   const back = appUrl(req);
   const ws = String(req.query.state || "");
   try {
+    const cbRedirect = redirectUri(req);
+    console.log("[auth] google callback — redirect_uri used for token exchange:", cbRedirect);
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -170,12 +172,15 @@ app.get("/auth/google/callback", async (req, res) => {
         code: String(req.query.code || ""),
         client_id: GOOGLE_ID,
         client_secret: GOOGLE_SECRET,
-        redirect_uri: redirectUri(req),
+        redirect_uri: cbRedirect,
         grant_type: "authorization_code",
       }),
     });
-    const tok = (await tokenRes.json()) as { access_token?: string; error?: string };
-    if (!tok.access_token) throw new Error(tok.error || "token exchange failed");
+    const tok = (await tokenRes.json()) as { access_token?: string; error?: string; error_description?: string };
+    if (!tok.access_token) {
+      console.error("[auth] google token exchange failed:", JSON.stringify(tok));
+      throw new Error(tok.error || "token exchange failed");
+    }
 
     const infoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
       headers: { Authorization: `Bearer ${tok.access_token}` },
