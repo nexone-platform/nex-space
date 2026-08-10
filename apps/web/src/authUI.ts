@@ -65,8 +65,21 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       localStorage.setItem(TOKEN_KEY, t);
       history.replaceState(null, "", location.pathname + location.search);
     } else if (h.get("auth_error")) {
+      const reason = h.get("auth_error") ?? "";
       history.replaceState(null, "", location.pathname + location.search);
-      setErr("auth-err", "เข้าสู่ระบบด้วย Google ไม่สำเร็จ");
+      // the API passes Google's own error code through, so the message can say
+      // what to fix instead of just "it failed"
+      const MSG: Record<string, string> = {
+        access_denied: "Google ปฏิเสธการเข้าสู่ระบบ — แอปยังไม่ได้เผยแพร่ ให้เพิ่มอีเมลนี้ใน Test users หรือกด Publish app",
+        admin_policy_enforced: "ผู้ดูแล Google Workspace ขององค์กรบล็อกแอปนี้ไว้",
+        redirect_uri_mismatch: "Redirect URI ไม่ตรงกับที่ลงทะเบียนใน Google Cloud Console",
+        invalid_client: "Client ID หรือ Client secret ไม่ถูกต้อง",
+        invalid_grant: "รหัสจาก Google หมดอายุหรือถูกใช้แล้ว — ลองอีกครั้ง",
+        token_exchange: "แลกโทเคนกับ Google ไม่สำเร็จ — ตรวจ Client secret",
+        no_code: "Google ไม่ได้ส่งรหัสยืนยันกลับมา",
+        no_email: "บัญชี Google นี้ไม่มีอีเมล",
+      };
+      setErr("auth-err", MSG[reason] ?? `เข้าสู่ระบบด้วย Google ไม่สำเร็จ (${reason})`);
     }
   })();
 

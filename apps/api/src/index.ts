@@ -162,6 +162,22 @@ app.get("/auth/google/callback", async (req, res) => {
   if (!googleEnabled) return res.status(501).send("Google sign-in is not configured");
   const back = appUrl(req);
   const ws = String(req.query.state || "");
+  const fail = (reason: string) =>
+    res.redirect(`${back}#auth_error=${encodeURIComponent(reason.slice(0, 40))}`);
+
+  // Google reports refusals in the query string rather than sending a code —
+  // access_denied is what an unpublished app shows anyone outside its test users.
+  // Without this the empty code went to the token endpoint and came back as a
+  // misleading invalid_grant.
+  if (req.query.error) {
+    console.error("[auth] google refused the sign-in:", req.query.error, req.query.error_description ?? "");
+    return fail(String(req.query.error));
+  }
+  if (!req.query.code) {
+    console.error("[auth] google callback arrived with no code");
+    return fail("no_code");
+  }
+
   try {
     const cbRedirect = redirectUri(req);
     console.log("[auth] google callback — redirect_uri used for token exchange:", cbRedirect);
@@ -179,7 +195,7 @@ app.get("/auth/google/callback", async (req, res) => {
     const tok = (await tokenRes.json()) as { access_token?: string; error?: string; error_description?: string };
     if (!tok.access_token) {
       console.error("[auth] google token exchange failed:", JSON.stringify(tok));
-      throw new Error(tok.error || "token exchange failed");
+      return fail(tok.error || "token_exchange");
     }
 
     const infoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
@@ -213,7 +229,7 @@ app.get("/auth/google/callback", async (req, res) => {
     res.redirect(`${back}${ws ? `?w=${encodeURIComponent(ws)}` : ""}#token=${encodeURIComponent(token)}`);
   } catch (e: any) {
     console.error("[auth] google sign-in failed detailed error:", e?.message || e);
-    res.redirect(`${back}#auth_error=google`);
+    fail(e?.message === "google account has no email" ? "no_email" : "google");
   }
 });
 
