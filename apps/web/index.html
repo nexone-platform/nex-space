@@ -280,6 +280,31 @@
       .wm-member select { border: 1px solid #e2e4ea; border-radius: 7px; padding: 4px 6px; font-size: 12.5px; background: #fff; }
       .wm-x { border: none; background: transparent; color: #c2c7cf; cursor: pointer; font-size: 15px; padding: 4px 6px; border-radius: 6px; }
       .wm-x:hover { background: #fdecec; color: #d3373d; }
+      .wm-tools { display: flex; gap: 8px; margin-top: 6px; }
+      .wm-tools input { flex: 1; }
+      .wm-tools select { border: 1px solid #e2e4ea; border-radius: 9px; padding: 0 8px; background: #fff;
+        font: 13px "Segoe UI", sans-serif; color: #4b5563; outline: none; }
+      .wm-empty { padding: 18px 12px; text-align: center; font-size: 12.5px; color: #9aa0a8; }
+      /* role chip — colour carries the rank at a glance */
+      .wm-role { flex: 0 0 auto; padding: 3px 9px; border-radius: 999px; font: 600 11.5px "Segoe UI", sans-serif; }
+      .wm-role.owner { background: #eee9ff; color: #6b46d6; }
+      .wm-role.admin { background: #e6efff; color: #2f66c9; }
+      .wm-role.member { background: #f2f3f6; color: #6b7280; }
+      .wm-role.guest { background: #fff2e3; color: #b06d1c; }
+      .wm-seen { flex: 0 0 auto; font-size: 11.5px; color: #9aa0a8; min-width: 62px; text-align: right; }
+      /* per-member action menu */
+      .wm-kebab { position: relative; flex: 0 0 auto; }
+      .wm-kebab > button { border: 1px solid #e7e9ee; background: #fff; color: #6b7280; cursor: pointer;
+        width: 28px; height: 28px; border-radius: 8px; font-size: 14px; line-height: 1; }
+      .wm-kebab > button:hover { background: #f4f5f8; }
+      .wm-menu { position: absolute; right: 0; top: 32px; z-index: 5; min-width: 196px; padding: 6px;
+        background: #23242a; border-radius: 11px; box-shadow: 0 14px 34px #0006; }
+      .wm-menu button { display: flex; align-items: center; gap: 9px; width: 100%; border: none;
+        background: transparent; color: #eef0f4; cursor: pointer; padding: 8px 10px; border-radius: 8px;
+        font: 500 13px "Segoe UI", sans-serif; text-align: left; }
+      .wm-menu button:hover { background: #ffffff1a; }
+      .wm-menu button.danger { color: #ff8085; }
+      .wm-menu hr { border: none; border-top: 1px solid #ffffff1f; margin: 5px 2px; }
       .wm-err { color: #e5484d; font-size: 12.5px; min-height: 16px; }
 
       /* two-factor (authenticator app) */
@@ -569,14 +594,24 @@
 
         <label class="wm-row"><input type="checkbox" id="wm-guests" /> ให้คนที่ไม่ได้สมัครสมาชิก (Guest) เข้าได้</label>
 
-        <label class="wm-l">ลิงก์เชิญ</label>
-        <div class="wm-invite">
+        <label class="wm-l" id="wm-invite-l">ลิงก์เชิญ</label>
+        <div class="wm-invite" id="wm-invite-row">
           <input type="text" id="wm-invite" readonly />
           <button class="wm-btn wm-ghost" id="wm-copy">คัดลอก</button>
           <button class="wm-btn wm-ghost" id="wm-reset" title="สร้างรหัสใหม่ ลิงก์เดิมจะใช้ไม่ได้">รีเซ็ต</button>
         </div>
 
         <label class="wm-l">สมาชิก (<span id="wm-count">0</span>)</label>
+        <div class="wm-tools">
+          <input type="text" id="wm-search" placeholder="ค้นหาชื่อหรืออีเมล…" autocomplete="off" />
+          <select id="wm-filter">
+            <option value="">ทุกสิทธิ์</option>
+            <option value="owner">เจ้าของ</option>
+            <option value="admin">ผู้ดูแล</option>
+            <option value="member">สมาชิก</option>
+            <option value="guest">ผู้เยี่ยมชม</option>
+          </select>
+        </div>
         <div class="wm-members" id="wm-members"></div>
 
         <div class="wm-actions">

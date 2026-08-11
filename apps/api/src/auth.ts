@@ -64,11 +64,19 @@ export interface AuthedRequest extends Request {
   user?: AuthedUser;
 }
 
+/** how stale lastSeenAt may get before an authed request refreshes it */
+const SEEN_REFRESH_MS = 5 * 60 * 1000;
+
 export async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
   const token = req.header("authorization")?.replace(/^Bearer\s+/i, "");
   const user = await userFromToken(token);
   if (!user) return res.status(401).json({ error: "unauthorized" });
   const { passwordHash: _pw, totpSecret: _s, ...safe } = user;
   req.user = safe;
+  // "Last active" in the member list, without a write on every single request
+  if (!user.lastSeenAt || Date.now() - user.lastSeenAt.getTime() > SEEN_REFRESH_MS) {
+    prisma.user.update({ where: { id: user.id }, data: { lastSeenAt: new Date() } })
+      .catch(() => {}); // never fail a request over presence bookkeeping
+  }
   next();
 }

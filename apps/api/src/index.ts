@@ -387,6 +387,10 @@ app.put("/me/desk", requireAuth, async (req: AuthedRequest, res) => {
   const { workspace, desk } = req.body ?? {};
   const ws = String(workspace || "main").slice(0, 32);
   const id = String(desk ?? "").slice(0, 32);
+  // a desk is staff seating: guests may walk the space but not take one.
+  // Releasing (id === "") stays allowed so a demoted member can give theirs up.
+  if (id && (await roleIn(ws, req.user!.id)) === "guest")
+    return res.status(403).json({ error: "guests cannot claim a desk" });
   const desks = parseDesks(req.user!.desk);
   if (id) desks[ws] = id;
   else delete desks[ws];
@@ -421,7 +425,9 @@ async function uniqueSlug(base: string): Promise<string> {
 
 const wsView = (w: any, role?: string) => ({
   slug: w.slug, name: w.name, allowGuests: w.allowGuests,
-  inviteCode: w.inviteCode, members: w._count?.members ?? undefined, role,
+  // a guest may be in the space but must not be able to invite more people in
+  inviteCode: role === "guest" ? undefined : w.inviteCode,
+  members: w._count?.members ?? undefined, role,
 });
 
 // workspaces I belong to
@@ -512,6 +518,32 @@ app.patch("/workspaces/:slug", requireAuth, async (req: AuthedRequest, res) => {
   res.json({ workspace: wsView(updated, m.role) });
 });
 
+// ---- roles ----
+// owner > admin > member > guest. A guest may walk around and talk but cannot
+// claim a desk or see the invite link; everything above that is staff seating.
+const ROLE_RANK: Record<string, number> = { owner: 3, admin: 2, member: 1, guest: 0 };
+const ASSIGNABLE = ["admin", "member", "guest"] as const;
+const rank = (role: string) => ROLE_RANK[role] ?? -1;
+
+/**
+ * Who may act on whom. An admin manages the ranks below it but cannot create
+ * another admin, touch a fellow admin, or reach the owner — otherwise any admin
+ * could quietly lock the owner out of their own workspace.
+ */
+const canManage = (actor: string, target: string) =>
+  actor === "owner" || (actor === "admin" && rank(target) < rank("admin"));
+
+/** this user's role in a workspace, or null when they are not a member of it */
+async function roleIn(slug: string, userId: string) {
+  const w = await prisma.workspace.findUnique({ where: { slug }, select: { id: true } });
+  if (!w) return null;
+  const m = await prisma.membership.findUnique({
+    where: { userId_workspaceId: { userId, workspaceId: w.id } },
+    select: { role: true },
+  });
+  return m?.role ?? null;
+}
+
 /** members of a workspace (any member may see the roster) */
 app.get("/workspaces/:slug/members", requireAuth, async (req: AuthedRequest, res) => {
   const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
@@ -522,7 +554,9 @@ app.get("/workspaces/:slug/members", requireAuth, async (req: AuthedRequest, res
   if (!me) return res.status(403).json({ error: "forbidden" });
   const rows = await prisma.membership.findMany({
     where: { workspaceId: w.id },
-    include: { user: { select: { id: true, name: true, email: true, photoUrl: true } } },
+    include: {
+      user: { select: { id: true, name: true, email: true, photoUrl: true, lastSeenAt: true } },
+    },
     orderBy: { createdAt: "asc" },
   });
   res.json({
@@ -530,18 +564,37 @@ app.get("/workspaces/:slug/members", requireAuth, async (req: AuthedRequest, res
     members: rows.map((m) => ({
       id: m.user.id, name: m.user.name, email: m.user.email,
       photoUrl: m.user.photoUrl, role: m.role, isMe: m.user.id === req.user!.id,
+      joinedAt: m.createdAt,
+      lastSeenAt: m.user.lastSeenAt,
+      // the menu the client draws for this row — one source of truth for the rules
+      canManage: canManage(me.role, m.role) && m.user.id !== w.ownerId && m.user.id !== req.user!.id,
+      canPromote: me.role === "owner" && m.user.id !== w.ownerId,
     })),
   });
 });
 
-/** change a member's role (owner only; the owner's own role is fixed) */
+/** change a member's role */
 app.patch("/workspaces/:slug/members/:userId", requireAuth, async (req: AuthedRequest, res) => {
   const role = String((req.body ?? {}).role ?? "");
-  if (!["admin", "member"].includes(role)) return res.status(400).json({ error: "invalid role" });
+  if (!ASSIGNABLE.includes(role as typeof ASSIGNABLE[number]))
+    return res.status(400).json({ error: "invalid role" });
   const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
   if (!w) return res.status(404).json({ error: "not found" });
-  if (w.ownerId !== req.user!.id) return res.status(403).json({ error: "owner only" });
+  const me = await prisma.membership.findUnique({
+    where: { userId_workspaceId: { userId: req.user!.id, workspaceId: w.id } },
+  });
+  if (!me) return res.status(403).json({ error: "forbidden" });
   if (req.params.userId === w.ownerId) return res.status(400).json({ error: "cannot change the owner" });
+  if (req.params.userId === req.user!.id) return res.status(400).json({ error: "cannot change your own role" });
+
+  const target = await prisma.membership.findUnique({
+    where: { userId_workspaceId: { userId: req.params.userId, workspaceId: w.id } },
+  });
+  if (!target) return res.status(404).json({ error: "not a member" });
+  // must outrank both where they are now and where they would end up
+  if (!canManage(me.role, target.role) || !canManage(me.role, role))
+    return res.status(403).json({ error: "forbidden" });
+
   await prisma.membership.update({
     where: { userId_workspaceId: { userId: req.params.userId, workspaceId: w.id } },
     data: { role },
@@ -557,13 +610,18 @@ app.delete("/workspaces/:slug/members/:userId", requireAuth, async (req: AuthedR
     where: { userId_workspaceId: { userId: req.user!.id, workspaceId: w.id } },
   });
   if (!me) return res.status(403).json({ error: "forbidden" });
-  const target = req.params.userId;
-  const removingSelf = target === req.user!.id;
-  const canManage = me.role === "owner" || me.role === "admin";
-  if (!removingSelf && !canManage) return res.status(403).json({ error: "forbidden" });
-  if (target === w.ownerId) return res.status(400).json({ error: "the owner cannot be removed" });
+  const targetId = req.params.userId;
+  if (targetId === w.ownerId) return res.status(400).json({ error: "the owner cannot be removed" });
+  if (targetId !== req.user!.id) {
+    // same rule as a role change: an admin cannot remove a fellow admin
+    const target = await prisma.membership.findUnique({
+      where: { userId_workspaceId: { userId: targetId, workspaceId: w.id } },
+    });
+    if (!target) return res.status(404).json({ error: "not a member" });
+    if (!canManage(me.role, target.role)) return res.status(403).json({ error: "forbidden" });
+  }
   await prisma.membership.delete({
-    where: { userId_workspaceId: { userId: target, workspaceId: w.id } },
+    where: { userId_workspaceId: { userId: targetId, workspaceId: w.id } },
   });
   res.json({ ok: true });
 });
@@ -589,7 +647,7 @@ app.get("/workspaces/:slug/access", async (req, res) => {
   const m = await prisma.membership.findUnique({
     where: { userId_workspaceId: { userId: user.id, workspaceId: w.id } },
   });
-  if (m) return res.json({ allowed: true, reason: "member", name: w.name });
+  if (m) return res.json({ allowed: true, reason: "member", role: m.role, name: w.name });
   // logged in but not a member yet — treat like a guest visit
   res.json({ allowed: w.allowGuests, reason: w.allowGuests ? "guest" : "members-only", name: w.name });
 });

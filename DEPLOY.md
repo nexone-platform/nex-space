@@ -146,6 +146,29 @@ written to the API log instead of emailed — fine for testing, not for real use
 docker compose logs -f nexspace-api | grep "sign-in code"
 ```
 
+### Member roles
+
+Four ranks, set from the ⋮ menu next to each person in **ตั้งค่า Workspace**:
+
+| | เจ้าของ (owner) | ผู้ดูแล (admin) | สมาชิก (member) | ผู้เยี่ยมชม (guest) |
+|---|---|---|---|---|
+| Rename the space, toggle guest access, reset the invite | ✓ | ✓ | | |
+| Change roles / remove people | anyone | ranks below admin only | | |
+| See and share the invite link | ✓ | ✓ | ✓ | |
+| Claim a desk | ✓ | ✓ | ✓ | |
+| Enter, walk, chat, call | ✓ | ✓ | ✓ | ✓ |
+
+An admin deliberately cannot promote someone to admin, demote a fellow admin, or
+touch the owner — otherwise any admin could lock the owner out of their own
+workspace. The owner has no "leave" option for the same reason: the space would
+be left ownerless. All of this is enforced in the API, not just hidden in the UI;
+`npm run test:roles -w apps/api` walks the whole table including the refusals.
+
+Guests are blocked from claiming a desk in two places — the API (`PUT /me/desk`)
+and the realtime server (`claimDesk`) — so a client talking straight to the
+socket cannot take one either. Demoting someone does not evict them from a desk
+they already hold, but they can release it and cannot take it back.
+
 ### Authenticator app (2FA)
 
 Works with no configuration — codes are verified locally, nothing is sent

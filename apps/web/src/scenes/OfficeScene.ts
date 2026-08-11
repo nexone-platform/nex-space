@@ -556,6 +556,13 @@ export class OfficeScene extends Phaser.Scene {
         }
       }
 
+      // the server refused a desk claim — undo the optimistic local change
+      room.onMessage("deskDenied", () => {
+        this.myDesk = "";
+        this.saveDesk("");
+        this.refreshDeskPlates();
+        this.toast("สิทธิ์ผู้เยี่ยมชมจองโต๊ะไม่ได้ — ขอให้ผู้ดูแลตั้งคุณเป็นสมาชิก", "warn");
+      });
       room.onMessage("chat", (msg: { from: string; text: string }) => this.showBubble(msg.from, msg.text));
       room.onMessage("roomchat", (msg: { from: string; name: string; text: string }) => this.appendChatLog(msg.from, msg.name, msg.text));
       room.onMessage("sit", (m: { from: string; on: boolean; dir: string }) => {

@@ -26,13 +26,14 @@ export class OfficeRoom extends Room<OfficeState> {
    */
   async onAuth(_client: Client, options: { workspace?: string; token?: string } = {}) {
     const slug = String(options.workspace || "main").slice(0, 32);
-    if (slug === DEFAULT_WORKSPACE) return true; // the shared public space
+    if (slug === DEFAULT_WORKSPACE) return { role: "member" }; // the shared public space
     try {
       const url = `${API_URL}/workspaces/${encodeURIComponent(slug)}/access`
         + `?token=${encodeURIComponent(options.token || "")}`;
       const r = await fetch(url);
-      const d = (await r.json()) as { allowed?: boolean; reason?: string };
-      if (d.allowed) return true;
+      const d = (await r.json()) as { allowed?: boolean; reason?: string; role?: string };
+      // the returned object becomes client.auth — the room reads the role from it
+      if (d.allowed) return { role: d.role || "member" };
       throw new Error(d.reason === "members-only" ? "members-only" : "workspace-not-found");
     } catch (e) {
       // a thrown auth error must reach the client; only network faults land here
@@ -76,6 +77,12 @@ export class OfficeRoom extends Room<OfficeState> {
       if (!p) return;
       const id = String(deskId ?? "").slice(0, 32);
       if (id) {
+        // desks are staff seating; the API refuses guests too, this stops a
+        // client that talks to the socket directly
+        if ((client.auth as { role?: string } | undefined)?.role === "guest") {
+          client.send("deskDenied", { reason: "guest" });
+          return;
+        }
         for (const [sid, other] of this.state.players) {
           if (sid !== client.sessionId && other.desk === id) return; // already taken
         }

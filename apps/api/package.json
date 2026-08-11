@@ -9,7 +9,8 @@
     "check": "tsc --noEmit",
     "db:push": "prisma db push",
     "generate": "prisma generate",
-    "test:totp": "node scripts/totp-e2e.mjs"
+    "test:totp": "node scripts/totp-e2e.mjs",
+    "test:roles": "node scripts/roles-e2e.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

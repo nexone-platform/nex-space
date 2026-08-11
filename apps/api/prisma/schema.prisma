@@ -29,6 +29,7 @@ model User {
   avatar       String? // JSON string: { avatarId, skin, hair, top, ... }
   desk         String? // JSON string: { workspaceSlug: deskId }
   createdAt    DateTime   @default(now())
+  lastSeenAt   DateTime? // refreshed at most every few minutes — powers "Last Active"
   sessions     Session[]
   maps         SavedMap[]
   owned        Workspace[]  @relation("OwnedWorkspaces")
@@ -54,7 +55,7 @@ model Membership {
   id          String    @id @default(cuid())
   userId      String
   workspaceId String
-  role        String    @default("member") // owner | admin | member
+  role        String    @default("member") // owner | admin | member | guest
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdAt   DateTime  @default(now())
