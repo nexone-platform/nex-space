@@ -423,10 +423,16 @@ async function uniqueSlug(base: string): Promise<string> {
   return `${root}-${randomCode()}`;
 }
 
+/**
+ * Who may see the invite code: members and up. Guests are inside the space but
+ * must not be able to pull more people in, and a plain visitor who guessed the
+ * slug is not a member at all — an undefined role has to fail closed.
+ */
+const canInvite = (role?: string) => role === "owner" || role === "admin" || role === "member";
+
 const wsView = (w: any, role?: string) => ({
   slug: w.slug, name: w.name, allowGuests: w.allowGuests,
-  // a guest may be in the space but must not be able to invite more people in
-  inviteCode: role === "guest" ? undefined : w.inviteCode,
+  inviteCode: canInvite(role) ? w.inviteCode : undefined,
   members: w._count?.members ?? undefined, role,
 });
 
@@ -495,7 +501,8 @@ app.get("/workspaces/:slug", async (req, res) => {
         where: { userId_workspaceId: { userId: user.id, workspaceId: w.id } },
       })
     : null;
-  res.json({ workspace: { ...wsView(w, membership?.role), inviteCode: membership ? w.inviteCode : undefined } });
+  // wsView already withholds the code from guests and non-members
+  res.json({ workspace: wsView(w, membership?.role) });
 });
 
 // owner/admin settings (rename, toggle guest access)

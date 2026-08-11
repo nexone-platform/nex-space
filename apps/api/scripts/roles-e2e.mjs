@@ -114,6 +114,17 @@ ok("a guest is not handed the invite code",
 const memberList = await call("GET", "/workspaces", { token: member.token });
 ok("a member still sees it", !!memberList.body.workspaces.find((w) => w.slug === slug)?.inviteCode);
 
+// the single-workspace lookup is the one the settings dialog calls, and it is
+// reachable without a token at all — every caller has to fail closed
+ok("the single lookup withholds the code from a guest",
+  (await call("GET", `/workspaces/${slug}`, { token: guest.token })).body.workspace.inviteCode === undefined);
+ok("...and from an anonymous visitor who guessed the slug",
+  (await call("GET", `/workspaces/${slug}`)).body.workspace.inviteCode === undefined);
+ok("...but still gives it to a member",
+  !!(await call("GET", `/workspaces/${slug}`, { token: member.token })).body.workspace.inviteCode);
+ok("the public lookup still returns the name for the invite screen",
+  (await call("GET", `/workspaces/${slug}`)).body.workspace.name === `Roles ${stamp}`);
+
 // ---- the game server reads the role from the access check ----
 const access = await call("GET", `/workspaces/${slug}/access?token=${guest.token}`);
 ok("access check reports the role to the game server",
