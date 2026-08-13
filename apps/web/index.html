@@ -235,6 +235,21 @@
         cursor: pointer; font: 500 14px "Segoe UI", sans-serif; color: #24262b; text-align: left; }
       .wiz-opt:hover { border-color: #b9bcc4; background: #fafbfc; }
       .wiz-opt.on { border-color: #4f46e5; background: #eef0ff; color: #3730a3; font-weight: 600; }
+      /* theme picker: a preview of the actual map instead of a label */
+      .wiz-themes { display: flex; gap: 12px; width: 100%; }
+      .wiz-theme { flex: 1 1 0; min-width: 0; padding: 8px; border: 2px solid #e4e6ec; border-radius: 14px;
+        background: #fff; cursor: pointer; text-align: center; font: inherit; }
+      .wiz-theme:hover { border-color: #b9bcc4; }
+      .wiz-theme.on { border-color: #4f46e5; background: #f7f8ff; }
+      /* 3:2 is close to both maps' own ratio, so the crop barely trims anything */
+      .wiz-shot { display: block; width: 100%; aspect-ratio: 3 / 2; border-radius: 9px; overflow: hidden;
+        background: #eceef2 linear-gradient(100deg, #eceef2 30%, #f6f7f9 50%, #eceef2 70%) 0 0 / 300% 100%;
+        animation: wt-load 1.1s linear infinite; }
+      .wiz-theme.ready .wiz-shot { animation: none; background: #eceef2; }
+      @keyframes wt-load { to { background-position: -300% 0; } }
+      .wiz-shot canvas { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
+      .wiz-theme b { display: block; margin-top: 8px; font-size: 13px; color: #1c1b22; }
+      .wiz-theme small { display: block; font-size: 11.5px; color: #8a8f98; margin-top: 1px; }
       #wiz-other { width: 100%; box-sizing: border-box; margin-top: 12px; padding: 10px 12px;
         border: 1px solid #dfe1e6; border-radius: 10px; font-size: 14px; outline: none; }
       #wiz-other:focus { border-color: #4f46e5; }

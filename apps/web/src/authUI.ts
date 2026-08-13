@@ -7,6 +7,7 @@ import { WORKSPACE, HAS_WORKSPACE_PARAM, gotoWorkspace, wsKey, wsKeyFor, remembe
 import { API, TOKEN_KEY, authToken as token, authHeaders } from "./api";
 import { mountMemberPanel, roleLabel, type PanelMember } from "./memberPanel";
 import { THEMES } from "./scenes/mapThemes";
+import { renderThemePreview } from "./themePreview";
 
 export interface StartInfo { name: string; avatar: string; desk: string; }
 interface User {
@@ -409,6 +410,10 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     const e = wizEls();
     const step = STEPS[stepIx];
     setErr("wiz-err", "");
+    // a tall step (the theme previews) can leave the body scrolled past the
+    // question, so every step starts at the top
+    const body = document.querySelector<HTMLElement>(".wiz-body");
+    if (body) body.scrollTop = 0;
     e.bar.style.width = `${(stepIx / STEPS.length) * 100}%`;
     e.q.textContent = step.q;
     e.back.style.visibility = stepIx === 0 ? "hidden" : "visible";
@@ -421,19 +426,35 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       // make the skip-what-is-already-answered loop jump straight past this step
       if (!answers.theme) answers.theme = "classic";
       e.next.textContent = "ถัดไป →";
+      const row = document.createElement("div");
+      row.className = "wiz-themes";
       for (const [id, t] of Object.entries(THEMES)) {
-        const b = document.createElement("button");
-        b.className = "wiz-opt" + (answers.theme === id ? " on" : "");
-        b.textContent = t.label;
-        b.onclick = () => {
+        const card = document.createElement("button");
+        card.className = "wiz-theme" + (answers.theme === id ? " on" : "");
+        const shot = document.createElement("span");
+        shot.className = "wiz-shot";     // shimmering until the preview is drawn
+        const name = document.createElement("b");
+        name.textContent = t.label;
+        const size = document.createElement("small");
+        size.textContent = `${t.cols}×${t.rows} ช่อง · ${t.desks.length} โต๊ะ`;
+        card.append(shot, name, size);
+        card.onclick = () => {
           answers.theme = id;
-          e.opts.querySelectorAll(".wiz-opt").forEach((x) => x.classList.remove("on"));
-          b.classList.add("on");
+          row.querySelectorAll(".wiz-theme").forEach((x) => x.classList.remove("on"));
+          card.classList.add("on");
         };
-        e.opts.appendChild(b);
+        row.appendChild(card);
+
+        // drawn from the theme's own data, so it can never show a stale layout
+        void renderThemePreview(t, 360).then((canvas) => {
+          if (!shot.isConnected) return; // stepped away before it finished
+          shot.appendChild(canvas);
+          card.classList.add("ready");
+        }).catch(() => card.classList.add("ready"));
       }
+      e.opts.appendChild(row);
       const note = document.createElement("p");
-      note.style.cssText = "margin:12px 0 0;font-size:12.5px;color:#8a8f98;line-height:1.6";
+      note.style.cssText = "margin:14px 0 0;font-size:12.5px;color:#8a8f98;line-height:1.6";
       note.textContent = "ทุกคนใน Space จะใช้แผนผังนี้ร่วมกัน และเลือกได้เฉพาะตอนสร้างเท่านั้น";
       e.opts.appendChild(note);
       e.next.disabled = false;
