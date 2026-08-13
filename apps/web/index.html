@@ -268,43 +268,63 @@
       .wm-ghost { background: #f2f3f6; color: #4b5563; }
       .wm-danger { background: #fdecec; color: #d3373d; }
       .wm-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
-      .wm-members { margin-top: 6px; border: 1px solid #eceef2; border-radius: 11px; overflow: hidden; }
-      .wm-member { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid #f1f2f5; }
-      .wm-member:last-child { border-bottom: none; }
-      .wm-ava { width: 30px; height: 30px; border-radius: 50%; background: #2bb3a3; color: #fff;
-        display: grid; place-items: center; font-weight: 700; font-size: 13px; flex: 0 0 auto; overflow: hidden; }
-      .wm-ava img { width: 100%; height: 100%; object-fit: cover; }
-      .wm-mi { flex: 1; min-width: 0; }
-      .wm-mi b { display: block; font-size: 13.5px; color: #1c1b22; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .wm-mi small { font-size: 11.5px; color: #8a8f98; }
-      .wm-member select { border: 1px solid #e2e4ea; border-radius: 7px; padding: 4px 6px; font-size: 12.5px; background: #fff; }
-      .wm-x { border: none; background: transparent; color: #c2c7cf; cursor: pointer; font-size: 15px; padding: 4px 6px; border-radius: 6px; }
-      .wm-x:hover { background: #fdecec; color: #d3373d; }
-      .wm-tools { display: flex; gap: 8px; margin-top: 6px; }
-      .wm-tools input { flex: 1; }
-      .wm-tools select { border: 1px solid #e2e4ea; border-radius: 9px; padding: 0 8px; background: #fff;
+      /* ---- member permissions panel (mounted in the settings dialog and in the
+             in-room sidebar, hence no dependence on either container's styles) ---- */
+      /* settings view inside the sidebar */
+      .sb-scroll { flex: 1; overflow-y: auto; padding: 4px 14px 16px; }
+      .sb-sec { padding: 8px 0 2px; }
+      .sb-sec b { font-size: 13.5px; color: #1c1b22; }
+      .sb-sec p { margin: 3px 0 0; font-size: 11.5px; color: #8a8f98; }
+      .sb-soon { margin-top: 16px; padding-top: 12px; border-top: 1px solid #eceef2;
+        font-size: 12px; color: #9aa0a8; }
+
+      .mp { display: flex; flex-direction: column; min-height: 0; font-family: "Segoe UI", sans-serif; }
+      .mp-tools { display: flex; gap: 8px; margin: 6px 0; }
+      .mp-tools input { flex: 1; min-width: 0; box-sizing: border-box; padding: 8px 11px;
+        border: 1px solid #e2e4ea; border-radius: 9px; font-size: 13px; outline: none; background: #fff; }
+      .mp-tools input:focus { border-color: #2bb3a3; }
+      .mp-tools select { border: 1px solid #e2e4ea; border-radius: 9px; padding: 0 6px; background: #fff;
         font: 13px "Segoe UI", sans-serif; color: #4b5563; outline: none; }
-      .wm-empty { padding: 18px 12px; text-align: center; font-size: 12.5px; color: #9aa0a8; }
+      .mp-msg { min-height: 16px; font-size: 12px; color: #16897a; }
+      .mp-msg.err { color: #e5484d; }
+      .mp-list { border: 1px solid #eceef2; border-radius: 11px; overflow: visible; background: #fff; }
+      .mp-empty { padding: 18px 12px; text-align: center; font-size: 12.5px; color: #9aa0a8; }
+      .mp-row { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-bottom: 1px solid #f1f2f5; }
+      .mp-row:last-child { border-bottom: none; }
+      .mp-ava { width: 30px; height: 30px; border-radius: 50%; background: #2bb3a3; color: #fff;
+        display: grid; place-items: center; font-weight: 700; font-size: 13px; flex: 0 0 auto; overflow: hidden; }
+      .mp-ava img { width: 100%; height: 100%; object-fit: cover; }
+      .mp-info { flex: 1; min-width: 0; }
+      .mp-info b { display: block; font-size: 13.5px; color: #1c1b22; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .mp-info small { display: block; font-size: 11.5px; color: #8a8f98; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .mp-meta { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; min-width: 0; }
       /* role chip — colour carries the rank at a glance */
-      .wm-role { flex: 0 0 auto; padding: 3px 9px; border-radius: 999px; font: 600 11.5px "Segoe UI", sans-serif; }
-      .wm-role.owner { background: #eee9ff; color: #6b46d6; }
-      .wm-role.admin { background: #e6efff; color: #2f66c9; }
-      .wm-role.member { background: #f2f3f6; color: #6b7280; }
-      .wm-role.guest { background: #fff2e3; color: #b06d1c; }
-      .wm-seen { flex: 0 0 auto; font-size: 11.5px; color: #9aa0a8; min-width: 62px; text-align: right; }
-      /* per-member action menu */
-      .wm-kebab { position: relative; flex: 0 0 auto; }
-      .wm-kebab > button { border: 1px solid #e7e9ee; background: #fff; color: #6b7280; cursor: pointer;
+      .mp-role { flex: 0 0 auto; padding: 2px 8px; border-radius: 999px; font: 600 11px "Segoe UI", sans-serif; font-style: normal; }
+      .mp-role.owner { background: #eee9ff; color: #6b46d6; }
+      .mp-role.admin { background: #e6efff; color: #2f66c9; }
+      .mp-role.member { background: #f2f3f6; color: #6b7280; }
+      .mp-role.guest { background: #fff2e3; color: #b06d1c; }
+      .mp-seen { font: 11px "Segoe UI", sans-serif; font-style: normal; color: #9aa0a8;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      /* narrow containers (the 250px sidebar) wrap the role + last-seen onto a
+         second line; `order` keeps the ⋮ up on the first one */
+      .mp-compact .mp-row { flex-wrap: wrap; row-gap: 4px; }
+      .mp-compact .mp-kebab { order: 3; }
+      /* box-sizing matters here: flex-basis 100% plus padding would overflow the row */
+      .mp-compact .mp-meta { order: 4; flex-basis: 100%; box-sizing: border-box; padding-left: 40px; }
+      .mp-kebab { position: relative; flex: 0 0 auto; }
+      .mp-kebab > button { border: 1px solid #e7e9ee; background: #fff; color: #6b7280; cursor: pointer;
         width: 28px; height: 28px; border-radius: 8px; font-size: 14px; line-height: 1; }
-      .wm-kebab > button:hover { background: #f4f5f8; }
-      .wm-menu { position: absolute; right: 0; top: 32px; z-index: 5; min-width: 196px; padding: 6px;
+      .mp-kebab > button:hover { background: #f4f5f8; }
+      .mp-menu { position: absolute; right: 0; top: 32px; z-index: 30; min-width: 186px; padding: 6px;
         background: #23242a; border-radius: 11px; box-shadow: 0 14px 34px #0006; }
-      .wm-menu button { display: flex; align-items: center; gap: 9px; width: 100%; border: none;
+      .mp-menu.up { top: auto; bottom: 32px; }
+      .mp-menu button { display: flex; align-items: center; gap: 9px; width: 100%; border: none;
         background: transparent; color: #eef0f4; cursor: pointer; padding: 8px 10px; border-radius: 8px;
-        font: 500 13px "Segoe UI", sans-serif; text-align: left; }
-      .wm-menu button:hover { background: #ffffff1a; }
-      .wm-menu button.danger { color: #ff8085; }
-      .wm-menu hr { border: none; border-top: 1px solid #ffffff1f; margin: 5px 2px; }
+        font: 500 13px "Segoe UI", sans-serif; text-align: left; white-space: nowrap; }
+      .mp-menu button:hover { background: #ffffff1a; }
+      .mp-menu button.danger { color: #ff8085; }
+      .mp-menu hr { border: none; border-top: 1px solid #ffffff1f; margin: 5px 2px; }
       .wm-err { color: #e5484d; font-size: 12.5px; min-height: 16px; }
 
       /* two-factor (authenticator app) */
@@ -601,18 +621,8 @@
           <button class="wm-btn wm-ghost" id="wm-reset" title="สร้างรหัสใหม่ ลิงก์เดิมจะใช้ไม่ได้">รีเซ็ต</button>
         </div>
 
-        <label class="wm-l">สมาชิก (<span id="wm-count">0</span>)</label>
-        <div class="wm-tools">
-          <input type="text" id="wm-search" placeholder="ค้นหาชื่อหรืออีเมล…" autocomplete="off" />
-          <select id="wm-filter">
-            <option value="">ทุกสิทธิ์</option>
-            <option value="owner">เจ้าของ</option>
-            <option value="admin">ผู้ดูแล</option>
-            <option value="member">สมาชิก</option>
-            <option value="guest">ผู้เยี่ยมชม</option>
-          </select>
-        </div>
-        <div class="wm-members" id="wm-members"></div>
+        <label class="wm-l">สมาชิกและสิทธิ์ (<span id="wm-count">0</span>)</label>
+        <div id="wm-members"></div>
 
         <div class="wm-actions">
           <button class="wm-btn wm-danger" id="wm-leave">ออกจาก Workspace</button>
@@ -757,8 +767,13 @@
       </div>
 
       <div id="view-settings" class="sb-view" hidden>
-        <div style="padding:16px;color:#6b7280;font-size:13px;line-height:1.6;">
-          <b style="color:#1c1b22;">ตั้งค่า</b><br/>ธีม, อุปกรณ์, และโปรไฟล์ — เร็ว ๆ นี้
+        <div class="sb-scroll">
+          <div class="sb-sec">
+            <b>สมาชิกและสิทธิ์ <span id="sbm-count">0</span></b>
+            <p id="sbm-role"></p>
+          </div>
+          <div id="sbm-members"></div>
+          <div class="sb-sec sb-soon">ธีม, อุปกรณ์, และโปรไฟล์ — เร็ว ๆ นี้</div>
         </div>
       </div>
     </aside>

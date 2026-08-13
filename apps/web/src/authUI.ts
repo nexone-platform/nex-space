@@ -4,12 +4,8 @@
 import { openAvatarEditor } from "./avatar/avatarEditor";
 import { encodeAvatar, buildFrameCanvas, defaultDressedConfig, type LpcConfig } from "./avatar/avatarCompose";
 import { WORKSPACE, HAS_WORKSPACE_PARAM, gotoWorkspace, wsKey, wsKeyFor } from "./workspace";
-
-// In production the app is served by nginx, which reverse-proxies the API on the
-// same origin (/auth, /me, /workspaces). Use same-origin relative URLs there so it
-// works over any host/port/protocol; fall back to the local API port only in dev.
-const API = ((import.meta as any).env?.VITE_API_URL as string)
-  || ((import.meta as any).env?.DEV ? "http://localhost:3001" : "");
+import { API, TOKEN_KEY, authToken as token, authHeaders } from "./api";
+import { mountMemberPanel, roleLabel, type PanelMember } from "./memberPanel";
 
 export interface StartInfo { name: string; avatar: string; desk: string; }
 interface User {
@@ -22,20 +18,8 @@ interface User {
   recoveryLeft?: number;
 }
 interface Space { slug: string; name: string; role: string; members?: number; inviteCode?: string }
-interface Member {
-  id: string; name: string; email: string; photoUrl?: string; role: string; isMe: boolean;
-  joinedAt?: string; lastSeenAt?: string | null;
-  canManage?: boolean;  // the server's verdict: may I change or remove this person?
-  canPromote?: boolean; // owner only — may I make them an admin?
-}
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T | null;
-const TOKEN_KEY = "nexspace-token";
-const token = () => localStorage.getItem(TOKEN_KEY);
-const authHeaders = () => ({
-  "Content-Type": "application/json",
-  ...(token() ? { Authorization: "Bearer " + token()! } : {}),
-});
 const initial = (s: string) => (s.trim()[0] ?? "?").toUpperCase();
 
 /**
@@ -65,20 +49,6 @@ function wireCodeBoxes(boxes: HTMLInputElement[], onComplete: (code: string) => 
     };
   });
 }
-
-const roleLabel = (r: string) =>
-  r === "owner" ? "เจ้าของ" : r === "admin" ? "ผู้ดูแล" : r === "guest" ? "ผู้เยี่ยมชม" : "สมาชิก";
-
-/** "เมื่อสักครู่" / "5 นาทีที่แล้ว" / "3 วันที่แล้ว" — coarse on purpose */
-const sinceLabel = (iso?: string | null) => {
-  if (!iso) return "ยังไม่เคยเข้า";
-  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 6) return "กำลังใช้งาน";
-  if (mins < 60) return `${mins} นาทีที่แล้ว`;
-  if (mins < 1440) return `${Math.floor(mins / 60)} ชม.ที่แล้ว`;
-  const days = Math.floor(mins / 1440);
-  return days < 30 ? `${days} วันที่แล้ว` : new Date(iso).toLocaleDateString("th-TH");
-};
 
 export function runAuthFlow(onReady: (s: StartInfo) => void) {
   const overlay = $("auth-overlay");
@@ -689,164 +659,16 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
 
   const closeModal = () => { const m = $("ws-modal"); if (m) m.style.display = "none"; };
 
-  let allMembers: Member[] = [];
-
-  const setRole = async (m: Member, role: string) => {
-    setErr("wm-err", "");
-    const r = await fetch(`${API}/workspaces/${editing!.slug}/members/${m.id}`, {
-      method: "PATCH", headers: authHeaders(), body: JSON.stringify({ role }),
+  // the member list and its per-row permission menu live in memberPanel so the
+  // in-room settings sidebar can mount the very same thing
+  const openMembers = (slug: string) => {
+    mountMemberPanel({
+      host: $("wm-members")!,
+      slug,
+      onCount: (n) => { $("wm-count")!.textContent = String(n); },
+      onMyRole: (r) => { myRole = r; applyRolePermissions(); },
+      onSelfRemoved: () => { closeModal(); void showSpaces(); },
     });
-    const d = await r.json().catch(() => ({} as any));
-    if (!r.ok) return setErr("wm-err", d.error === "forbidden" ? "คุณไม่มีสิทธิ์เปลี่ยนสิทธิ์ของคนนี้"
-      : d.error || "เปลี่ยนสิทธิ์ไม่สำเร็จ");
-    setErr("wm-err", `${m.name} เป็น${roleLabel(role)}แล้ว`);
-    void loadMembers();
-  };
-
-  const removeMember = async (m: Member) => {
-    if (!confirm(m.isMe ? "ออกจาก workspace นี้?" : `นำ ${m.name} ออกจาก workspace?`)) return;
-    setErr("wm-err", "");
-    const r = await fetch(`${API}/workspaces/${editing!.slug}/members/${m.id}`, {
-      method: "DELETE", headers: authHeaders(),
-    });
-    const d = await r.json().catch(() => ({} as any));
-    if (!r.ok) return setErr("wm-err", d.error === "forbidden" ? "คุณไม่มีสิทธิ์นำคนนี้ออก"
-      : d.error === "the owner cannot be removed" ? "นำเจ้าของออกไม่ได้"
-      : d.error || "นำออกไม่สำเร็จ");
-    if (m.isMe) { closeModal(); void showSpaces(); } else void loadMembers();
-  };
-
-  const closeMenus = () => document.querySelectorAll(".wm-menu").forEach((el) => el.remove());
-  // one click anywhere else dismisses an open menu
-  document.addEventListener("click", closeMenus);
-
-  type MenuItem = { label: string; icon: string; run: () => void; danger?: boolean };
-
-  /**
-   * What this row may actually do, from the permissions the server reported.
-   * Nothing is listed that the server would refuse — in particular the owner
-   * gets no "leave" entry, because a workspace cannot be left ownerless.
-   */
-  const menuItems = (m: Member): MenuItem[] => {
-    const items: MenuItem[] = [];
-    // one entry per destination role, so "ตั้งเป็นสมาชิก" and "ถอดสิทธิ์ผู้ดูแล"
-    // can't both appear on an admin row doing the very same thing
-    const to = (role: string, label: string, allowed: boolean) => {
-      if (!allowed || m.role === role) return;
-      const rank: Record<string, number> = { admin: 2, member: 1, guest: 0 };
-      items.push({ label, icon: rank[role] > (rank[m.role] ?? 1) ? "↑" : "↓", run: () => void setRole(m, role) });
-    };
-
-    to("admin", "ตั้งเป็นผู้ดูแล", !!m.canPromote);
-    to("member", m.role === "admin" ? "ถอดสิทธิ์ผู้ดูแล" : "ตั้งเป็นสมาชิก", !!m.canManage);
-    to("guest", "ลดเป็นผู้เยี่ยมชม", !!m.canManage);
-
-    if (m.role !== "owner" && (m.canManage || m.isMe)) {
-      items.push({
-        label: m.isMe ? "ออกจาก Workspace" : "นำออกจาก Workspace",
-        icon: "⊘", danger: true, run: () => void removeMember(m),
-      });
-    }
-    return items;
-  };
-
-  const buildMenu = (items: MenuItem[]) => {
-    const menu = document.createElement("div");
-    menu.className = "wm-menu";
-    menu.onclick = (e) => e.stopPropagation();
-    items.forEach((it, i) => {
-      if (it.danger && i > 0) menu.appendChild(document.createElement("hr"));
-      const b = document.createElement("button");
-      if (it.danger) b.className = "danger";
-      b.textContent = `${it.icon}  ${it.label}`;
-      b.onclick = () => { closeMenus(); it.run(); };
-      menu.appendChild(b);
-    });
-    return menu;
-  };
-
-  const renderMembers = () => {
-    const box = $("wm-members");
-    const count = $("wm-count");
-    if (count) count.textContent = String(allMembers.length);
-    if (!box) return;
-    box.innerHTML = "";
-
-    const q = ($<HTMLInputElement>("wm-search")?.value ?? "").trim().toLowerCase();
-    const only = $<HTMLSelectElement>("wm-filter")?.value ?? "";
-    const shown = allMembers.filter((m) =>
-      (!only || m.role === only)
-      && (!q || m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q)));
-
-    if (!shown.length) {
-      const empty = document.createElement("div");
-      empty.className = "wm-empty";
-      empty.textContent = allMembers.length ? "ไม่พบสมาชิกที่ตรงกับการค้นหา" : "ยังไม่มีสมาชิก";
-      box.appendChild(empty);
-      return;
-    }
-
-    for (const m of shown) {
-      const row = document.createElement("div");
-      row.className = "wm-member";
-
-      const ava = document.createElement("span");
-      ava.className = "wm-ava";
-      if (m.photoUrl) {
-        const img = document.createElement("img");
-        img.src = m.photoUrl; img.alt = "";
-        ava.appendChild(img);
-      } else ava.textContent = initial(m.name);
-
-      const info = document.createElement("span");
-      info.className = "wm-mi";
-      const b = document.createElement("b"); b.textContent = m.name + (m.isMe ? " (คุณ)" : "");
-      const sm = document.createElement("small"); sm.textContent = m.email;
-      info.append(b, sm);
-
-      const chip = document.createElement("span");
-      chip.className = `wm-role ${m.role}`;
-      chip.textContent = roleLabel(m.role);
-
-      const seen = document.createElement("span");
-      seen.className = "wm-seen";
-      seen.textContent = sinceLabel(m.lastSeenAt);
-      if (m.joinedAt) seen.title = `เข้าร่วมเมื่อ ${new Date(m.joinedAt).toLocaleDateString("th-TH")}`;
-
-      row.append(ava, info, chip, seen);
-
-      // nothing actionable -> no menu button, rather than a menu that only refuses
-      const items = menuItems(m);
-      if (items.length) {
-        const wrap = document.createElement("span");
-        wrap.className = "wm-kebab";
-        const btn = document.createElement("button");
-        btn.textContent = "⋮";
-        btn.title = "ตัวเลือก";
-        btn.onclick = (e) => {
-          e.stopPropagation();
-          const open = wrap.querySelector(".wm-menu");
-          closeMenus();
-          if (!open) wrap.appendChild(buildMenu(items));
-        };
-        wrap.appendChild(btn);
-        row.appendChild(wrap);
-      }
-      box.appendChild(row);
-    }
-  };
-
-  const loadMembers = async () => {
-    if (!editing) return;
-    try {
-      const r = await fetch(`${API}/workspaces/${editing.slug}/members`, { headers: authHeaders() });
-      const d = await r.json();
-      if (!r.ok) return setErr("wm-err", d.error || "โหลดสมาชิกไม่ได้");
-      myRole = d.myRole;
-      allMembers = d.members ?? [];
-      applyRolePermissions();
-      renderMembers();
-    } catch { setErr("wm-err", "เชื่อมต่อ API ไม่ได้"); }
   };
 
   /** hide what this role may not do, instead of letting the server refuse later */
@@ -887,15 +709,8 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     } catch { /* keep what we have */ }
     // apply what we already know, then again once the roster confirms the role
     applyRolePermissions();
-    const search = $<HTMLInputElement>("wm-search");
-    if (search) search.value = "";
-    const filter = $<HTMLSelectElement>("wm-filter");
-    if (filter) filter.value = "";
-    void loadMembers();
+    openMembers(s.slug);
   };
-
-  $("wm-search")!.oninput = renderMembers;
-  $("wm-filter")!.onchange = renderMembers;
 
   $("wm-close")!.onclick = closeModal;
   $("ws-modal")!.onclick = (e) => { if (e.target === $("ws-modal")) closeModal(); };
@@ -918,7 +733,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
   $("wm-leave")!.onclick = async () => {
     if (!editing || !confirm("ออกจาก workspace นี้?")) return;
     const me = (await (await fetch(`${API}/workspaces/${editing.slug}/members`, { headers: authHeaders() })).json())
-      .members?.find((m: Member) => m.isMe);
+      .members?.find((m: PanelMember) => m.isMe);
     if (!me) return;
     const r = await fetch(`${API}/workspaces/${editing.slug}/members/${me.id}`, { method: "DELETE", headers: authHeaders() });
     const d = await r.json().catch(() => ({}));

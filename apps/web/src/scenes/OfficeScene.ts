@@ -7,6 +7,8 @@ import type { MediaManager } from "../net/media";
 import { buildWalkCanvas, buildSitCanvas, SIT_COLS, SIT_SEATED_COL, decodeAvatar, encodeAvatar, isLpc, avatarKey, defaultDressedConfig, LPC_ROW } from "../avatar/avatarCompose";
 import { openAvatarEditor } from "../avatar/avatarEditor";
 import { WORKSPACE, IS_DEFAULT_WORKSPACE, workspaceLabel, inviteLink, wsKey } from "../workspace";
+import { API as AUTH_API } from "../api";
+import { mountMemberPanel, roleLabel } from "../memberPanel";
 import { pickTheme, propPath, type Interactive } from "./mapThemes";
 
 const LPC_COLS = 9; // LPC walk sheet: 9 frames per direction row
@@ -27,7 +29,6 @@ const wsProto = typeof window !== "undefined" && window.location.protocol === "h
 const sameHost = typeof window !== "undefined" ? window.location.host : "";
 const SERVER_URL = (env.VITE_GAME_SERVER_URL as string) || (isDev ? "ws://localhost:2567" : `${wsProto}//${sameHost}/colyseus`);
 const HTTP_URL = (env.VITE_GAME_SERVER_HTTP as string) || (isDev ? "http://localhost:2567" : "");
-const AUTH_API = (env.VITE_API_URL as string) || (isDev ? "http://localhost:3001" : "");
 
 // selectable avatars: spritesheet key + frame size (walk sheet 8 rows x 6 frames)
 // frame size + frames-per-direction (nf) MUST match the generated walk sheets
@@ -737,7 +738,42 @@ export class OfficeScene extends Phaser.Scene {
     document.getElementById("btn-edit-avatar")?.addEventListener("click", () => void this.editAvatarInRoom());
     document.getElementById("rail-people")?.addEventListener("click", () => showView("people"));
     document.getElementById("rail-chat")?.addEventListener("click", () => showView("chat"));
-    document.getElementById("rail-settings")?.addEventListener("click", () => showView("settings"));
+    // members + their permissions, mounted lazily and refreshed on each open so
+    // a role someone else changed shows up without a reload
+    let memberPanel: { reload(): Promise<void> } | null = null;
+    document.getElementById("rail-settings")?.addEventListener("click", () => {
+      showView("settings");
+      const host = document.getElementById("sbm-members");
+      if (!host) return;
+      // the shared public space has no workspace record, so no roster to manage
+      if (IS_DEFAULT_WORKSPACE) {
+        host.innerHTML = "";
+        const note = document.createElement("p");
+        note.className = "sb-sec";
+        note.style.color = "#8a8f98";
+        note.style.fontSize = "12.5px";
+        note.textContent = "พื้นที่สาธารณะนี้เข้าได้ทุกคน ไม่มีการกำหนดสิทธิ์ — สร้าง Space ของทีมเพื่อจัดการสมาชิก";
+        host.appendChild(note);
+        const c = document.getElementById("sbm-count");
+        if (c) c.textContent = "";
+        return;
+      }
+      if (memberPanel) return void memberPanel.reload();
+      memberPanel = mountMemberPanel({
+        host,
+        slug: WORKSPACE,
+        compact: true, // the sidebar is 250px wide
+        onCount: (n) => {
+          const el = document.getElementById("sbm-count");
+          if (el) el.textContent = `(${n})`;
+        },
+        onMyRole: (role) => {
+          const el = document.getElementById("sbm-role");
+          if (el) el.textContent = `สิทธิ์ของคุณ: ${roleLabel(role)}`;
+        },
+        onSelfRemoved: () => { location.href = location.pathname; },
+      });
+    });
     document.getElementById("sb-close")?.addEventListener("click", () => sidebar?.classList.add("closed"));
     document.getElementById("sb-search")?.addEventListener("input", () => this.refreshRoster());
 
