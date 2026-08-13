@@ -8,7 +8,7 @@ import { buildWalkCanvas, buildSitCanvas, SIT_COLS, SIT_SEATED_COL, decodeAvatar
 import { openAvatarEditor } from "../avatar/avatarEditor";
 import { WORKSPACE, IS_DEFAULT_WORKSPACE, workspaceLabel, inviteLink, wsKey } from "../workspace";
 import { API as AUTH_API } from "../api";
-import { mountMemberPanel, roleLabel } from "../memberPanel";
+import { setupPrefsModal } from "../prefsModal";
 import { pickTheme, propPath, type Interactive } from "./mapThemes";
 
 const LPC_COLS = 9; // LPC walk sheet: 9 frames per direction row
@@ -724,8 +724,8 @@ export class OfficeScene extends Phaser.Scene {
 
   private setupSidebar() {
     const sidebar = document.getElementById("sidebar");
-    const views: Record<string, string> = { people: "view-people", chat: "view-chat", settings: "view-settings" };
-    const titles: Record<string, string> = { people: "NexSpace", chat: "แชตห้องรวม", settings: "ตั้งค่า" };
+    const views: Record<string, string> = { people: "view-people", chat: "view-chat" };
+    const titles: Record<string, string> = { people: "NexSpace", chat: "แชตห้องรวม" };
     const showView = (v: string) => {
       sidebar?.classList.remove("closed");
       for (const [k, id] of Object.entries(views)) {
@@ -738,42 +738,9 @@ export class OfficeScene extends Phaser.Scene {
     document.getElementById("btn-edit-avatar")?.addEventListener("click", () => void this.editAvatarInRoom());
     document.getElementById("rail-people")?.addEventListener("click", () => showView("people"));
     document.getElementById("rail-chat")?.addEventListener("click", () => showView("chat"));
-    // members + their permissions, mounted lazily and refreshed on each open so
-    // a role someone else changed shows up without a reload
-    let memberPanel: { reload(): Promise<void> } | null = null;
-    document.getElementById("rail-settings")?.addEventListener("click", () => {
-      showView("settings");
-      const host = document.getElementById("sbm-members");
-      if (!host) return;
-      // the shared public space has no workspace record, so no roster to manage
-      if (IS_DEFAULT_WORKSPACE) {
-        host.innerHTML = "";
-        const note = document.createElement("p");
-        note.className = "sb-sec";
-        note.style.color = "#8a8f98";
-        note.style.fontSize = "12.5px";
-        note.textContent = "พื้นที่สาธารณะนี้เข้าได้ทุกคน ไม่มีการกำหนดสิทธิ์ — สร้าง Space ของทีมเพื่อจัดการสมาชิก";
-        host.appendChild(note);
-        const c = document.getElementById("sbm-count");
-        if (c) c.textContent = "";
-        return;
-      }
-      if (memberPanel) return void memberPanel.reload();
-      memberPanel = mountMemberPanel({
-        host,
-        slug: WORKSPACE,
-        compact: true, // the sidebar is 250px wide
-        onCount: (n) => {
-          const el = document.getElementById("sbm-count");
-          if (el) el.textContent = `(${n})`;
-        },
-        onMyRole: (role) => {
-          const el = document.getElementById("sbm-role");
-          if (el) el.textContent = `สิทธิ์ของคุณ: ${roleLabel(role)}`;
-        },
-        onSelfRemoved: () => { location.href = location.pathname; },
-      });
-    });
+    // the gear opens the preferences dialog (members, space settings)
+    const prefs = setupPrefsModal(WORKSPACE, IS_DEFAULT_WORKSPACE);
+    document.getElementById("rail-settings")?.addEventListener("click", () => prefs.open("members"));
     document.getElementById("sb-close")?.addEventListener("click", () => sidebar?.classList.add("closed"));
     document.getElementById("sb-search")?.addEventListener("input", () => this.refreshRoster());
 

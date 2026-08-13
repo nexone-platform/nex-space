@@ -35,6 +35,10 @@ export interface MemberPanelOptions {
   slug: string;
   /** stacked rows for a narrow container such as the 250px sidebar */
   compact?: boolean;
+  /** sortable Name / Role / Last active column headings above the rows */
+  table?: boolean;
+  /** shown as a person-plus button beside the search box */
+  onInvite?(): void;
   onCount?(n: number): void;
   /** fires whenever the roster confirms this user's own role */
   onMyRole?(role: string): void;
@@ -50,15 +54,48 @@ document.addEventListener("click", closeMenus);
 
 export function mountMemberPanel(o: MemberPanelOptions): MemberPanel {
   o.host.innerHTML = "";
-  o.host.classList.add("mp");
-  if (o.compact) o.host.classList.add("mp-compact");
+  o.host.className = `mp${o.compact ? " mp-compact" : ""}${o.table ? " mp-table" : ""}`;
+
+  type SortKey = "name" | "role" | "seen";
+  let sortKey: SortKey = "name";
+  let sortAsc = true;
+
+  /** clickable Name / Role / Last active headings (table variant only) */
+  function buildHead() {
+    const head = document.createElement("div");
+    head.className = "mp-head";
+    // a real spacer, not padding: the heading columns must be the same flex
+    // children as the row's, or the two shrink differently and stop lining up
+    const avaCol = document.createElement("span");
+    avaCol.className = "mp-h-ava";
+    head.appendChild(avaCol);
+    const col = (key: SortKey, label: string, cls: string) => {
+      const wrap = document.createElement("span");
+      wrap.className = cls;
+      const b = document.createElement("button");
+      b.classList.toggle("sorted", sortKey === key);
+      const arrow = document.createElement("i");
+      arrow.textContent = sortKey === key ? (sortAsc ? "▲" : "▼") : "▲";
+      b.append(document.createTextNode(label), arrow);
+      b.onclick = () => {
+        if (sortKey === key) sortAsc = !sortAsc;
+        else { sortKey = key; sortAsc = true; }
+        head.replaceWith(buildHead());
+        render();
+      };
+      wrap.appendChild(b);
+      return wrap;
+    };
+    head.append(col("name", "ชื่อ", "mp-h-name"), col("role", "สิทธิ์", "mp-h-role"),
+                col("seen", "ใช้งานล่าสุด", "mp-h-seen"));
+    const gap = document.createElement("span");
+    gap.className = "mp-h-gap";
+    head.appendChild(gap);
+    return head;
+  }
 
   const tools = document.createElement("div");
   tools.className = "mp-tools";
-  const search = document.createElement("input");
-  search.type = "text";
-  search.placeholder = "ค้นหาชื่อหรืออีเมล…";
-  search.autocomplete = "off";
   const filter = document.createElement("select");
   for (const [v, label] of [["", "ทุกสิทธิ์"], ["owner", "เจ้าของ"], ["admin", "ผู้ดูแล"],
                             ["member", "สมาชิก"], ["guest", "ผู้เยี่ยมชม"]]) {
@@ -66,13 +103,28 @@ export function mountMemberPanel(o: MemberPanelOptions): MemberPanel {
     opt.value = v; opt.textContent = label;
     filter.appendChild(opt);
   }
-  tools.append(search, filter);
+  const search = document.createElement("input");
+  search.type = "text";
+  search.placeholder = "ค้นหาชื่อหรืออีเมล…";
+  search.autocomplete = "off";
+  // filter first in table mode, matching the "View All … Search  ＋" header row
+  tools.append(...(o.table ? [filter, search] : [search, filter]));
+  if (o.onInvite) {
+    const add = document.createElement("button");
+    add.className = "mp-invite";
+    add.title = "เชิญคนเข้า workspace";
+    add.textContent = "＋";
+    add.onclick = () => o.onInvite!();
+    tools.appendChild(add);
+  }
 
   const msg = document.createElement("div");
   msg.className = "mp-msg";
   const list = document.createElement("div");
   list.className = "mp-list";
-  o.host.append(tools, msg, list);
+  o.host.append(tools, msg);
+  if (o.table) o.host.appendChild(buildHead());
+  o.host.appendChild(list);
 
   let members: PanelMember[] = [];
   let myRole = "member";
@@ -180,6 +232,21 @@ export function mountMemberPanel(o: MemberPanelOptions): MemberPanel {
       (!only || m.role === only)
       && (!q || m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q)));
 
+    if (o.table) {
+      const rank: Record<string, number> = { owner: 3, admin: 2, member: 1, guest: 0 };
+      const by: Record<SortKey, (m: PanelMember) => number | string> = {
+        name: (m) => m.name.toLowerCase(),
+        role: (m) => rank[m.role] ?? -1,
+        // never seen sorts oldest rather than newest
+        seen: (m) => (m.lastSeenAt ? new Date(m.lastSeenAt).getTime() : 0),
+      };
+      shown.sort((a, b) => {
+        const [x, y] = [by[sortKey](a), by[sortKey](b)];
+        const c = typeof x === "string" ? String(x).localeCompare(String(y), "th") : Number(x) - Number(y);
+        return sortAsc ? c : -c;
+      });
+    }
+
     if (!shown.length) {
       const empty = document.createElement("div");
       empty.className = "mp-empty";
@@ -219,9 +286,15 @@ export function mountMemberPanel(o: MemberPanelOptions): MemberPanel {
       seen.className = "mp-seen";
       seen.textContent = sinceLabel(m.lastSeenAt);
       if (m.joinedAt) seen.title = `เข้าร่วมเมื่อ ${new Date(m.joinedAt).toLocaleDateString("th-TH")}`;
-      meta.append(chip, seen);
-
-      row.append(ava, info, meta);
+      // table mode keeps chip and seen as direct row children so they are the
+      // very same flex columns the headings are; the list variant groups them
+      if (o.table) {
+        meta.remove();
+        row.append(ava, info, chip, seen);
+      } else {
+        meta.append(chip, seen);
+        row.append(ava, info, meta);
+      }
 
       const items = menuItems(m);
       if (items.length) {
@@ -241,6 +314,11 @@ export function mountMemberPanel(o: MemberPanelOptions): MemberPanel {
         };
         wrap.appendChild(btn);
         row.appendChild(wrap);
+      } else if (o.table) {
+        // hold the column open, or rows without a menu shift out of alignment
+        const spacer = document.createElement("span");
+        spacer.className = "mp-kebab";
+        row.appendChild(spacer);
       }
       list.appendChild(row);
     }

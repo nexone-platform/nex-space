@@ -270,13 +270,48 @@
       .wm-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
       /* ---- member permissions panel (mounted in the settings dialog and in the
              in-room sidebar, hence no dependence on either container's styles) ---- */
-      /* settings view inside the sidebar */
-      .sb-scroll { flex: 1; overflow-y: auto; padding: 4px 14px 16px; }
-      .sb-sec { padding: 8px 0 2px; }
-      .sb-sec b { font-size: 13.5px; color: #1c1b22; }
-      .sb-sec p { margin: 3px 0 0; font-size: 11.5px; color: #8a8f98; }
-      .sb-soon { margin-top: 16px; padding-top: 12px; border-top: 1px solid #eceef2;
-        font-size: 12px; color: #9aa0a8; }
+      /* ---- preferences modal: left nav + one pane at a time ---- */
+      #prefs-modal { position: fixed; inset: 0; z-index: 72; background: #0b0b1066; display: none;
+        place-items: center; font-family: "Segoe UI", sans-serif; }
+      #prefs-modal .pf-box { display: flex; width: min(96vw, 900px); height: min(88vh, 620px);
+        background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 28px 70px #0006; }
+      .pf-nav { width: 216px; flex: 0 0 auto; background: #f7f8fa; border-right: 1px solid #eceef2;
+        padding: 18px 10px; overflow-y: auto; }
+      /* the member table needs the width more than the nav labels do */
+      @media (max-width: 780px) { .pf-nav { width: 150px; padding: 14px 7px; } }
+      .pf-group { padding: 12px 10px 6px; font: 600 11.5px "Segoe UI", sans-serif; color: #9aa0a8;
+        letter-spacing: .3px; }
+      .pf-group:first-child { padding-top: 0; }
+      .pf-item { display: flex; align-items: center; gap: 10px; width: 100%; border: none; cursor: pointer;
+        background: transparent; color: #3f434a; padding: 9px 10px; border-radius: 9px; text-align: left;
+        font: 500 13.5px "Segoe UI", sans-serif; }
+      .pf-item:hover { background: #ecedf1; }
+      .pf-item.active { background: #4f46e5; color: #fff; }
+      .pf-item svg { width: 17px; height: 17px; flex: 0 0 auto; }
+      .pf-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+      .pf-head { display: flex; align-items: center; gap: 12px; padding: 20px 22px 16px;
+        border-bottom: 1px solid #eceef2; }
+      .pf-head h2 { flex: 1; margin: 0; font-size: 19px; color: #1c1b22; }
+      #pf-close { border: none; background: transparent; color: #6b7280; cursor: pointer; font-size: 17px;
+        width: 30px; height: 30px; border-radius: 8px; }
+      #pf-close:hover { background: #f2f3f6; }
+      .pf-body { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 22px 22px; }
+      .pf-pane[hidden] { display: none; }
+      /* segmented tabs */
+      .pf-tabs { display: flex; gap: 4px; padding: 3px; background: #f2f3f6; border-radius: 11px; margin-bottom: 16px; }
+      .pf-tabs button { flex: 1; border: none; background: transparent; cursor: pointer; padding: 9px;
+        border-radius: 9px; font: 600 13px "Segoe UI", sans-serif; color: #6b7280; }
+      .pf-tabs button.active { background: #fff; color: #1c1b22; box-shadow: 0 1px 3px #0000001f; }
+      .pf-tabs button:disabled { color: #b9bec7; cursor: not-allowed; }
+      .pf-l { display: block; font-size: 12.5px; color: #6b7280; margin: 14px 0 5px; font-weight: 600; }
+      .pf-l:first-child { margin-top: 0; }
+      #prefs-modal input[type="text"] { width: 100%; box-sizing: border-box; padding: 9px 11px;
+        border: 1px solid #e2e4ea; border-radius: 9px; font-size: 14px; outline: none; }
+      .pf-row { display: flex; align-items: center; gap: 9px; font-size: 13px; color: #4b5563; margin-top: 12px; }
+      .pf-note { font-size: 12.5px; color: #8a8f98; line-height: 1.6; }
+      .pf-msg { min-height: 17px; font-size: 12.5px; color: #16897a; }
+      .pf-msg.err { color: #e5484d; }
+      .pf-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
 
       .mp { display: flex; flex-direction: column; min-height: 0; font-family: "Segoe UI", sans-serif; }
       .mp-tools { display: flex; gap: 8px; margin: 6px 0; }
@@ -285,6 +320,9 @@
       .mp-tools input:focus { border-color: #2bb3a3; }
       .mp-tools select { border: 1px solid #e2e4ea; border-radius: 9px; padding: 0 6px; background: #fff;
         font: 13px "Segoe UI", sans-serif; color: #4b5563; outline: none; }
+      .mp-invite { flex: 0 0 auto; width: 34px; height: 34px; border: none; border-radius: 9px;
+        background: #4f46e5; color: #fff; cursor: pointer; font-size: 17px; line-height: 1; }
+      .mp-invite:hover { background: #4338ca; }
       .mp-msg { min-height: 16px; font-size: 12px; color: #16897a; }
       .mp-msg.err { color: #e5484d; }
       .mp-list { border: 1px solid #eceef2; border-radius: 11px; overflow: visible; background: #fff; }
@@ -306,6 +344,26 @@
       .mp-role.guest { background: #fff2e3; color: #b06d1c; }
       .mp-seen { font: 11px "Segoe UI", sans-serif; font-style: normal; color: #9aa0a8;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      /* table variant: column headings above the rows, sortable */
+      .mp-head { display: flex; align-items: center; gap: 10px; padding: 9px 11px; background: #f7f8fa;
+        border: 1px solid #eceef2; border-bottom: none; border-radius: 11px 11px 0 0; }
+      .mp-head + .mp-list { border-radius: 0 0 11px 11px; }
+      .mp-head button { border: none; background: transparent; cursor: pointer; padding: 0;
+        font: 600 12px "Segoe UI", sans-serif; color: #6b7280; display: flex; align-items: center; gap: 4px; }
+      .mp-head button:hover { color: #1c1b22; }
+      .mp-head button i { font-style: normal; font-size: 9px; color: #b9bec7; }
+      .mp-head button.sorted i { color: #4f46e5; }
+      /* headings and rows must declare identical columns — same basis, same
+         shrink — or they drift apart as the dialog narrows */
+      .mp-h-ava,  .mp-table .mp-ava   { flex: 0 0 30px; }
+      /* basis 0, not auto: with an auto basis a long name widens its own column
+         and every row lands somewhere different */
+      .mp-h-name, .mp-table .mp-info  { flex: 1 1 0; min-width: 86px; }
+      .mp-h-role, .mp-table .mp-role  { flex: 0 1 84px; width: auto; box-sizing: border-box;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+      .mp-h-seen, .mp-table .mp-seen  { flex: 0 1 88px; width: auto; }
+      .mp-h-gap,  .mp-table .mp-kebab { flex: 0 0 28px; }
+      .mp-h-role button, .mp-h-seen button { justify-content: center; }
       /* narrow containers (the 250px sidebar) wrap the role + last-seen onto a
          second line; `order` keeps the ⋮ up on the first one */
       .mp-compact .mp-row { flex-wrap: wrap; row-gap: 4px; }
@@ -694,6 +752,55 @@
       </div>
     </div>
 
+    <div id="prefs-modal">
+      <div class="pf-box">
+        <nav class="pf-nav">
+          <div class="pf-group">การตั้งค่า</div>
+          <button class="pf-item" data-pane="general">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.1 14.5a1.4 1.4 0 0 0 .3 1.6 2 2 0 1 1-2.8 2.8 1.4 1.4 0 0 0-2.4 1v.2a2 2 0 1 1-4 0 1.4 1.4 0 0 0-2.4-1 2 2 0 1 1-2.8-2.8 1.4 1.4 0 0 0-1-2.4H4a2 2 0 1 1 0-4 1.4 1.4 0 0 0 1-2.4 2 2 0 1 1 2.8-2.8 1.4 1.4 0 0 0 2.4-1V4a2 2 0 1 1 4 0 1.4 1.4 0 0 0 2.4 1 2 2 0 1 1 2.8 2.8 1.4 1.4 0 0 0 1 2.4h.1a2 2 0 1 1 0 4h-.2a1.4 1.4 0 0 0-1.2.9z"/></svg>
+            <span>ทั่วไป</span>
+          </button>
+          <div class="pf-group">ออฟฟิศ</div>
+          <button class="pf-item active" data-pane="members">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6a3 3 0 0 1 0 6"/><path d="M18 20a6 6 0 0 0-3-5"/></svg>
+            <span>จัดการสมาชิก</span>
+          </button>
+        </nav>
+        <section class="pf-main">
+          <header class="pf-head">
+            <h2 id="pf-title">จัดการสมาชิก</h2>
+            <button id="pf-close" title="ปิด">✕</button>
+          </header>
+          <div class="pf-body">
+            <div class="pf-pane" id="pane-members">
+              <div class="pf-tabs">
+                <button class="active" id="pf-tab-members">รายชื่อสมาชิก (<span id="pf-count">0</span>)</button>
+                <button disabled title="คำเชิญที่รอตอบรับ — เร็ว ๆ นี้">คำเชิญ (0)</button>
+              </div>
+              <div id="pf-members"></div>
+            </div>
+
+            <div class="pf-pane" id="pane-general" hidden>
+              <div class="pf-msg" id="pf-gen-msg"></div>
+              <label class="pf-l" for="pf-name">ชื่อบริษัท / ทีม</label>
+              <input type="text" id="pf-name" />
+              <label class="pf-row"><input type="checkbox" id="pf-guests" /> ให้คนที่ไม่ได้สมัครสมาชิก (Guest) เข้าได้</label>
+              <label class="pf-l">ลิงก์เชิญ</label>
+              <div class="wm-invite" id="pf-invite-row">
+                <input type="text" id="pf-invite" readonly />
+                <button class="wm-btn wm-ghost" id="pf-copy">คัดลอก</button>
+                <button class="wm-btn wm-ghost" id="pf-reset" title="สร้างรหัสใหม่ ลิงก์เดิมจะใช้ไม่ได้">รีเซ็ต</button>
+              </div>
+              <p class="pf-note" id="pf-gen-note"></p>
+              <div class="pf-actions">
+                <button class="wm-btn wm-primary" id="pf-save">บันทึก</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
     <div class="hint">เดิน: <b>WASD</b>/ลูกศร &nbsp;·&nbsp; เก้าอี้: คลิก+ลาก=หมุน &nbsp;·&nbsp; <b>Enter</b>=แชตกับคนที่อยู่ใกล้ &nbsp;·&nbsp; NexSpace</div>
     <div id="tiles" style="position:fixed; top:12px; right:12px; z-index:20; display:flex; flex-direction:column; gap:8px; width:180px;"></div>
     <div id="av-bar">
@@ -766,16 +873,6 @@
         </div>
       </div>
 
-      <div id="view-settings" class="sb-view" hidden>
-        <div class="sb-scroll">
-          <div class="sb-sec">
-            <b>สมาชิกและสิทธิ์ <span id="sbm-count">0</span></b>
-            <p id="sbm-role"></p>
-          </div>
-          <div id="sbm-members"></div>
-          <div class="sb-sec sb-soon">ธีม, อุปกรณ์, และโปรไฟล์ — เร็ว ๆ นี้</div>
-        </div>
-      </div>
     </aside>
     <input id="chat" type="text" maxlength="140" autocomplete="off"
       placeholder="พิมพ์แล้ว Enter เพื่อคุยกับคนใกล้ ๆ…"
