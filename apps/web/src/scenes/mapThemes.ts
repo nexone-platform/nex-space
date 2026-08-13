@@ -75,7 +75,9 @@ export const classicTheme: MapTheme = {
     rect(add, CLASSIC_BUILD.x0, CLASSIC_BUILD.y0, CLASSIC_BUILD.x1, CLASSIC_BUILD.y1);
     for (let x = 5; x <= 26; x++) add(x, 10);               // hall / rooms partition
     for (let y = 4; y <= 9; y++) { add(12, y); add(19, y); } // between the three top rooms
-    for (const d of ["15,20", "16,20", "8,10", "16,10", "23,10"]) w.delete(d); // doors
+    // doors. The team pod's is at 13,10 rather than the middle: column 13 is its
+    // walkway, so entering in the middle would put you on top of a chair
+    for (const d of ["15,20", "16,20", "8,10", "13,10", "23,10"]) w.delete(d);
     return w;
   },
 
@@ -84,26 +86,29 @@ export const classicTheme: MapTheme = {
     ["sofa-yellow", 6, 5, false], ["sofa-pink", 9, 5, false],
     ["side-table", 7.5, 6, false], ["floor-lamp", 11, 5, false],
     ["plant-large", 5, 8, true], ["rug-round", 8, 7, false],
-    // private office (blue)
-    ["bookshelf", 13, 4, true], ["whiteboard", 15, 4, true],
-    ["desk", 14, 6, true], ["chair-9-north", 14, 7, false],
-    ["desk-monitor", 17, 6, true], ["chair-11-north", 17, 7, false],
-    ["plant", 18, 4, true],
+    // team pod (blue) — a proper desk bank: two rows of three facing an aisle at
+    // y=7, with column 13 left clear as the walkway in from the door at 13,10
+    // wall props sit on the gap columns (13, 15, 17) so nothing stands on a desk
+    ["whiteboard", 15, 4, true], ["plant-small", 13, 4, false], ["plant-small", 17, 4, false],
+    ["desk", 14, 5, true], ["chair-12-north", 14, 6, false],
+    ["desk-monitor", 16, 5, true], ["chair-13-north", 16, 6, false],
+    ["desk", 18, 5, true], ["chair-14-north", 18, 6, false],
+    ["desk-monitor", 14, 8, true], ["chair-15-north", 14, 9, false],
+    ["desk", 16, 8, true], ["chair-9-north", 16, 9, false],
+    ["desk-monitor", 18, 8, true], ["chair-11-north", 18, 9, false],
     // meeting room (mint) — one matched executive set
     ["conference-table", 23, 6, true],
     ["chair-10-south", 22, 5, false], ["chair-10-south", 24, 5, false],
     ["chair-10-north", 22, 8, false], ["chair-10-north", 24, 8, false],
     ["chair-10-east", 21, 6, false], ["chair-10-west", 25, 6, false],
     ["plant-small", 20, 4, false], ["plant-small", 26, 4, false],
-    // hall: reception + open desks, a different chair colour each
+    // hall: reception and a walkway. The desks that used to be scattered here in
+    // pairs now live in the team pod above, so this reads as an entrance again
     ["reception-desk", 15, 16, true], ["plant", 17, 16, true],
-    ["desk", 8, 12, true], ["chair-12-north", 8, 13, false],
-    ["desk-monitor", 11, 12, true], ["chair-13-north", 11, 13, false],
-    ["desk", 20, 12, true], ["chair-14-north", 20, 13, false],
-    ["desk-monitor", 23, 12, true], ["chair-15-north", 23, 13, false],
     ["rug", 15, 13, false],
     ["plant-large", 11, 17, true], ["plant-large", 20, 17, true],
     ["plant", 5, 11, false], ["plant", 26, 11, false],
+    ["plant", 5, 13, false], ["plant", 26, 13, false],
     // pantry (plank)
     ["kitchen-counter", 6, 15, true], ["coffee-machine", 8, 15, true],
     ["beverage-cooler", 9, 15, true],
@@ -147,13 +152,16 @@ export const classicTheme: MapTheme = {
     ["wall-clock", 14, 10], ["corkboard", 17, 10], ["neon-sign", 24, 3],
   ],
 
+  // The ids are kept exactly as they were even though every desk moved into the
+  // pod: they are what people have claimed, and renaming them would silently
+  // drop those claims. Order here is the pod read left-to-right, top row first.
   desks: [
-    { id: "office-1", x: 14, y: 6, sx: 14, sy: 7 },
-    { id: "office-2", x: 17, y: 6, sx: 17, sy: 7 },
-    { id: "hall-1", x: 8, y: 12, sx: 8, sy: 13 },
-    { id: "hall-2", x: 11, y: 12, sx: 11, sy: 13 },
-    { id: "hall-3", x: 20, y: 12, sx: 20, sy: 13 },
-    { id: "hall-4", x: 23, y: 12, sx: 23, sy: 13 },
+    { id: "office-1", x: 14, y: 5, sx: 14, sy: 6 },
+    { id: "office-2", x: 16, y: 5, sx: 16, sy: 6 },
+    { id: "hall-1", x: 18, y: 5, sx: 18, sy: 6 },
+    { id: "hall-2", x: 14, y: 8, sx: 14, sy: 9 },
+    { id: "hall-3", x: 16, y: 8, sx: 16, sy: 9 },
+    { id: "hall-4", x: 18, y: 8, sx: 18, sy: 9 },
   ],
 
   interactives: [
