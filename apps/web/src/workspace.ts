@@ -38,3 +38,19 @@ export const wsKey = (key: string) => `${key}:${WORKSPACE}`;
 
 /** same, but for a workspace other than the current page's (e.g. before navigating there) */
 export const wsKeyFor = (slug: string, key: string) => `${key}:${normalizeSlug(slug)}`;
+
+// ---- map theme ----
+// The scene must choose its layout before it can await anything, so the
+// workspace's theme is cached here and refreshed from the API afterwards.
+const THEME_KEY = "nexspace-ws-theme";
+
+export const cachedTheme = () => {
+  try { return localStorage.getItem(wsKey(THEME_KEY)) ?? ""; } catch { return ""; }
+};
+
+export const rememberTheme = (slug: string, id: string) => {
+  try { localStorage.setItem(wsKeyFor(slug, THEME_KEY), id); } catch { /* private mode */ }
+};
+
+/** a `?theme=` in the URL previews a layout for this visit only */
+export const themeOverride = () => new URLSearchParams(location.search).get("theme") ?? "";

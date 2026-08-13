@@ -3,7 +3,7 @@
 // localStorage and hands {name, avatar, desk} to the game.
 import { openAvatarEditor } from "./avatar/avatarEditor";
 import { encodeAvatar, buildFrameCanvas, defaultDressedConfig, type LpcConfig } from "./avatar/avatarCompose";
-import { WORKSPACE, HAS_WORKSPACE_PARAM, gotoWorkspace, wsKey, wsKeyFor } from "./workspace";
+import { WORKSPACE, HAS_WORKSPACE_PARAM, gotoWorkspace, wsKey, wsKeyFor, rememberTheme } from "./workspace";
 import { API, TOKEN_KEY, authToken as token, authHeaders } from "./api";
 import { mountMemberPanel, roleLabel, type PanelMember } from "./memberPanel";
 
@@ -17,7 +17,7 @@ interface User {
   totpEnabled?: boolean;                 // authenticator app required at sign-in
   recoveryLeft?: number;
 }
-interface Space { slug: string; name: string; role: string; members?: number; inviteCode?: string }
+interface Space { slug: string; name: string; role: string; members?: number; inviteCode?: string; theme?: string }
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T | null;
 const initial = (s: string) => (s.trim()[0] ?? "?").toUpperCase();
@@ -119,7 +119,11 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     fetch(`${API}/workspaces/${encodeURIComponent(WORKSPACE)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (!d?.workspace?.name) return;
+        if (!d?.workspace) return;
+        // cache the layout before the game boots, so an invite link lands on the
+        // right map first time instead of loading the default and reloading
+        if (d.workspace.theme) rememberTheme(WORKSPACE, d.workspace.theme);
+        if (!d.workspace.name) return;
         const sub = document.querySelector<HTMLElement>("#auth-step .sub");
         if (sub) sub.textContent = `เข้าสู่ workspace: ${d.workspace.name}`;
         localStorage.setItem(wsKey("nexspace-ws-name"), d.workspace.name);
@@ -328,6 +332,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
   const enterSpace = (s: Space) => {
     // cache under the TARGET slug — we're still on the previous workspace's page here
     localStorage.setItem(wsKeyFor(s.slug, "nexspace-ws-name"), s.name);
+    if (s.theme) rememberTheme(s.slug, s.theme);
     gotoWorkspace(s.slug);
   };
 

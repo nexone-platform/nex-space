@@ -6,10 +6,11 @@ import { LiveKitManager } from "../net/livekit";
 import type { MediaManager } from "../net/media";
 import { buildWalkCanvas, buildSitCanvas, SIT_COLS, SIT_SEATED_COL, decodeAvatar, encodeAvatar, isLpc, avatarKey, defaultDressedConfig, LPC_ROW } from "../avatar/avatarCompose";
 import { openAvatarEditor } from "../avatar/avatarEditor";
-import { WORKSPACE, IS_DEFAULT_WORKSPACE, workspaceLabel, inviteLink, wsKey } from "../workspace";
+import { WORKSPACE, IS_DEFAULT_WORKSPACE, workspaceLabel, inviteLink, wsKey,
+         rememberTheme, themeOverride } from "../workspace";
 import { API as AUTH_API } from "../api";
 import { setupPrefsModal } from "../prefsModal";
-import { pickTheme, propPath, type Interactive } from "./mapThemes";
+import { pickTheme, propPath, THEMES, type Interactive } from "./mapThemes";
 
 const LPC_COLS = 9; // LPC walk sheet: 9 frames per direction row
 const LPC_SCALE = 0.5;    // 64px LPC frames render large vs 32px furniture -> scale down
@@ -340,7 +341,10 @@ export class OfficeScene extends Phaser.Scene {
   startSession(name: string, avatar: string, desk = "") {
     this.myName = name || "Guest";
     this.myAvatar = isLpc(avatar) || AVATARS[avatar] ? avatar : "1";
-    this.myDesk = desk || "";
+    // desk ids belong to a layout: one claimed before the theme changed no
+    // longer exists, and keeping it would show a nameplate on nothing
+    this.myDesk = desk && DESKS.some((d) => d.id === desk) ? desk : "";
+    if (desk && !this.myDesk) this.saveDesk("");
     if (this.player) this.refreshMyLabel();
     if (this.player) void this.applyAvatarBody();
     if (this.created) void this.connectMultiplayer();
@@ -754,9 +758,20 @@ export class OfficeScene extends Phaser.Scene {
         fetch(`${AUTH_API}/workspaces/${encodeURIComponent(WORKSPACE)}`)
           .then((r) => (r.ok ? r.json() : null))
           .then((d) => {
-            if (!d?.workspace?.name) return;
-            title.textContent = d.workspace.name;
-            localStorage.setItem(wsKey("nexspace-ws-name"), d.workspace.name);
+            if (!d?.workspace) return;
+            if (d.workspace.name) {
+              title.textContent = d.workspace.name;
+              localStorage.setItem(wsKey("nexspace-ws-name"), d.workspace.name);
+            }
+            // Someone changed the layout (or this is a first visit and the cache
+            // was empty). Everyone has to be on the same map, so take the
+            // server's answer and boot again — writing the cache first is what
+            // stops this from looping. A ?theme= preview stays untouched.
+            const want = d.workspace.theme || "classic";
+            if (!themeOverride() && want !== THEME.id && THEMES[want]) {
+              rememberTheme(WORKSPACE, want);
+              location.reload();
+            }
           })
           .catch(() => {});
       }

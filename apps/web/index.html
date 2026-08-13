@@ -305,8 +305,9 @@
       .pf-tabs button:disabled { color: #b9bec7; cursor: not-allowed; }
       .pf-l { display: block; font-size: 12.5px; color: #6b7280; margin: 14px 0 5px; font-weight: 600; }
       .pf-l:first-child { margin-top: 0; }
-      #prefs-modal input[type="text"] { width: 100%; box-sizing: border-box; padding: 9px 11px;
-        border: 1px solid #e2e4ea; border-radius: 9px; font-size: 14px; outline: none; }
+      #prefs-modal input[type="text"], #prefs-modal select { width: 100%; box-sizing: border-box; padding: 9px 11px;
+        border: 1px solid #e2e4ea; border-radius: 9px; font-size: 14px; outline: none; background: #fff; color: #24262b; }
+      #prefs-modal select:disabled { background: #f5f6f8; color: #9aa0a8; }
       .pf-row { display: flex; align-items: center; gap: 9px; font-size: 13px; color: #4b5563; margin-top: 12px; }
       .pf-note { font-size: 12.5px; color: #8a8f98; line-height: 1.6; }
       .pf-msg { min-height: 17px; font-size: 12.5px; color: #16897a; }
@@ -785,6 +786,12 @@
               <label class="pf-l" for="pf-name">ชื่อบริษัท / ทีม</label>
               <input type="text" id="pf-name" />
               <label class="pf-row"><input type="checkbox" id="pf-guests" /> ให้คนที่ไม่ได้สมัครสมาชิก (Guest) เข้าได้</label>
+
+              <label class="pf-l" for="pf-theme">ธีมแผนผังออฟฟิศ</label>
+              <select id="pf-theme"></select>
+              <p class="pf-note">เปลี่ยนแล้วมีผลกับทุกคนใน Space นี้ — ทุกคนต้องอยู่บนแผนผังเดียวกัน
+                ระบบจะโหลดห้องใหม่ให้ และโต๊ะที่จองไว้ในแผนผังเดิมจะถูกยกเลิก</p>
+
               <label class="pf-l">ลิงก์เชิญ</label>
               <div class="wm-invite" id="pf-invite-row">
                 <input type="text" id="pf-invite" readonly />

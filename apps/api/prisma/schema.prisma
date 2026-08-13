@@ -44,6 +44,9 @@ model Workspace {
   name        String // display name, e.g. "บริษัท A"
   inviteCode  String       @unique
   allowGuests Boolean      @default(true)
+  // map layout everyone in this space loads. Per workspace, not per person:
+  // different maps would put people inside each other's walls.
+  theme       String       @default("classic")
   useCase     String? // onboarding: how the team plans to use this space
   ownerId     String
   owner       User         @relation("OwnedWorkspaces", fields: [ownerId], references: [id], onDelete: Cascade)

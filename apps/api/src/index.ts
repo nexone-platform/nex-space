@@ -430,8 +430,13 @@ async function uniqueSlug(base: string): Promise<string> {
  */
 const canInvite = (role?: string) => role === "owner" || role === "admin" || role === "member";
 
+// map layouts the client can render — mirrors THEMES in apps/web/src/scenes/mapThemes.ts.
+// Validated here so a bad value can never reach everyone's map loader.
+const THEMES = ["classic", "office"];
+
 const wsView = (w: any, role?: string) => ({
   slug: w.slug, name: w.name, allowGuests: w.allowGuests,
+  theme: w.theme ?? "classic",
   inviteCode: canInvite(role) ? w.inviteCode : undefined,
   members: w._count?.members ?? undefined, role,
 });
@@ -513,12 +518,15 @@ app.patch("/workspaces/:slug", requireAuth, async (req: AuthedRequest, res) => {
     where: { userId_workspaceId: { userId: req.user!.id, workspaceId: w.id } },
   });
   if (!m || (m.role !== "owner" && m.role !== "admin")) return res.status(403).json({ error: "forbidden" });
-  const { name, allowGuests } = req.body ?? {};
+  const { name, allowGuests, theme } = req.body ?? {};
+  if (theme !== undefined && !THEMES.includes(String(theme)))
+    return res.status(400).json({ error: "unknown theme" });
   const updated = await prisma.workspace.update({
     where: { id: w.id },
     data: {
       ...(typeof name === "string" && name.trim() ? { name: name.trim().slice(0, 60) } : {}),
       ...(typeof allowGuests === "boolean" ? { allowGuests } : {}),
+      ...(theme !== undefined ? { theme: String(theme) } : {}),
     },
     include: { _count: { select: { members: true } } },
   });

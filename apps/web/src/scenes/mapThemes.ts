@@ -7,6 +7,8 @@
 // a bare key loads from /assets/furniture. Positions are tile coordinates of the
 // sprite's CENTRE, matching how the scene places images.
 
+import { cachedTheme, themeOverride } from "../workspace";
+
 export type Prop = [key: string, x: number, y: number, solid: boolean];
 export type Flat = [key: string, x: number, y: number];
 
@@ -275,10 +277,14 @@ export const THEMES: Record<string, MapTheme> = {
   office: officeTheme,
 };
 
-/** `?theme=office` picks the new layout; anything else falls back to classic */
+/**
+ * The layout this room loads: a `?theme=` override first (previewing), then the
+ * workspace's saved theme from the local cache. The cache exists because the
+ * scene picks its map synchronously at import time, long before the API answers;
+ * OfficeScene reloads if the server turns out to disagree.
+ */
 export function pickTheme(): MapTheme {
-  const want = new URLSearchParams(location.search).get("theme") ?? "";
-  return THEMES[want] ?? classicTheme;
+  return THEMES[themeOverride()] ?? THEMES[cachedTheme()] ?? classicTheme;
 }
 
 /** where a prop's PNG lives: "office/cs-desk" -> office, bare key -> furniture */

@@ -6,7 +6,8 @@
 // member never sees controls their write would be refused.
 import { API, authHeaders, authToken } from "./api";
 import { mountMemberPanel, type MemberPanel } from "./memberPanel";
-import { inviteLink } from "./workspace";
+import { inviteLink, rememberTheme, themeOverride } from "./workspace";
+import { THEMES } from "./scenes/mapThemes";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T | null;
 
@@ -26,6 +27,18 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
   let panel: MemberPanel | null = null;
   let myRole = "member";
   let inviteCode = "";
+  let savedTheme = "classic";
+
+  // one option per layout the client can actually render
+  const themeSelect = $<HTMLSelectElement>("pf-theme");
+  if (themeSelect && !themeSelect.options.length) {
+    for (const [id, t] of Object.entries(THEMES)) {
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = t.label;
+      themeSelect.appendChild(opt);
+    }
+  }
 
   const say = (text: string, kind: "ok" | "err" = "ok") => {
     const el = $("pf-gen-msg");
@@ -87,7 +100,7 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
   /** hide what this role may not do instead of letting the server refuse later */
   const applyRole = () => {
     const manager = myRole === "owner" || myRole === "admin";
-    for (const id of ["pf-name", "pf-guests"]) {
+    for (const id of ["pf-name", "pf-guests", "pf-theme"]) {
       const el = $<HTMLInputElement>(id);
       if (el) el.disabled = !manager;
     }
@@ -116,10 +129,13 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
       const w = d.workspace ?? {};
       myRole = w.role ?? myRole;
       inviteCode = w.inviteCode ?? "";
+      savedTheme = w.theme ?? "classic";
       $<HTMLInputElement>("pf-name")!.value = w.name ?? slug;
       $<HTMLInputElement>("pf-guests")!.checked = !!w.allowGuests;
+      if (themeSelect) themeSelect.value = THEMES[savedTheme] ? savedTheme : "classic";
       $<HTMLInputElement>("pf-invite")!.value = inviteCode ? inviteLink() : "—";
       applyRole();
+      if (themeOverride()) say(`กำลังดูตัวอย่างธีม "${themeOverride()}" จาก URL — ยังไม่ได้บันทึกให้ทีม`);
     } catch { say("โหลดการตั้งค่าไม่ได้", "err"); }
   };
 
@@ -153,16 +169,35 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
 
   $("pf-save")!.onclick = async () => {
     say("");
+    const theme = themeSelect?.value || savedTheme;
+    const themeChanged = theme !== savedTheme;
+    if (themeChanged && !confirm(
+      `เปลี่ยนแผนผังเป็น "${THEMES[theme]?.label ?? theme}"?\n\n`
+      + "ทุกคนใน Space นี้จะถูกโหลดห้องใหม่ และโต๊ะที่จองไว้ในแผนผังเดิมจะถูกยกเลิก")) return;
+
     const r = await fetch(`${API}/workspaces/${encodeURIComponent(slug)}`, {
       method: "PATCH", headers: authHeaders(),
       body: JSON.stringify({
         name: $<HTMLInputElement>("pf-name")!.value.trim(),
         allowGuests: $<HTMLInputElement>("pf-guests")!.checked,
+        theme,
       }),
     });
     const d = await r.json().catch(() => ({} as any));
-    if (!r.ok) return say(d.error === "forbidden" ? "คุณไม่มีสิทธิ์แก้ไข Space นี้" : (d.error || "บันทึกไม่สำเร็จ"), "err");
+    if (!r.ok) return say(d.error === "forbidden" ? "คุณไม่มีสิทธิ์แก้ไข Space นี้"
+      : d.error === "unknown theme" ? "ไม่รู้จักธีมนี้"
+      : (d.error || "บันทึกไม่สำเร็จ"), "err");
     say("บันทึกแล้ว");
+
+    if (themeChanged) {
+      // the map is chosen at boot, so the new layout needs a fresh load. Other
+      // people's tabs notice the change from their own workspace fetch.
+      savedTheme = theme;
+      rememberTheme(slug, theme);
+      say("บันทึกแล้ว — กำลังโหลดแผนผังใหม่…");
+      setTimeout(() => location.reload(), 700);
+      return;
+    }
     // the sidebar header and the cached name should follow the rename
     const name = d.workspace?.name ?? $<HTMLInputElement>("pf-name")!.value.trim();
     const title = document.getElementById("sb-title");

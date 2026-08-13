@@ -146,6 +146,26 @@ written to the API log instead of emailed — fine for testing, not for real use
 docker compose logs -f nexspace-api | grep "sign-in code"
 ```
 
+### Map theme
+
+Owners and admins pick the layout in **⚙️ → ทั่วไป → ธีมแผนผังออฟฟิศ**. It is a
+property of the workspace, not of the person: two people on different maps would
+stand inside each other's walls, so everyone in a space loads the same one.
+
+Because the scene chooses its map synchronously at boot, the theme is cached in
+`localStorage` per workspace and refreshed from the API right after. A tab whose
+cache disagrees with the server writes the new value and reloads once — that is
+how other people's open tabs pick up a change.
+
+`?theme=<id>` still previews a layout for one visit without saving it, which is
+the way to look at a new one before switching the team over.
+
+Desk ids belong to a layout (`hall-1` exists in classic, `open-1` in office), so
+switching drops desks claimed under the old map. Adding a theme means adding it
+to `THEMES` in `apps/web/src/scenes/mapThemes.ts` **and** to the `THEMES`
+whitelist in `apps/api/src/index.ts`, which is what stops an unknown value from
+reaching every client's map loader.
+
 ### Member roles
 
 Four ranks, set from the ⋮ menu next to each person in **ตั้งค่า Workspace**:
