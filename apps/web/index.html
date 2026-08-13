@@ -313,6 +313,17 @@
       .pf-msg { min-height: 17px; font-size: 12.5px; color: #16897a; }
       .pf-msg.err { color: #e5484d; }
       .pf-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+      /* art credits */
+      .cr-card { margin-top: 14px; padding: 13px 15px; border: 1px solid #eceef2; border-radius: 12px; background: #fafbfc; }
+      .cr-card h3 { margin: 0 0 3px; font-size: 13.5px; color: #1c1b22; }
+      .cr-card p { margin: 0 0 9px; font-size: 12px; color: #8a8f98; line-height: 1.55; }
+      .cr-row { display: flex; gap: 8px; font-size: 12px; margin-top: 7px; }
+      .cr-row > b { flex: 0 0 74px; color: #6b7280; font-weight: 600; }
+      .cr-row > span { flex: 1; min-width: 0; color: #3f434a; line-height: 1.6; word-break: break-word; }
+      .cr-lic { display: inline-block; margin: 0 5px 4px 0; padding: 2px 7px; border-radius: 999px;
+        background: #eef1fb; color: #4348a8; font: 600 11px "Segoe UI", sans-serif; }
+      .cr-card a { color: #4f46e5; text-decoration: none; margin-right: 10px; }
+      .cr-card a:hover { text-decoration: underline; }
 
       .mp { display: flex; flex-direction: column; min-height: 0; font-family: "Segoe UI", sans-serif; }
       .mp-tools { display: flex; gap: 8px; margin: 6px 0; }
@@ -761,6 +772,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.1 14.5a1.4 1.4 0 0 0 .3 1.6 2 2 0 1 1-2.8 2.8 1.4 1.4 0 0 0-2.4 1v.2a2 2 0 1 1-4 0 1.4 1.4 0 0 0-2.4-1 2 2 0 1 1-2.8-2.8 1.4 1.4 0 0 0-1-2.4H4a2 2 0 1 1 0-4 1.4 1.4 0 0 0 1-2.4 2 2 0 1 1 2.8-2.8 1.4 1.4 0 0 0 2.4-1V4a2 2 0 1 1 4 0 1.4 1.4 0 0 0 2.4 1 2 2 0 1 1 2.8 2.8 1.4 1.4 0 0 0 1 2.4h.1a2 2 0 1 1 0 4h-.2a1.4 1.4 0 0 0-1.2.9z"/></svg>
             <span>ทั่วไป</span>
           </button>
+          <button class="pf-item" data-pane="credits">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M8 7.5h7M8 10.5h5"/></svg>
+            <span>เครดิตงานศิลป์</span>
+          </button>
           <div class="pf-group">ออฟฟิศ</div>
           <button class="pf-item active" data-pane="members">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6a3 3 0 0 1 0 6"/><path d="M18 20a6 6 0 0 0-3-5"/></svg>
@@ -787,10 +802,10 @@
               <input type="text" id="pf-name" />
               <label class="pf-row"><input type="checkbox" id="pf-guests" /> ให้คนที่ไม่ได้สมัครสมาชิก (Guest) เข้าได้</label>
 
-              <label class="pf-l" for="pf-theme">ธีมแผนผังออฟฟิศ</label>
-              <select id="pf-theme"></select>
-              <p class="pf-note">เปลี่ยนแล้วมีผลกับทุกคนใน Space นี้ — ทุกคนต้องอยู่บนแผนผังเดียวกัน
-                ระบบจะโหลดห้องใหม่ให้ และโต๊ะที่จองไว้ในแผนผังเดิมจะถูกยกเลิก</p>
+              <label class="pf-l">ธีมแผนผังออฟฟิศ</label>
+              <p class="pf-note"><b id="pf-theme-name">—</b><br />
+                เลือกได้ตอนสร้าง Space เท่านั้น — ทุกคนต้องอยู่บนแผนผังเดียวกัน
+                การเปลี่ยนภายหลังจะยกเลิกโต๊ะที่ทุกคนจองไว้</p>
 
               <label class="pf-l">ลิงก์เชิญ</label>
               <div class="wm-invite" id="pf-invite-row">
@@ -802,6 +817,12 @@
               <div class="pf-actions">
                 <button class="wm-btn wm-primary" id="pf-save">บันทึก</button>
               </div>
+            </div>
+
+            <div class="pf-pane" id="pane-credits" hidden>
+              <p class="pf-note">งานศิลป์บางส่วนมาจากศิลปินภายนอกภายใต้สัญญาอนุญาตที่
+                <b>กำหนดให้ต้องแสดงเครดิต</b> ทุกที่ที่เผยแพร่งาน หน้านี้คือเครดิตนั้น</p>
+              <div id="pf-credits"></div>
             </div>
           </div>
         </section>

@@ -148,23 +148,50 @@ docker compose logs -f nexspace-api | grep "sign-in code"
 
 ### Map theme
 
-Owners and admins pick the layout in **⚙️ → ทั่วไป → ธีมแผนผังออฟฟิศ**. It is a
-property of the workspace, not of the person: two people on different maps would
-stand inside each other's walls, so everyone in a space loads the same one.
+Chosen **once, in the create-space wizard**, and fixed after that. It belongs to
+the workspace, not the person: two people on different maps would stand inside
+each other's walls. Desk ids also belong to a layout (`hall-1` exists in classic,
+`open-1` in office), so changing one later would cancel every desk the team had
+claimed — `PATCH /workspaces/:slug` rejects a different theme rather than allow
+that quietly. **⚙️ → ทั่วไป** shows which layout a space uses, read-only.
 
-Because the scene chooses its map synchronously at boot, the theme is cached in
-`localStorage` per workspace and refreshed from the API right after. A tab whose
-cache disagrees with the server writes the new value and reloads once — that is
-how other people's open tabs pick up a change.
+If a space genuinely has to move, it is a deliberate database change plus telling
+the team their desks are gone:
 
-`?theme=<id>` still previews a layout for one visit without saving it, which is
-the way to look at a new one before switching the team over.
+```bash
+docker compose exec nexspace-api node -e "const{PrismaClient}=require('@prisma/client');const p=new PrismaClient();p.workspace.update({where:{slug:'SLUG'},data:{theme:'office'}}).then(w=>console.log(w.slug,w.theme)).finally(()=>p.\$disconnect())"
+```
 
-Desk ids belong to a layout (`hall-1` exists in classic, `open-1` in office), so
-switching drops desks claimed under the old map. Adding a theme means adding it
-to `THEMES` in `apps/web/src/scenes/mapThemes.ts` **and** to the `THEMES`
-whitelist in `apps/api/src/index.ts`, which is what stops an unknown value from
-reaching every client's map loader.
+Everyone's open tab notices on its next workspace fetch and reloads once: the
+scene picks its map synchronously at boot, so the theme is cached in
+`localStorage` per workspace, and a tab whose cache disagrees writes the server's
+value and reloads. `?theme=<id>` previews a layout for one visit without saving.
+
+Adding a theme means adding it to `THEMES` in
+`apps/web/src/scenes/mapThemes.ts` **and** to the `THEMES` whitelist in
+`apps/api/src/index.ts`, which is what stops an unknown value from reaching every
+client's map loader.
+
+### Art credits (licence obligation)
+
+Some of the art is third-party under licences that **require attribution wherever
+the work is published** — OGA-BY 3.0, CC-BY, CC-BY-SA and GPL. **⚙️ → เครดิต
+งานศิลป์** is that attribution, and it must stay reachable while these files ship:
+
+- **Office theme props** — LPC "The Office" by Eliza Wyatt and Lanea Zimmerman
+  (Sharm), OGA-BY 3.0.
+- **Avatar sprites** — Universal LPC Spritesheet: 749 parts by 71 artists under a
+  mix of the licences above. The dialog names every artist and links
+  `/lpc/CREDITS.txt`, the full per-part list.
+- CoolSchool desks (CC0) and the PixelLab art are credited as courtesy.
+
+`apps/web/src/artCredits.ts` and `public/lpc/CREDITS.txt` are **generated** from
+the upstream sheet definitions, not written by hand. After adding or removing
+spritesheets, regenerate them or the credit stops matching what ships:
+
+```bash
+node apps/web/scripts/build-credits.mjs
+```
 
 ### Member roles
 

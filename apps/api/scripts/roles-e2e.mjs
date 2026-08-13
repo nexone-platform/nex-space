@@ -125,27 +125,29 @@ ok("...but still gives it to a member",
 ok("the public lookup still returns the name for the invite screen",
   (await call("GET", `/workspaces/${slug}`)).body.workspace.name === `Roles ${stamp}`);
 
-// ---- map theme: one per workspace, managers only ----
-ok("a new workspace starts on the classic layout",
+// ---- map theme: chosen once at creation, then fixed ----
+ok("a workspace created without a theme gets the classic layout",
   (await call("GET", `/workspaces/${slug}`, { token: owner.token })).body.workspace.theme === "classic");
-ok("owner switches the layout",
-  (await call("PATCH", `/workspaces/${slug}`, { token: owner.token, body: { theme: "office" } })).status === 200);
-ok("everyone is told the new layout",
-  (await call("GET", `/workspaces/${slug}`, { token: member.token })).body.workspace.theme === "office");
-ok("a junk theme is refused rather than shipped to every client",
-  (await call("PATCH", `/workspaces/${slug}`, { token: owner.token, body: { theme: "../etc/passwd" } })).status === 400);
-ok("the refused write left the layout alone",
-  (await call("GET", `/workspaces/${slug}`, { token: owner.token })).body.workspace.theme === "office");
-ok("an admin may switch it too",
-  (await call("PATCH", `/workspaces/${slug}`, { token: admin.token, body: { theme: "classic" } })).status === 200);
-ok("a plain member may not",
-  (await call("PATCH", `/workspaces/${slug}`, { token: member.token, body: { theme: "office" } })).status === 403);
-ok("renaming without naming a theme keeps the current one",
-  (await call("PATCH", `/workspaces/${slug}`, { token: owner.token, body: { name: `Roles ${stamp}` } }))
-    .body.workspace.theme === "classic");
-ok("the workspace list carries the theme so a card can preload it",
-  (await call("GET", "/workspaces", { token: member.token }))
-    .body.workspaces.find((w) => w.slug === slug)?.theme === "classic");
+
+const themed = await call("POST", "/workspaces",
+  { token: owner.token, body: { name: `Themed ${stamp}`, theme: "office" } });
+const tslug = themed.body.workspace.slug;
+ok("the create wizard's choice is honoured", themed.body.workspace.theme === "office");
+ok("a junk theme is refused at creation rather than shipped to every client",
+  (await call("POST", "/workspaces", { token: owner.token, body: { name: "Bad", theme: "../etc/passwd" } })).status === 400);
+
+ok("the layout cannot be changed afterwards",
+  (await call("PATCH", `/workspaces/${tslug}`, { token: owner.token, body: { theme: "classic" } })).status === 400);
+ok("the refused change left the layout alone",
+  (await call("GET", `/workspaces/${tslug}`, { token: owner.token })).body.workspace.theme === "office");
+ok("re-sending the same theme is not treated as a change",
+  (await call("PATCH", `/workspaces/${tslug}`, { token: owner.token, body: { name: `Themed ${stamp}`, theme: "office" } })).status === 200);
+ok("renaming still works and keeps the layout",
+  (await call("PATCH", `/workspaces/${tslug}`, { token: owner.token, body: { name: `Themed ${stamp} B` } }))
+    .body.workspace.theme === "office");
+ok("the workspace list carries the theme so the map loads right first time",
+  (await call("GET", "/workspaces", { token: owner.token }))
+    .body.workspaces.find((w) => w.slug === tslug)?.theme === "office");
 
 // ---- the game server reads the role from the access check ----
 const access = await call("GET", `/workspaces/${slug}/access?token=${guest.token}`);

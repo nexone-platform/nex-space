@@ -452,9 +452,11 @@ app.get("/workspaces", requireAuth, async (req: AuthedRequest, res) => {
 });
 
 app.post("/workspaces", requireAuth, async (req: AuthedRequest, res) => {
-  const { name: rawName, allowGuests: guests, role, companySize, useCase } = req.body ?? {};
+  const { name: rawName, allowGuests: guests, role, companySize, useCase, theme } = req.body ?? {};
   const name = String(rawName ?? "").trim().slice(0, 60);
   if (!name) return res.status(400).json({ error: "name required" });
+  if (theme !== undefined && !THEMES.includes(String(theme)))
+    return res.status(400).json({ error: "unknown theme" });
   const trim = (v: unknown) => (v ? String(v).slice(0, 60) : undefined);
 
   // the onboarding answers about the person are kept on the account, so creating
@@ -471,6 +473,8 @@ app.post("/workspaces", requireAuth, async (req: AuthedRequest, res) => {
     data: {
       name, slug: await uniqueSlug(name), inviteCode: randomCode(),
       allowGuests: guests !== false, useCase: trim(useCase), ownerId: req.user!.id,
+      // chosen in the create wizard; the layout is fixed for the space's lifetime
+      ...(theme !== undefined ? { theme: String(theme) } : {}),
       members: { create: { userId: req.user!.id, role: "owner" } },
     },
     include: { _count: { select: { members: true } } },
@@ -519,14 +523,17 @@ app.patch("/workspaces/:slug", requireAuth, async (req: AuthedRequest, res) => {
   });
   if (!m || (m.role !== "owner" && m.role !== "admin")) return res.status(403).json({ error: "forbidden" });
   const { name, allowGuests, theme } = req.body ?? {};
-  if (theme !== undefined && !THEMES.includes(String(theme)))
-    return res.status(400).json({ error: "unknown theme" });
+  // The layout is fixed once the space exists: desk ids belong to it, so a
+  // change would cancel every desk the team had claimed and move everyone's
+  // walls. Chosen in the create wizard instead — see DEPLOY.md for the manual
+  // route if a space really has to be moved.
+  if (theme !== undefined && String(theme) !== w.theme)
+    return res.status(400).json({ error: "theme is fixed after creation" });
   const updated = await prisma.workspace.update({
     where: { id: w.id },
     data: {
       ...(typeof name === "string" && name.trim() ? { name: name.trim().slice(0, 60) } : {}),
       ...(typeof allowGuests === "boolean" ? { allowGuests } : {}),
-      ...(theme !== undefined ? { theme: String(theme) } : {}),
     },
     include: { _count: { select: { members: true } } },
   });

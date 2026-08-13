@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "credits": "node scripts/build-credits.mjs"
   },
   "dependencies": {
     "colyseus.js": "^0.16.22",

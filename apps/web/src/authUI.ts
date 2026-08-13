@@ -6,6 +6,7 @@ import { encodeAvatar, buildFrameCanvas, defaultDressedConfig, type LpcConfig } 
 import { WORKSPACE, HAS_WORKSPACE_PARAM, gotoWorkspace, wsKey, wsKeyFor, rememberTheme } from "./workspace";
 import { API, TOKEN_KEY, authToken as token, authHeaders } from "./api";
 import { mountMemberPanel, roleLabel, type PanelMember } from "./memberPanel";
+import { THEMES } from "./scenes/mapThemes";
 
 export interface StartInfo { name: string; avatar: string; desk: string; }
 interface User {
@@ -357,6 +358,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
   // ------------------------------------------------------ create-space wizard
   type Step =
     | { key: "role" | "companySize" | "useCase"; q: string; opts: string[]; other?: boolean }
+    | { key: "theme"; q: string }
     | { key: "name"; q: string };
 
   const STEPS: Step[] = [
@@ -367,6 +369,9 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     { key: "useCase", q: "คุณจะใช้ออฟฟิศเสมือนนี้เป็นหลักอย่างไร?", other: true,
       opts: ["พื้นที่ทำงานประจำวันของทีม", "พื้นที่ทำงานสัปดาห์ละ 1-2 ครั้ง",
              "อีเวนต์ครั้งเดียว (เช่น Hackathon)", "อีเวนต์ประจำ (เช่น Workshop)", "อื่น ๆ (ระบุ)"] },
+    // asked here and only here: the layout decides where the desks are, and
+    // changing it later would cancel every desk the team had claimed
+    { key: "theme", q: "เลือกแผนผังออฟฟิศของคุณ" },
     { key: "name", q: "ตั้งชื่อ Space ของคุณ" },
   ];
 
@@ -410,6 +415,30 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     e.opts.innerHTML = "";
     e.other.style.display = "none";
     e.other.value = "";
+
+    if (step.key === "theme") {
+      // defaulted at render, not in startWizard: pre-answering it there would
+      // make the skip-what-is-already-answered loop jump straight past this step
+      if (!answers.theme) answers.theme = "classic";
+      e.next.textContent = "ถัดไป →";
+      for (const [id, t] of Object.entries(THEMES)) {
+        const b = document.createElement("button");
+        b.className = "wiz-opt" + (answers.theme === id ? " on" : "");
+        b.textContent = t.label;
+        b.onclick = () => {
+          answers.theme = id;
+          e.opts.querySelectorAll(".wiz-opt").forEach((x) => x.classList.remove("on"));
+          b.classList.add("on");
+        };
+        e.opts.appendChild(b);
+      }
+      const note = document.createElement("p");
+      note.style.cssText = "margin:12px 0 0;font-size:12.5px;color:#8a8f98;line-height:1.6";
+      note.textContent = "ทุกคนใน Space จะใช้แผนผังนี้ร่วมกัน และเลือกได้เฉพาะตอนสร้างเท่านั้น";
+      e.opts.appendChild(note);
+      e.next.disabled = false;
+      return;
+    }
 
     if (step.key === "name") {
       // final step: name + guest access
@@ -462,6 +491,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
 
   $("wiz-next")!.onclick = async () => {
     const step = STEPS[stepIx];
+    if (step.key === "theme") { stepIx++; return renderStep(); }
     if (step.key !== "name") {
       // keep the typed detail next to the chosen label so Back can restore both
       if (wizEls().other.style.display !== "none") {
@@ -478,7 +508,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       const r = await fetch(`${API}/workspaces`, {
         method: "POST", headers: authHeaders(),
         body: JSON.stringify({
-          name: answers.name, allowGuests,
+          name: answers.name, allowGuests, theme: answers.theme || "classic",
           role: answers.role, companySize: answers.companySize,
           // an "other" pick is reported as what they actually typed
           useCase: isOther(answers.useCase ?? "")

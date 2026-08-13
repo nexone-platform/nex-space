@@ -6,12 +6,16 @@
 // member never sees controls their write would be refused.
 import { API, authHeaders, authToken } from "./api";
 import { mountMemberPanel, type MemberPanel } from "./memberPanel";
-import { inviteLink, rememberTheme, themeOverride } from "./workspace";
+import { inviteLink, themeOverride } from "./workspace";
 import { THEMES } from "./scenes/mapThemes";
+import { ART_CREDITS } from "./artCredits";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T | null;
 
-const TITLES: Record<string, string> = { members: "จัดการสมาชิก", general: "ทั่วไป" };
+const TITLES: Record<string, string> = {
+  members: "จัดการสมาชิก", general: "ทั่วไป", credits: "เครดิตงานศิลป์",
+};
+const PANES = Object.keys(TITLES);
 
 export interface PrefsModal { open(pane?: string): void; close(): void; }
 
@@ -27,18 +31,7 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
   let panel: MemberPanel | null = null;
   let myRole = "member";
   let inviteCode = "";
-  let savedTheme = "classic";
-
-  // one option per layout the client can actually render
-  const themeSelect = $<HTMLSelectElement>("pf-theme");
-  if (themeSelect && !themeSelect.options.length) {
-    for (const [id, t] of Object.entries(THEMES)) {
-      const opt = document.createElement("option");
-      opt.value = id;
-      opt.textContent = t.label;
-      themeSelect.appendChild(opt);
-    }
-  }
+  let creditsDrawn = false;
 
   const say = (text: string, kind: "ok" | "err" = "ok") => {
     const el = $("pf-gen-msg");
@@ -48,7 +41,7 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
   };
 
   const showPane = (pane: string) => {
-    for (const p of ["members", "general"]) {
+    for (const p of PANES) {
       const el = $(`pane-${p}`);
       if (el) el.hidden = p !== pane;
     }
@@ -57,6 +50,65 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
     $("pf-title")!.textContent = TITLES[pane] ?? "ตั้งค่า";
     if (pane === "members") mountMembers();
     if (pane === "general") void loadGeneral();
+    if (pane === "credits") drawCredits();
+  };
+
+  /**
+   * Attribution required by the licences on the third-party art (OGA-BY, CC-BY,
+   * CC-BY-SA, GPL). Built from artCredits.ts, which is generated from the
+   * upstream sheet definitions rather than typed by hand.
+   */
+  const drawCredits = () => {
+    const host = $("pf-credits");
+    if (!host || creditsDrawn) return;
+    creditsDrawn = true;
+    for (const g of ART_CREDITS) {
+      const card = document.createElement("div");
+      card.className = "cr-card";
+      const h = document.createElement("h3");
+      h.textContent = g.title;
+      const what = document.createElement("p");
+      what.textContent = g.what;
+      card.append(h, what);
+
+      const row = (label: string, fill: (s: HTMLElement) => void) => {
+        const r = document.createElement("div");
+        r.className = "cr-row";
+        const b = document.createElement("b");
+        b.textContent = label;
+        const s = document.createElement("span");
+        fill(s);
+        r.append(b, s);
+        card.appendChild(r);
+      };
+
+      row(g.authors.length > 1 ? "ศิลปิน" : "ศิลปิน", (s) => { s.textContent = g.authors.join(", "); });
+      row("สัญญาอนุญาต", (s) => {
+        for (const l of g.licenses) {
+          const chip = document.createElement("i");
+          chip.className = "cr-lic";
+          chip.textContent = l;
+          s.appendChild(chip);
+        }
+      });
+      if (g.urls.length || g.fullList) {
+        row("แหล่งที่มา", (s) => {
+          for (const u of g.urls) {
+            const a = document.createElement("a");
+            a.href = u.href; a.target = "_blank"; a.rel = "noopener noreferrer";
+            a.textContent = u.label;
+            s.appendChild(a);
+          }
+          if (g.fullList) {
+            const a = document.createElement("a");
+            a.href = g.fullList; a.target = "_blank"; a.rel = "noopener noreferrer";
+            a.textContent = "รายการครบทุกชิ้น";
+            s.appendChild(a);
+          }
+        });
+      }
+      host.appendChild(card);
+    }
   };
 
   /** copy the room link; the invite code itself is only handed to members */
@@ -100,7 +152,7 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
   /** hide what this role may not do instead of letting the server refuse later */
   const applyRole = () => {
     const manager = myRole === "owner" || myRole === "admin";
-    for (const id of ["pf-name", "pf-guests", "pf-theme"]) {
+    for (const id of ["pf-name", "pf-guests"]) {
       const el = $<HTMLInputElement>(id);
       if (el) el.disabled = !manager;
     }
@@ -129,13 +181,13 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
       const w = d.workspace ?? {};
       myRole = w.role ?? myRole;
       inviteCode = w.inviteCode ?? "";
-      savedTheme = w.theme ?? "classic";
+      const theme = w.theme ?? "classic";
       $<HTMLInputElement>("pf-name")!.value = w.name ?? slug;
       $<HTMLInputElement>("pf-guests")!.checked = !!w.allowGuests;
-      if (themeSelect) themeSelect.value = THEMES[savedTheme] ? savedTheme : "classic";
+      $("pf-theme-name")!.textContent = THEMES[theme]?.label ?? theme;
       $<HTMLInputElement>("pf-invite")!.value = inviteCode ? inviteLink() : "—";
       applyRole();
-      if (themeOverride()) say(`กำลังดูตัวอย่างธีม "${themeOverride()}" จาก URL — ยังไม่ได้บันทึกให้ทีม`);
+      if (themeOverride()) say(`กำลังดูตัวอย่างธีม "${themeOverride()}" จาก URL — ไม่ใช่ธีมที่ Space นี้ใช้จริง`);
     } catch { say("โหลดการตั้งค่าไม่ได้", "err"); }
   };
 
@@ -167,37 +219,21 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
     say("สร้างรหัสเชิญใหม่แล้ว");
   };
 
+  // the theme is deliberately not editable here — it is chosen once, when the
+  // space is created, because changing it invalidates everyone's claimed desk
   $("pf-save")!.onclick = async () => {
     say("");
-    const theme = themeSelect?.value || savedTheme;
-    const themeChanged = theme !== savedTheme;
-    if (themeChanged && !confirm(
-      `เปลี่ยนแผนผังเป็น "${THEMES[theme]?.label ?? theme}"?\n\n`
-      + "ทุกคนใน Space นี้จะถูกโหลดห้องใหม่ และโต๊ะที่จองไว้ในแผนผังเดิมจะถูกยกเลิก")) return;
-
     const r = await fetch(`${API}/workspaces/${encodeURIComponent(slug)}`, {
       method: "PATCH", headers: authHeaders(),
       body: JSON.stringify({
         name: $<HTMLInputElement>("pf-name")!.value.trim(),
         allowGuests: $<HTMLInputElement>("pf-guests")!.checked,
-        theme,
       }),
     });
     const d = await r.json().catch(() => ({} as any));
     if (!r.ok) return say(d.error === "forbidden" ? "คุณไม่มีสิทธิ์แก้ไข Space นี้"
-      : d.error === "unknown theme" ? "ไม่รู้จักธีมนี้"
       : (d.error || "บันทึกไม่สำเร็จ"), "err");
     say("บันทึกแล้ว");
-
-    if (themeChanged) {
-      // the map is chosen at boot, so the new layout needs a fresh load. Other
-      // people's tabs notice the change from their own workspace fetch.
-      savedTheme = theme;
-      rememberTheme(slug, theme);
-      say("บันทึกแล้ว — กำลังโหลดแผนผังใหม่…");
-      setTimeout(() => location.reload(), 700);
-      return;
-    }
     // the sidebar header and the cached name should follow the rename
     const name = d.workspace?.name ?? $<HTMLInputElement>("pf-name")!.value.trim();
     const title = document.getElementById("sb-title");
