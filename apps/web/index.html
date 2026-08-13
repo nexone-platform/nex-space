@@ -78,6 +78,9 @@
       #rail button.active { background: #3a3f47; color: #fff; }
       #rail .spacer { flex: 1; }
       #rail svg { width: 22px; height: 22px; }
+      /* 30deg is half the 60deg tooth pitch, so it reads as the gear turning one notch */
+      #rail-settings svg { transition: transform .25s ease; }
+      #rail-settings:hover svg { transform: rotate(30deg); }
       #rail .rail-badge { position: absolute; top: -2px; right: -2px; background: #e5484d; color: #fff;
         font: 700 10px sans-serif; border-radius: 9px; padding: 0 5px; min-width: 16px; text-align: center; }
       /* sidebar now sits next to the rail */
@@ -886,7 +889,9 @@
       </button>
       <span class="spacer"></span>
       <button id="rail-settings" title="ตั้งค่า">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
+        <!-- Six chunky teeth on an exact 60° pitch. The previous gear had twelve
+             thin ones and collapsed into a blur at this icon's real 22px size. -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.04 5.18L10.19 2.67L13.81 2.67L13.96 5.18A7.1 7.1 0 0 1 16.93 6.89L19.17 5.77L20.98 8.91L18.89 10.28A7.1 7.1 0 0 1 18.89 13.72L20.98 15.09L19.17 18.23L16.93 17.11A7.1 7.1 0 0 1 13.96 18.82L13.81 21.33L10.19 21.33L10.04 18.82A7.1 7.1 0 0 1 7.07 17.11L4.83 18.23L3.02 15.09L5.11 13.72A7.1 7.1 0 0 1 5.11 10.28L3.02 8.91L4.83 5.77L7.07 6.89Z"/><circle cx="12" cy="12" r="3.1"/></svg>
       </button>
     </nav>
     <aside id="sidebar">
