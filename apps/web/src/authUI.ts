@@ -435,9 +435,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
         shot.className = "wiz-shot";     // shimmering until the preview is drawn
         const name = document.createElement("b");
         name.textContent = t.label;
-        const size = document.createElement("small");
-        size.textContent = `${t.cols}×${t.rows} ช่อง · ${t.desks.length} โต๊ะ`;
-        card.append(shot, name, size);
+        card.append(shot, name);
         card.onclick = () => {
           answers.theme = id;
           row.querySelectorAll(".wiz-theme").forEach((x) => x.classList.remove("on"));
