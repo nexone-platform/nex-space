@@ -5,14 +5,26 @@ import { runAuthFlow } from "./authUI";
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: "app",
-  width: 960,
-  height: 640,
   backgroundColor: "#f3e7ca",
   pixelArt: true,
   roundPixels: true,
   scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    // RESIZE, not FIT. FIT keeps a fixed 960x640 buffer and stretches it to the
+    // window by whatever factor fits — measured at x0.6484 here, which combined
+    // with a fractional camera zoom put one art pixel on 0.843 screen pixels and
+    // threw away most of the detail before it reached the screen. RESIZE gives
+    // the canvas the window's own size, so that factor is exactly 1 and the
+    // camera's (integer) zoom is the only scaling left.
+    mode: Phaser.Scale.RESIZE,
+    width: "100%",
+    height: "100%",
+    // Give the drawing buffer one pixel per DEVICE pixel. Without this the buffer
+    // is sized in CSS pixels and the browser rescales the finished frame by the
+    // display scaling factor — fine at 100% or 200%, but Windows at 125% or 150%
+    // would land art pixels between device pixels again. Phaser derives the game
+    // size as parent/zoom, so 1/dpr makes the buffer dpr times larger while the
+    // canvas still occupies the same CSS space.
+    zoom: 1 / (window.devicePixelRatio || 1),
   },
   physics: {
     default: "arcade",

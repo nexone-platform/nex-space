@@ -70,7 +70,19 @@ const THEME = pickTheme();
 const COLS = THEME.cols;
 const ROWS = THEME.rows;
 const SPAWN = THEME.spawn;
-const ZOOM_MIN = 1.3, ZOOM_MAX = 4, ZOOM_DEFAULT = 2.2;
+// Zoom LEVELS, not camera zoom values — see setZoom. 2 is the readable default,
+// 1 shows the most of the map, and a step is what the +/- buttons and the wheel move.
+const ZOOM_MIN = 1, ZOOM_MAX = 4, ZOOM_DEFAULT = 2;
+
+/**
+ * The drawing buffer holds one pixel per device pixel (see main.ts), so a camera
+ * zoom of N puts one art pixel on exactly N device pixels. Multiplying the level
+ * by the display scaling keeps the room the same physical size on a 150% display
+ * as on a 100% one, and rounding keeps the result whole — which is the whole
+ * point: a fractional zoom is what made the art mushy.
+ */
+const cameraZoomFor = (level: number) =>
+  Math.max(1, Math.round(level * (typeof window === "undefined" ? 1 : window.devicePixelRatio || 1)));
 
 const CHAIR_DIRS = ["south", "south-east", "east", "north-east", "north", "north-west", "west", "south-west"];
 
@@ -96,6 +108,7 @@ export class OfficeScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
   private myLabel?: Phaser.GameObjects.Container; // my own name tag above my head
   private myDesk = "";                          // id of my claimed home desk ("" = none)
+  private zoomLevel = ZOOM_DEFAULT;             // whole step; the camera gets it x dpr
   private deskClaimAt = 0;                      // scene time of my last claim (grace window for state reconcile)
   private toastTimer?: number;                  // pending hide timer for the DOM toast
   private myStatus = "online";                  // presence broadcast to peers
@@ -235,7 +248,9 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // --- outdoor props (trees / fountain / benches / signs) on the grass ring ---
-    const outdoorScale = (k: string) => (/planter/.test(k) ? 0.6 : 1); // shrink bulky planters
+    // 0.5, not 0.6: halving keeps the pixel grid (each drawn pixel comes from a
+    // whole 2x2 block), where 0.6 lands source pixels between screen pixels
+    const outdoorScale = (k: string) => (/planter/.test(k) ? 0.5 : 1); // shrink bulky planters
     for (const [k, tx, ty, solid] of OUTDOOR) {
       const px = tx * TILE + TILE / 2;
       const py = ty * TILE + TILE / 2;
@@ -250,10 +265,11 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // --- decor overlays (windows / art / signage) drawn on top of walls ---
-    // scale down so wall decor sits proportionally on the wall instead of filling a whole tile
+    // halved so wall decor sits proportionally on the wall instead of filling a
+    // whole tile; 0.5 rather than 0.6 keeps it on the pixel grid
     for (const [k, tx, ty] of DECOR) {
       this.add.image(tx * TILE + TILE / 2, ty * TILE + TILE / 2, k)
-        .setScale(0.6)
+        .setScale(0.5)
         .setDepth(55);
     }
 
@@ -284,7 +300,9 @@ export class OfficeScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, worldW, worldH);
     this.cameras.main.setBounds(0, 0, worldW, worldH);
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
-    this.cameras.main.setZoom(ZOOM_DEFAULT);
+    this.setZoom(ZOOM_DEFAULT); // via the helper so the dpr multiplier applies
+    // the fill floor depends on the viewport, so re-apply it when that changes
+    this.scale.on("resize", () => this.setZoom(this.zoomLevel));
 
     // --- input: movement ---
     this.cursors = this.input.keyboard!.createCursorKeys();
@@ -307,7 +325,7 @@ export class OfficeScene extends Phaser.Scene {
     });
     this.input.on("wheel", (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
       if (this.selected) this.rotateChairStep(this.selected, Math.sign(dy));
-      else this.zoomBy(dy > 0 ? 1 / 1.12 : 1.12); // scroll = zoom the camera
+      else this.zoomBy(dy > 0 ? -1 : 1); // scroll = zoom the camera, one whole step
     });
     this.input.keyboard!.on("keydown-ESC", () => this.deselectChair());
     this.input.keyboard!.on("keydown-Q", () => { if (this.selected) this.rotateChairStep(this.selected, -1); });
@@ -894,11 +912,23 @@ export class OfficeScene extends Phaser.Scene {
     pop.style.bottom = window.innerHeight - r.top + 8 + "px";
   }
 
-  private setZoom(z: number) {
-    this.cameras.main.setZoom(Phaser.Math.Clamp(z, ZOOM_MIN, ZOOM_MAX));
+  /**
+   * `level` is a whole step, 1..4. The camera never gets a fractional zoom: at a
+   * fractional one every source pixel lands on a fraction of a device pixel and
+   * the art is resampled into mush, which is why Gather only zooms in whole steps.
+   */
+  private setZoom(level: number) {
+    this.zoomLevel = Phaser.Math.Clamp(Math.round(level), ZOOM_MIN, ZOOM_MAX);
+    const cam = this.cameras.main;
+    // Integer zoom means we cannot scale the map to fit the window, so on a wide
+    // screen the lowest levels would leave the world floating in background
+    // colour. Raise the floor to the smallest whole zoom that still fills the
+    // view — 1600x900 needs 2, a small window is happy at 1.
+    const fill = Math.ceil(Math.max(cam.width / (COLS * TILE), cam.height / (ROWS * TILE)));
+    cam.setZoom(Math.max(cameraZoomFor(this.zoomLevel), fill));
   }
-  private zoomBy(factor: number) {
-    this.setZoom(this.cameras.main.zoom * factor);
+  private zoomBy(steps: number) {
+    this.setZoom(this.zoomLevel + steps);
   }
 
   private setupZoomControls() {
@@ -917,8 +947,8 @@ export class OfficeScene extends Phaser.Scene {
     };
     b("zb-locate", icons.locate, () => { this.setZoom(ZOOM_DEFAULT); this.cameras.main.startFollow(this.player, true, 0.12, 0.12); });
     b("zb-desk", icons.desk, () => this.goToMyDesk());
-    b("zb-in", icons.in, () => this.zoomBy(1.2));
-    b("zb-out", icons.out, () => this.zoomBy(1 / 1.2));
+    b("zb-in", icons.in, () => this.zoomBy(1));
+    b("zb-out", icons.out, () => this.zoomBy(-1));
     b("zb-fully", icons.fully, () => this.setZoom(ZOOM_MIN));
   }
 
