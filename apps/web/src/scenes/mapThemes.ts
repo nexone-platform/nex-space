@@ -180,7 +180,10 @@ export const classicTheme: MapTheme = {
 // covers 1.5 tiles and matches the person; 0.5 is the only reduction available
 // that keeps every source pixel on the grid. The chair is left at its own size,
 // where it already fits the avatar.
-const OFFICE_BUILD = { x0: 3, y0: 2, x1: 32, y1: 23 };
+// Sized for the team it is for: six desks, one meeting table, a pantry and a
+// lounge. The first cut gave every zone the footprint of a floor plate and left
+// a ten-person company rattling around in it.
+const OFFICE_BUILD = { x0: 2, y0: 1, x1: 23, y1: 17 };
 const DESK_SCALE = 0.5;
 const DESK_W = 3 * DESK_SCALE;                 // tiles a desk covers: 1.5
 const deskCentre = (x: number) => x + DESK_W / 2;
@@ -205,84 +208,94 @@ function station(x: number, y: number): Prop[] {
   ];
 }
 
-// a 4-tile pitch: 1.5 of desk and 2.5 of aisle, so two people can pass behind
+// a 3-tile pitch: 1.5 of desk over two grid columns, then one clear column to
+// walk down. Rows are four apart, which leaves the desks' two blocked rows, the
+// seat row, and an aisle.
 const OFFICE_STATIONS: { id: string; x: number; y: number }[] = [
-  { id: "open-1", x: 6, y: 4 }, { id: "open-2", x: 10, y: 4 }, { id: "open-3", x: 14, y: 4 },
-  { id: "open-4", x: 6, y: 9 }, { id: "open-5", x: 10, y: 9 }, { id: "open-6", x: 14, y: 9 },
+  { id: "open-1", x: 4, y: 3 }, { id: "open-2", x: 7, y: 3 }, { id: "open-3", x: 10, y: 3 },
+  { id: "open-4", x: 4, y: 7 }, { id: "open-5", x: 7, y: 7 }, { id: "open-6", x: 10, y: 7 },
 ];
 
 export const officeTheme: MapTheme = {
   id: "office",
   label: "ออฟฟิศคลาสสิก (โต๊ะใหญ่)",
-  cols: 36,
-  rows: 26,
-  spawn: { x: 18, y: 21 },
-  meetingRoom: { x0: 20, x1: 31, y0: 3, y1: 13 },
+  cols: 26,
+  rows: 20,
+  spawn: { x: 12, y: 15 },                                  // just inside the front door
+  meetingRoom: { x0: 14, x1: 22, y0: 2, y1: 10 },
 
   floorAt(x, y) {
-    const inBuild = x >= 4 && x <= 31 && y >= 3 && y <= 22;
-    if (x >= 16 && x <= 19 && y >= 24) return 8;            // plaza at the door
+    const inBuild = x >= 3 && x <= 22 && y >= 2 && y <= 16;
+    if (x >= 11 && x <= 14 && y >= 18) return 8;            // plaza at the door
     if (!inBuild) return 1;                                 // grass
-    if (x >= 4 && x <= 17 && y >= 3 && y <= 13) return 5;   // open plan (blue)
-    if (x >= 20 && x <= 31 && y >= 3 && y <= 13) return 4;  // meeting wing (mint)
-    if (x >= 4 && x <= 14 && y >= 16 && y <= 22) return 2;  // pantry (plank)
-    if (x >= 23 && x <= 31 && y >= 16 && y <= 22) return 6; // lounge (dark wood)
-    return 0;                                               // hall
+    if (x <= 12 && y <= 10) return 5;                       // open plan (blue)
+    if (x >= 14 && y <= 10) return 4;                       // meeting wing (mint)
+    if (x <= 9 && y >= 12) return 2;                        // pantry (plank)
+    if (x >= 16 && y >= 12) return 6;                       // lounge (dark wood)
+    return 0;                                               // hall + corridor
   },
 
   walls() {
     const w = new Set<string>();
     const add = (x: number, y: number) => w.add(`${x},${y}`);
     rect(add, OFFICE_BUILD.x0, OFFICE_BUILD.y0, OFFICE_BUILD.x1, OFFICE_BUILD.y1);
-    for (let y = 3; y <= 14; y++) add(18, y);               // spine between the wings
-    for (let x = 4; x <= 31; x++) add(x, 14);               // corridor wall
-    for (const d of ["18,23", "19,23", "18,14", "10,14", "27,14", "18,8", "18,9"]) w.delete(d);
+    for (let y = 2; y <= 10; y++) add(13, y);               // spine between the wings
+    for (let x = 3; x <= 22; x++) add(x, 11);               // corridor wall
+    // doors: through the spine, three off the corridor, and the front entrance
+    for (const d of ["13,6", "13,7", "6,11", "12,11", "19,11", "12,17", "13,17"]) w.delete(d);
     return w;
   },
 
   furniture: [
     ...OFFICE_STATIONS.flatMap((s) => station(s.x, s.y)),
-    // open plan extras
-    ["office/copier", 16.5, 12.6, true], ["office/bin-1", 4.8, 13.1, false],
-    // meeting wing
-    ["office/tv-on", 26.5, 4.6, true],
-    ["office/table-grey", 23.5, 8, true], ["office/table-grey", 28.5, 8, true],
-    ["furniture/chair-10-south", 23, 6, false], ["furniture/chair-10-south", 28, 6, false],
-    ["furniture/chair-10-north", 23, 10, false], ["furniture/chair-10-north", 28, 10, false],
-    ["office/mailboxes", 31.5, 10.5, true],
-    // pantry
-    ["office/cs-counter", 7, 17.5, true],
-    ["office/coffee-maker", 10.5, 17.6, true], ["office/water-cooler", 12.5, 17.6, true],
-    ["office/bin-2", 13.5, 21.5, false],
-    // lounge
-    ["office/tv", 26.5, 17.4, true], ["office/table-dark", 26.5, 20, true],
-    ["furniture/armchair", 24, 21.5, false], ["furniture/armchair", 29, 21.5, false],
-    ["office/bin-3", 31.5, 21.5, false],
-    // hall
-    ["office/credenza", 20.5, 21.5, true],
+    ["office/bin-1", 3.5, 2.5, false],
+    // meeting wing: one table with a seat on each side, screen on the end wall.
+    // The copier lives here because in the open plan every spot that fits it
+    // either sat on a desk or reached down over the corridor door.
+    ["office/copier", 21.5, 3, true],
+    ["office/tv-on", 18, 2.6, true],
+    ["office/table-grey", 18, 6.5, true],
+    ["furniture/chair-10-south", 17, 4.6, false], ["furniture/chair-10-south", 19, 4.6, false],
+    ["furniture/chair-10-north", 17, 8.4, false], ["furniture/chair-10-north", 19, 8.4, false],
+    ["office/mailboxes", 21.5, 9.5, true],
+    // pantry — the CoolSchool counter is halved like the desks it sits beside
+    ["office/cs-counter", 4.6, 13, true, 0.5],
+    // clear of row 12 under the pantry door at 6,11 — parked there it sealed
+    // the whole west side off
+    ["office/coffee-maker", 7.5, 13, true], ["office/water-cooler", 8.5, 13, true],
+    ["office/bin-2", 3.5, 15.5, false],
+    // lounge. The TV hangs on the corridor wall, so it is not solid — left solid
+    // it stacked with the table and blocked every row of the room's middle.
+    ["office/tv", 18.5, 12.4, false], ["office/table-dark", 18.5, 15, true],
+    ["furniture/armchair", 17, 13.6, false], ["furniture/armchair", 20, 13.6, false],
+    ["office/bin-3", 21.5, 12.5, false],
+    // No credenza: it is three tiles wide and the hall is six, of which the
+    // column under the corridor door has to stay clear. It did not fit.
   ],
 
   outdoor: [
-    ["fountain", 17.5, 24.5, true],
-    ["tree", 1, 5, true], ["tree-oval", 1.6, 13, true], ["pine", 1, 20, true],
-    ["tree-oval", 34.4, 5, true], ["tree", 34, 13, true], ["pine", 34.4, 20, true],
-    ["pine", 6, 1, true], ["tree", 12, 1, true], ["tree-oval", 24, 1, true], ["tree", 30, 1, true],
-    ["shrub", 9, 1, false], ["shrub", 27, 1, false],
-    ["bench", 9, 24.8, false], ["bench", 27, 24.8, false],
-    ["lamp-post", 6, 24, true], ["lamp-post", 30, 24, true],
-    ["sign-welcome", 12, 24.4, false], ["sign-team", 23, 24.4, false],
+    ["fountain", 12.5, 18.6, true, 0.5],
+    // only the side margins are two tiles wide, so the trees live there; above
+    // the building there is a single row, which fits shrubs and nothing taller
+    ["tree", 1, 4, true], ["tree-oval", 1, 10, true], ["pine", 1, 15, true],
+    ["tree-oval", 25, 4, true], ["tree", 25, 10, true], ["pine", 25, 15, true],
+    ["shrub", 5, 0.5, false], ["shrub", 11, 0.5, false],
+    ["shrub", 17, 0.5, false], ["shrub", 21, 0.5, false],
+    ["bench", 8, 18.8, false], ["bench", 17, 18.8, false],
+    ["lamp-post", 5, 18.2, true], ["lamp-post", 20, 18.2, true],
+    ["sign-welcome", 10, 18.4, false], ["sign-team", 15, 18.4, false],
   ],
 
   decals: [
-    ["flower-yellow", 1, 3], ["clover", 3, 9], ["flower-mixed", 1, 16], ["flower-pink", 3, 22],
-    ["clover", 33, 4], ["flower-yellow", 34, 10], ["flower-mixed", 33, 17], ["flower-pink", 34, 22],
-    ["bush-blob", 4, 1], ["bush-blob", 32, 1], ["rocks", 6, 25], ["rocks", 30, 25],
+    ["flower-yellow", 1, 1.6], ["clover", 0.6, 7], ["flower-mixed", 1, 12], ["flower-pink", 0.6, 17],
+    ["clover", 24.5, 1.6], ["flower-yellow", 25, 7], ["flower-mixed", 24.5, 12], ["flower-pink", 25, 17],
+    ["bush-blob", 3, 0.5], ["bush-blob", 22, 0.5], ["rocks", 6, 19.4], ["rocks", 19, 19.4],
   ],
 
   decor: [
-    ["arched-window", 8, 2], ["arched-window", 14, 2], ["arched-window", 24, 2], ["arched-window", 29, 2],
-    ["office/portrait-1", 21, 2.4], ["office/portrait-2", 31, 2.4],
-    ["wall-clock", 12, 14], ["corkboard", 22, 14],
+    ["arched-window", 6, 1], ["arched-window", 10, 1], ["arched-window", 17, 1], ["arched-window", 20, 1],
+    ["office/portrait-1", 15, 1.4], ["office/portrait-2", 22, 1.4],
+    ["wall-clock", 9, 11], ["corkboard", 16, 11],
   ],
 
   // derived from the same helpers station() uses, so the claim target and the
@@ -294,7 +307,7 @@ export const officeTheme: MapTheme = {
   })),
 
   interactives: [
-    { type: "screen", x: 26, y: 3, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
+    { type: "screen", x: 18, y: 3, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
     { type: "whiteboard", x: 12, y: 2, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
   ],
 };
