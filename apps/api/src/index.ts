@@ -432,7 +432,7 @@ const canInvite = (role?: string) => role === "owner" || role === "admin" || rol
 
 // map layouts the client can render — mirrors THEMES in apps/web/src/scenes/mapThemes.ts.
 // Validated here so a bad value can never reach everyone's map loader.
-const THEMES = ["classic", "office"];
+const THEMES = ["classic", "departments", "office"];
 
 const wsView = (w: any, role?: string) => ({
   slug: w.slug, name: w.name, allowGuests: w.allowGuests,

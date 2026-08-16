@@ -174,6 +174,141 @@ export const classicTheme: MapTheme = {
   ],
 };
 
+// ------------------------------------------------------------ departments ---
+// Every prop here is 32px art placed at native size — no scaling anywhere, so
+// nothing lands between pixels and a desk stays one tile beside a one-tile
+// person. Departments get their own rooms off a corridor rather than sharing an
+// open floor.
+const DEPT_BUILD = { x0: 2, y0: 2, x1: 29, y1: 21 };
+
+/** desk + the chair in front of it, the pastel theme's arrangement */
+function seat(deskKey: string, chairKey: string, x: number, y: number): Prop[] {
+  return [[deskKey, x, y, true], [chairKey, x, y + 1, false]];
+}
+
+const DEPT_STATIONS: { id: string; x: number; y: number; desk: string; chair: string }[] = [
+  // engineering (blue), four desks in two pairs
+  { id: "eng-1", x: 5, y: 4, desk: "desk", chair: "chair-12-north" },
+  { id: "eng-2", x: 8, y: 4, desk: "desk-monitor", chair: "chair-13-north" },
+  { id: "eng-3", x: 5, y: 7, desk: "desk-monitor", chair: "chair-14-north" },
+  { id: "eng-4", x: 8, y: 7, desk: "desk", chair: "chair-15-north" },
+  // design (mint), a row of three
+  { id: "design-1", x: 16, y: 4, desk: "desk", chair: "chair-9-north" },
+  { id: "design-2", x: 18, y: 4, desk: "desk-monitor", chair: "chair-11-north" },
+  { id: "design-3", x: 20, y: 4, desk: "desk", chair: "chair-16-north" },
+  // sales (pink), a row of three downstairs
+  { id: "sales-1", x: 5, y: 16, desk: "desk-monitor", chair: "chair-12-north" },
+  { id: "sales-2", x: 7, y: 16, desk: "desk", chair: "chair-13-north" },
+  { id: "sales-3", x: 9, y: 16, desk: "desk-monitor", chair: "chair-14-north" },
+];
+
+export const departmentsTheme: MapTheme = {
+  id: "departments",
+  label: "ออฟฟิศแบ่งแผนก",
+  cols: 32,
+  rows: 24,
+  spawn: { x: 15, y: 19 },                                 // inside the front door
+  meetingRoom: { x0: 23, x1: 28, y0: 3, y1: 10 },
+
+  floorAt(x, y) {
+    const inBuild = x >= 3 && x <= 28 && y >= 3 && y <= 20;
+    if (x >= 13 && x <= 16 && y >= 22) return 8;           // plaza at the door
+    if (!inBuild) return 1;                                // grass
+    if (y <= 10) {                                         // upper wing
+      if (x <= 12) return 5;                               // engineering (blue)
+      if (x >= 14 && x <= 21) return 4;                    // design (mint)
+      if (x >= 23) return 6;                               // meeting (dark wood)
+    }
+    if (y >= 15) {                                         // lower wing
+      if (x <= 11) return 3;                               // sales (pink)
+      if (x >= 18 && x <= 22) return 2;                    // pantry (plank)
+      if (x >= 24) return 8;                               // lounge (brick)
+    }
+    return 0;                                              // corridors
+  },
+
+  walls() {
+    const w = new Set<string>();
+    const add = (x: number, y: number) => w.add(`${x},${y}`);
+    rect(add, DEPT_BUILD.x0, DEPT_BUILD.y0, DEPT_BUILD.x1, DEPT_BUILD.y1);
+    for (let x = 3; x <= 28; x++) { add(x, 11); add(x, 14); }   // the corridor's two walls
+    for (let y = 3; y <= 10; y++) { add(13, y); add(22, y); }   // upper wing dividers
+    for (let y = 15; y <= 20; y++) { add(12, y); add(17, y); add(23, y); } // lower wing dividers
+    for (const d of [
+      "7,11", "17,11", "25,11",        // engineering / design / meeting off the corridor
+      "14,14", "15,14",                // corridor down into the entrance hall
+      "12,17", "18,14", "24,14",       // sales off the hall, pantry and lounge off the corridor
+      "14,21", "15,21",                // front door
+    ]) w.delete(d);
+    return w;
+  },
+
+  furniture: [
+    ...DEPT_STATIONS.flatMap((s) => seat(s.desk, s.chair, s.x, s.y)),
+    // engineering
+    ["whiteboard", 11, 3, true], ["bookshelf", 11.5, 9.5, true], ["plant", 3, 10, false],
+    // design
+    ["plant-large", 14, 3, true], ["plant", 21, 10, false],
+    ["side-table", 18, 8, false], ["floor-lamp", 20, 8, false],
+    // meeting (dark wood)
+    ["conference-table", 25.5, 6, true],
+    ["chair-10-south", 25, 4.4, false], ["chair-10-south", 26, 4.4, false],
+    ["chair-10-north", 25, 7.6, false], ["chair-10-north", 26, 7.6, false],
+    ["chair-10-east", 24, 6, false], ["chair-10-west", 27, 6, false],
+    ["plant-small", 23, 3, false], ["plant-small", 28, 10, false],
+    // corridor: reception facing the front door, plants along the run
+    ["reception-desk", 15, 12, true], ["rug", 15, 13, false],
+    ["plant-large", 3, 12, true], ["plant-large", 28, 12, true],
+    // sales
+    ["plant", 3, 20, false], ["plant-small", 11, 15, false],
+    // pantry
+    // A 68px unit covers three tile rows wherever it sits, so this 5-wide room
+    // takes exactly one of them: two put diagonally across each other walled it
+    // in half. The counter holds rows 15-17 and everything below stays clear.
+    ["kitchen-counter", 20, 16, true], ["coffee-machine", 19, 15, true],
+    ["plant", 18, 16, false], ["bean-bag", 19, 19, false],
+    // lounge
+    ["gaming-tv", 26.5, 15.6, true],
+    ["lounge-coffee-table", 26.5, 19, false],
+    ["armchair", 25, 19, false], ["armchair", 28, 19, false],
+    // entrance hall
+    ["plant", 13, 19, false], ["plant", 16, 19, false],
+  ],
+
+  outdoor: [
+    ["fountain", 15, 22.5, true],
+    ["tree", 1, 5, true], ["tree-oval", 1, 12, true], ["pine", 1, 19, true],
+    ["tree-oval", 30.5, 5, true], ["tree", 30.5, 12, true], ["pine", 30.5, 19, true],
+    ["pine", 6, 1, true], ["tree", 12, 1, true], ["tree-oval", 19, 1, true], ["tree", 25, 1, true],
+    ["shrub", 9, 1, false], ["shrub", 22, 1, false],
+    ["bench", 10, 22.8, false], ["bench", 20, 22.8, false],
+    ["lamp-post", 8, 22.2, true], ["lamp-post", 22, 22.2, true],
+    ["sign-welcome", 12, 22.4, false], ["sign-team", 18, 22.4, false],
+  ],
+
+  decals: [
+    ["flower-yellow", 1, 2], ["clover", 0.6, 9], ["flower-mixed", 1, 16], ["flower-pink", 0.6, 21],
+    ["clover", 30.5, 2], ["flower-yellow", 31, 9], ["flower-mixed", 30.5, 16], ["flower-pink", 31, 21],
+    ["bush-blob", 3, 0.6], ["bush-blob", 28, 0.6], ["rocks", 6, 23.4], ["rocks", 25, 23.4],
+  ],
+
+  decor: [
+    ["arched-window", 6, 2], ["arched-window", 10, 2], ["arched-window", 17, 2], ["arched-window", 25, 2],
+    ["window", 2, 7], ["window", 29, 7],
+    ["art-landscape", 9, 11], ["art-poster", 19, 11], ["wall-clock", 15, 11],
+    ["corkboard", 8, 14], ["wall-shelf", 20, 14],
+  ],
+
+  // built from DEPT_STATIONS so the claim target and the seat cannot drift from
+  // where the sprites are
+  desks: DEPT_STATIONS.map((s) => ({ id: s.id, x: s.x, y: s.y, sx: s.x, sy: s.y + 1 })),
+
+  interactives: [
+    { type: "whiteboard", x: 11, y: 3, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
+    { type: "screen", x: 25.5, y: 3, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
+  ],
+};
+
 // ----------------------------------------------------------------- office ---
 // The CoolSchool desk art is 96x96px — three tiles square, which beside a
 // one-tile avatar reads as a conference table rather than a desk. Halved it
@@ -326,6 +461,7 @@ export const officeTheme: MapTheme = {
 
 export const THEMES: Record<string, MapTheme> = {
   classic: classicTheme,
+  departments: departmentsTheme,
   office: officeTheme,
 };
 
