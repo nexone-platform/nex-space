@@ -184,18 +184,24 @@ const OFFICE_BUILD = { x0: 3, y0: 2, x1: 32, y1: 23 };
 const DESK_SCALE = 0.5;
 const DESK_W = 3 * DESK_SCALE;                 // tiles a desk covers: 1.5
 const deskCentre = (x: number) => x + DESK_W / 2;
+// The chair is halved along with the desk so the two share a pixel scale, and
+// tucked four pixels under the desk's front edge instead of parked below it.
+const CHAIR_SCALE = 0.5;
+const CHAIR_H = 1.5 * CHAIR_SCALE;             // tiles the chair covers: 0.75
+
 // The desk is 1.5 tiles tall, so its body covers two whole rows of the walk grid
-// however it is placed. The seat therefore has to sit on the row below both of
-// them or nobody can reach their own desk — the previous 3-tile desks had the
-// same collision over the chair, which only showed up once routing existed.
-const seatRow = (y: number) => y + 2.5;
+// however it is placed, and the seat has to clear both or nobody can reach their
+// own desk — the previous 3-tile desks had the same collision over the chair,
+// which only showed up once routing existed to disagree with it. A sprite is
+// drawn at v*TILE + TILE/2, so the row stood on is floor(v + 0.5), not floor(v).
+const seatRow = (y: number) => y + DESK_W + CHAIR_H / 2 - 4 / 32;
 
 /** desk + the chair tucked in front of it, both centred on the same column */
 function station(x: number, y: number): Prop[] {
   const cx = deskCentre(x);
   return [
     ["office/cs-desk", cx, y + DESK_W / 2, true, DESK_SCALE],
-    ["office/cs-chair-2", cx, seatRow(y), false],
+    ["office/cs-chair-2", cx, seatRow(y), false, CHAIR_SCALE],
   ];
 }
 
