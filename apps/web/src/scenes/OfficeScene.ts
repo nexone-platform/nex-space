@@ -109,6 +109,9 @@ export class OfficeScene extends Phaser.Scene {
   private myLabel?: Phaser.GameObjects.Container; // my own name tag above my head
   private myDesk = "";                          // id of my claimed home desk ("" = none)
   private zoomLevel = ZOOM_DEFAULT;             // whole step; the camera gets it x dpr
+  private walkable: boolean[][] = [];           // tiles with no wall and no solid prop
+  private path: { x: number; y: number }[] = []; // remaining click-to-move waypoints
+  private moveMarker?: Phaser.GameObjects.Arc;
   private deskClaimAt = 0;                      // scene time of my last claim (grace window for state reconcile)
   private toastTimer?: number;                  // pending hide timer for the DOM toast
   private myStatus = "online";                  // presence broadcast to peers
@@ -259,6 +262,15 @@ export class OfficeScene extends Phaser.Scene {
         const img = solids.create(px, py, k) as Phaser.Physics.Arcade.Sprite;
         img.setScale(s).setDepth(py);
         img.refreshBody();
+        // Collide with the base only, not the whole sprite. These are tall props
+        // you should be able to walk behind, and the 4x4 fountain's full body
+        // reached two tiles up into the building's front doorway and sealed the
+        // only way outdoors — with the keys as much as with click-to-move.
+        const body = img.body as Phaser.Physics.Arcade.StaticBody;
+        const bh = Math.min(img.displayHeight, TILE);
+        body.setSize(img.displayWidth, bh);
+        body.position.set(img.x - img.displayWidth / 2, img.y + img.displayHeight / 2 - bh);
+        body.updateCenter();
       } else {
         this.add.image(px, py, k).setScale(s).setDepth(py);
       }
@@ -292,6 +304,9 @@ export class OfficeScene extends Phaser.Scene {
     this.player.setDepth(this.player.y);
     this.physics.add.collider(this.player, wallLayer);
     this.physics.add.collider(this.player, solids);
+    // derive click-to-move's grid from the very bodies the player collides with,
+    // so a route can never be planned through something that will block it
+    this.walkable = this.buildWalkable(walls, solids);
 
     // my own name above my head (same tag style as remote players)
     this.refreshMyLabel();
@@ -312,10 +327,25 @@ export class OfficeScene extends Phaser.Scene {
     this.selRing = this.add.circle(0, 0, 17).setStrokeStyle(2, 0x2bb3a3).setFillStyle(0x2bb3a3, 0.08)
       .setVisible(false).setDepth(99999);
 
+    // click empty floor to walk there. Tracked from pointerdown to pointerup so a
+    // drag — which is how a chair gets rotated — never also sends the avatar off.
+    let downAt: { x: number; y: number; onObject: boolean } | null = null;
+
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
-      const hit = this.input.hitTestPointer(p).find((o) => this.rotatables.includes(o as Phaser.GameObjects.Image));
+      const hits = this.input.hitTestPointer(p);
+      const hit = hits.find((o) => this.rotatables.includes(o as Phaser.GameObjects.Image));
       if (hit) this.selectChair(hit as Phaser.GameObjects.Image);
       else this.deselectChair();
+      // any hit means a desk or chair owns this click and handles it itself
+      downAt = { x: p.x, y: p.y, onObject: hits.length > 0 };
+    });
+
+    this.input.on("pointerup", (p: Phaser.Input.Pointer) => {
+      const from = downAt;
+      downAt = null;
+      if (!from || from.onObject || p.button !== 0) return;
+      if (Math.hypot(p.x - from.x, p.y - from.y) > 6) return; // a drag, not a click
+      this.walkTo(p.worldX, p.worldY);
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
       if (this.selected && p.isDown) {
@@ -1517,6 +1547,120 @@ export class OfficeScene extends Phaser.Scene {
     if (this.textures.exists(key)) obj.setTexture(key);
   }
 
+  // ------------------------------------------------------------ click to move
+  /** tiles with no wall and no solid prop body over them */
+  private buildWalkable(walls: Set<string>, solids: Phaser.Physics.Arcade.StaticGroup) {
+    const grid: boolean[][] = [];
+    for (let y = 0; y < ROWS; y++) {
+      const row: boolean[] = [];
+      for (let x = 0; x < COLS; x++) row.push(!walls.has(`${x},${y}`));
+      grid.push(row);
+    }
+    for (const o of solids.getChildren()) {
+      const b = (o as Phaser.Physics.Arcade.Sprite).body as Phaser.Physics.Arcade.StaticBody | null;
+      if (!b) continue;
+      // -1 on the far edges: a body ending exactly on a boundary does not occupy the next tile
+      for (let y = Math.floor(b.top / TILE); y <= Math.floor((b.bottom - 1) / TILE); y++)
+        for (let x = Math.floor(b.left / TILE); x <= Math.floor((b.right - 1) / TILE); x++)
+          if (grid[y]?.[x] !== undefined) grid[y][x] = false;
+    }
+    return grid;
+  }
+
+  private canStand(x: number, y: number) {
+    return !!this.walkable[y]?.[x];
+  }
+
+  /**
+   * A* across the tile grid, eight directions. A diagonal is only allowed when
+   * both of its orthogonal neighbours are clear, or routes would slip through
+   * the corner between two walls that the physics body cannot actually pass.
+   */
+  private findPath(sx: number, sy: number, tx: number, ty: number) {
+    if (!this.canStand(tx, ty) || (sx === tx && sy === ty)) return [];
+    const key = (x: number, y: number) => y * COLS + x;
+    const h = (x: number, y: number) => Math.hypot(x - tx, y - ty);
+    const came = new Map<number, number>();
+    const g = new Map<number, number>([[key(sx, sy), 0]]);
+    const open: { x: number; y: number; f: number }[] = [{ x: sx, y: sy, f: h(sx, sy) }];
+    const done = new Set<number>();
+
+    while (open.length) {
+      // the grid is under a thousand tiles, so scanning for the best node is
+      // cheaper than maintaining a heap
+      let bi = 0;
+      for (let i = 1; i < open.length; i++) if (open[i].f < open[bi].f) bi = i;
+      const cur = open.splice(bi, 1)[0];
+      const ck = key(cur.x, cur.y);
+      if (done.has(ck)) continue;
+      done.add(ck);
+
+      if (cur.x === tx && cur.y === ty) {
+        const out: { x: number; y: number }[] = [];
+        for (let k: number | undefined = ck; k !== undefined; k = came.get(k)) {
+          out.push({ x: k % COLS, y: Math.floor(k / COLS) });
+        }
+        out.reverse();
+        return out.slice(1); // drop the tile we are already standing on
+      }
+
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const nx = cur.x + dx, ny = cur.y + dy;
+        if (!this.canStand(nx, ny)) continue;
+        if (dx && dy && (!this.canStand(cur.x + dx, cur.y) || !this.canStand(cur.x, cur.y + dy))) continue;
+        const nk = key(nx, ny);
+        if (done.has(nk)) continue;
+        const step = dx && dy ? Math.SQRT2 : 1;
+        const ng = (g.get(ck) ?? Infinity) + step;
+        if (ng >= (g.get(nk) ?? Infinity)) continue;
+        g.set(nk, ng);
+        came.set(nk, ck);
+        open.push({ x: nx, y: ny, f: ng + h(nx, ny) });
+      }
+    }
+    return [];
+  }
+
+  /** the clicked tile, or the closest standable one to it if that is blocked */
+  private nearestStandable(tx: number, ty: number) {
+    if (this.canStand(tx, ty)) return { x: tx, y: ty };
+    for (let r = 1; r <= 4; r++) {
+      let best: { x: number; y: number } | null = null, bestD = Infinity;
+      for (let y = ty - r; y <= ty + r; y++) {
+        for (let x = tx - r; x <= tx + r; x++) {
+          if (Math.max(Math.abs(x - tx), Math.abs(y - ty)) !== r || !this.canStand(x, y)) continue;
+          const d = Math.hypot(x - tx, y - ty);
+          if (d < bestD) { bestD = d; best = { x, y }; }
+        }
+      }
+      if (best) return best;
+    }
+    return null;
+  }
+
+  private clearPath() {
+    this.path = [];
+    this.moveMarker?.destroy();
+    this.moveMarker = undefined;
+  }
+
+  /** walk to a world position, routing around walls and furniture */
+  private walkTo(worldX: number, worldY: number) {
+    const goal = this.nearestStandable(Math.floor(worldX / TILE), Math.floor(worldY / TILE));
+    if (!goal) return;
+    const from = { x: Math.floor(this.player.x / TILE), y: Math.floor(this.player.y / TILE) };
+    const tiles = this.findPath(from.x, from.y, goal.x, goal.y);
+    if (!tiles.length) return;
+
+    this.clearPath();
+    if (this.sitting) this.standUp();
+    this.path = tiles.map((t) => ({ x: t.x * TILE + TILE / 2, y: t.y * TILE + TILE / 2 }));
+
+    const last = this.path[this.path.length - 1];
+    this.moveMarker = this.add.circle(last.x, last.y, 9).setStrokeStyle(2, 0x2bb3a3, 0.9).setDepth(99998);
+    this.tweens.add({ targets: this.moveMarker, scale: 0.5, alpha: 0.35, duration: 420, yoyo: true, repeat: -1 });
+  }
+
   update() {
     const speed = 150;
     const body = this.player.body as Phaser.Physics.Arcade.Body;
@@ -1527,6 +1671,22 @@ export class OfficeScene extends Phaser.Scene {
       else if (this.cursors.right.isDown || this.keys.D.isDown) vx = 1;
       if (this.cursors.up.isDown || this.keys.W.isDown) vy = -1;
       else if (this.cursors.down.isDown || this.keys.S.isDown) vy = 1;
+    }
+
+    // the keys always win: pressing one drops whatever route was running
+    if (vx !== 0 || vy !== 0) this.clearPath();
+    else if (this.path.length) {
+      const wp = this.path[0];
+      const dx = wp.x - this.player.x, dy = wp.y - this.player.y;
+      if (Math.hypot(dx, dy) < 4) {
+        this.path.shift();
+        if (!this.path.length) this.clearPath(); // arrived
+      } else {
+        // step in one of the eight directions, exactly as the keys would, so the
+        // walk animation and facing come out the same as manual movement
+        vx = Math.abs(dx) > 2 ? Math.sign(dx) : 0;
+        vy = Math.abs(dy) > 2 ? Math.sign(dy) : 0;
+      }
     }
 
     if (this.sitting && (vx !== 0 || vy !== 0)) this.standUp(); // any movement input stands up
