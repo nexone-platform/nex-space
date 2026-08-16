@@ -221,20 +221,21 @@ export class OfficeScene extends Phaser.Scene {
 
     // --- furniture ---
     const solids = this.physics.add.staticGroup();
-    for (const [k, tx, ty, solid] of FURNITURE) {
+    for (const [k, tx, ty, solid, scale] of FURNITURE) {
       const px = tx * TILE + TILE / 2;
       const py = ty * TILE + TILE / 2;
+      const s = scale ?? 1;
       if (solid) {
         const img = solids.create(px, py, k) as Phaser.Physics.Arcade.Sprite;
-        img.setDepth(py);
-        img.refreshBody();
+        img.setScale(s).setDepth(py);
+        img.refreshBody(); // after setScale, so the body matches what is drawn
         const desk = DESKS.find((d) => d.x === tx && d.y === ty);
         if (desk) {
           img.setInteractive({ useHandCursor: true });
           img.on("pointerdown", () => this.claimDesk(desk.id));
         }
       } else {
-        const spr = this.add.image(px, py, k).setDepth(k.startsWith("rug") ? -900 : py);
+        const spr = this.add.image(px, py, k).setScale(s).setDepth(k.startsWith("rug") ? -900 : py);
         if (k.includes("chair") || k === "stool" || k.includes("sofa") || k.includes("bean-bag")) {
           spr.setInteractive({ useHandCursor: true });
           this.rotatables.push(spr);

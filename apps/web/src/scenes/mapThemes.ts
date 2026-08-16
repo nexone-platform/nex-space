@@ -9,7 +9,9 @@
 
 import { cachedTheme, themeOverride } from "../workspace";
 
-export type Prop = [key: string, x: number, y: number, solid: boolean];
+// scale is optional and defaults to 1. Keep it to halves: anything else lands
+// source pixels between screen pixels and the art goes soft.
+export type Prop = [key: string, x: number, y: number, solid: boolean, scale?: number];
 export type Flat = [key: string, x: number, y: number];
 
 export interface Interactive {
@@ -173,25 +175,34 @@ export const classicTheme: MapTheme = {
 };
 
 // ----------------------------------------------------------------- office ---
-// The CoolSchool desk is 96x96px, so it covers 3x3 tiles and its centre sits at
-// (x+1.5, y+1.5) from its top-left corner. Workstations are spaced on a 5-tile
-// rhythm to leave a walkable aisle between them.
+// The CoolSchool desk art is 96x96px — three tiles square, which beside a
+// one-tile avatar reads as a conference table rather than a desk. Halved it
+// covers 1.5 tiles and matches the person; 0.5 is the only reduction available
+// that keeps every source pixel on the grid. The chair is left at its own size,
+// where it already fits the avatar.
 const OFFICE_BUILD = { x0: 3, y0: 2, x1: 32, y1: 23 };
-const DESK_W = 3;                              // tiles a desk covers
+const DESK_SCALE = 0.5;
+const DESK_W = 3 * DESK_SCALE;                 // tiles a desk covers: 1.5
 const deskCentre = (x: number) => x + DESK_W / 2;
+// The desk is 1.5 tiles tall, so its body covers two whole rows of the walk grid
+// however it is placed. The seat therefore has to sit on the row below both of
+// them or nobody can reach their own desk — the previous 3-tile desks had the
+// same collision over the chair, which only showed up once routing existed.
+const seatRow = (y: number) => y + 2.5;
 
 /** desk + the chair tucked in front of it, both centred on the same column */
 function station(x: number, y: number): Prop[] {
   const cx = deskCentre(x);
   return [
-    ["office/cs-desk", cx, y + 1.5, true],
-    ["office/cs-chair-2", cx, y + 2.85, false],
+    ["office/cs-desk", cx, y + DESK_W / 2, true, DESK_SCALE],
+    ["office/cs-chair-2", cx, seatRow(y), false],
   ];
 }
 
+// a 4-tile pitch: 1.5 of desk and 2.5 of aisle, so two people can pass behind
 const OFFICE_STATIONS: { id: string; x: number; y: number }[] = [
-  { id: "open-1", x: 5, y: 4 }, { id: "open-2", x: 10, y: 4 }, { id: "open-3", x: 14, y: 4 },
-  { id: "open-4", x: 5, y: 9 }, { id: "open-5", x: 10, y: 9 }, { id: "open-6", x: 14, y: 9 },
+  { id: "open-1", x: 6, y: 4 }, { id: "open-2", x: 10, y: 4 }, { id: "open-3", x: 14, y: 4 },
+  { id: "open-4", x: 6, y: 9 }, { id: "open-5", x: 10, y: 9 }, { id: "open-6", x: 14, y: 9 },
 ];
 
 export const officeTheme: MapTheme = {
@@ -268,10 +279,12 @@ export const officeTheme: MapTheme = {
     ["wall-clock", 12, 14], ["corkboard", 22, 14],
   ],
 
+  // derived from the same helpers station() uses, so the claim target and the
+  // seat can never drift from where the sprites actually are
   desks: OFFICE_STATIONS.map((s) => ({
     id: s.id,
-    x: deskCentre(s.x), y: s.y + 1.5,        // where the nameplate sits
-    sx: deskCentre(s.x), sy: s.y + 2.85,     // the chair in front of it
+    x: deskCentre(s.x), y: s.y + DESK_W / 2, // where the nameplate sits
+    sx: deskCentre(s.x), sy: seatRow(s.y),   // the chair in front of it
   })),
 
   interactives: [
