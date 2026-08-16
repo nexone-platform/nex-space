@@ -252,15 +252,19 @@ export const officeTheme: MapTheme = {
   furniture: [
     ...OFFICE_STATIONS.flatMap((s) => station(s.x, s.y)),
     ["office/bin-1", 3.5, 2.5, false],
-    // meeting wing: one table with a seat on each side, screen on the end wall.
-    // The copier lives here because in the open plan every spot that fits it
-    // either sat on a desk or reached down over the corridor door.
-    ["office/copier", 26.5, 3, true],
-    ["office/tv-on", 23.5, 2.6, true],
+    // Meeting room: six seats drawn right up against the table. In these
+    // coordinates a prop at v is drawn at v*TILE + TILE/2, so the 3x2 table
+    // centred on (23.5, 6.5). These are aligned on DRAWN pixels, not sprite
+    // boxes: the table carries 12px of empty space above its top edge and 16px
+    // below, the chairs 2-5px, and matching boxes leaves a visible gap — the
+    // same thing that once made the pastel theme's chairs float off their desks.
+    // The screen hangs on the end wall, so it is not solid.
+    ["office/tv-on", 23.5, 2.2, false],
     ["office/table-grey", 23.5, 6.5, true],
-    ["furniture/chair-10-south", 22.5, 4.6, false], ["furniture/chair-10-south", 24.5, 4.6, false],
-    ["furniture/chair-10-north", 22.5, 8.4, false], ["furniture/chair-10-north", 24.5, 8.4, false],
-    ["office/mailboxes", 26.5, 9.5, true],
+    ["furniture/chair-10-south", 22.8, 5.41, false], ["furniture/chair-10-south", 24.2, 5.41, false],
+    ["furniture/chair-10-north", 22.8, 7.38, false], ["furniture/chair-10-north", 24.2, 7.38, false],
+    ["furniture/chair-10-east", 21.78, 6.5, false], ["furniture/chair-10-west", 25.19, 6.5, false],
+    ["furniture/plant-small", 26.5, 2.5, false], ["furniture/plant-small", 26.5, 9.5, false],
     // pantry — the CoolSchool counter is halved like the desks it sits beside
     ["office/cs-counter", 4.6, 13, true, 0.5],
     // clear of row 12 under the pantry door at 6,11 — parked there it sealed
@@ -273,8 +277,11 @@ export const officeTheme: MapTheme = {
     ["furniture/armchair", 22, 13.6, false], ["furniture/armchair", 25, 13.6, false],
     ["office/bin-3", 26.5, 12.5, false],
     // hall: the wider entrance takes the credenza again, kept off the column
-    // under the corridor door so the way in from the front stays clear
+    // under the corridor door so the way in from the front stays clear. The
+    // copier and mailboxes moved here out of the meeting room, where they made
+    // it read as a store cupboard with a table in it.
     ["office/credenza", 12.5, 12.6, true],
+    ["office/copier", 17.5, 12.6, true], ["office/mailboxes", 18.5, 15.5, true],
   ],
 
   outdoor: [
