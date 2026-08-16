@@ -13,8 +13,13 @@ import { setupPrefsModal } from "../prefsModal";
 import { pickTheme, propPath, THEMES, type Interactive } from "./mapThemes";
 
 const LPC_COLS = 9; // LPC walk sheet: 9 frames per direction row
-const LPC_SCALE = 0.5;    // 64px LPC frames render large vs 32px furniture -> scale down
-const PRESET_SCALE = 0.62; // shrink the older whole-avatar presets too (independent of LPC)
+// Avatars are drawn at their native size. They used to be shrunk — presets to
+// 0.62 — which left a person 0.33 tiles wide, so every desk, room and doorway
+// was built around someone a third of a tile across and the whole map read as
+// oversized. 0.62 was also a fractional scale, the same thing that was blurring
+// the map before the render fix.
+const LPC_SCALE = 1;
+const PRESET_SCALE = 1;
 // chair facing (CHAIR_DIRS) -> avatar facing (DIRS8) for sitting
 const CHAIR_TO_FACING: Record<string, string> = {
   south: "down", "south-east": "down-right", east: "right", "north-east": "up-right",

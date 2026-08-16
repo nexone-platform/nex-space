@@ -187,9 +187,12 @@ const OFFICE_BUILD = { x0: 2, y0: 1, x1: 28, y1: 17 };
 const DESK_SCALE = 0.5;
 const DESK_W = 3 * DESK_SCALE;                 // tiles a desk covers: 1.5
 const deskCentre = (x: number) => x + DESK_W / 2;
-// The chair is halved along with the desk so the two share a pixel scale, and
-// tucked four pixels under the desk's front edge instead of parked below it.
-const CHAIR_SCALE = 0.5;
+// The chair stays at its own size and tucks four pixels under the desk's front
+// edge. It was halved for a while to stop it dwarfing the avatar, but that was
+// treating a symptom: the avatar itself was being drawn at 0.62 scale, a third
+// of a tile wide. With that fixed the full-size chair frames a seated person,
+// where the halved one disappeared behind them entirely.
+const CHAIR_SCALE = 1;
 const CHAIR_H = 1.5 * CHAIR_SCALE;             // tiles the chair covers: 0.75
 
 // The desk is 1.5 tiles tall, so its body covers two whole rows of the walk grid
