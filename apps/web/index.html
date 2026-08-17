@@ -287,6 +287,32 @@
       .wm-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
       /* ---- member permissions panel (mounted in the settings dialog and in the
              in-room sidebar, hence no dependence on either container's styles) ---- */
+      /* ---- who is in the meeting room ---- */
+      /* centred over the game, not the window: the 56px rail always covers the
+         left edge and the 250px sidebar covers more when it is open */
+      #meet-panel { position: fixed; top: 14px; left: calc(50% + 28px); transform: translate(-50%, -14px); z-index: 24;
+        min-width: 216px; max-width: min(86vw, 460px); padding: 10px 12px 8px; border-radius: 14px;
+        background: #23242ae8; box-shadow: 0 10px 30px #0006; backdrop-filter: blur(6px);
+        font-family: "Segoe UI", sans-serif; opacity: 0; pointer-events: none;
+        transition: opacity .18s ease, transform .18s ease; }
+      #sidebar:not(.closed) ~ #meet-panel { left: calc(50% + 153px); }
+      #meet-panel.on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+      .meet-head { display: flex; align-items: center; gap: 8px; color: #eef0f4; }
+      .meet-head b { flex: 1; font-size: 13.5px; }
+      .meet-ico svg { width: 17px; height: 17px; display: block; color: #7fd8cc; }
+      .meet-count { padding: 1px 8px; border-radius: 999px; background: #ffffff1f;
+        font: 600 11.5px "Segoe UI", sans-serif; color: #cfd4dc; }
+      #meet-people { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+      .meet-who { display: flex; align-items: center; gap: 7px; padding: 4px 9px 4px 4px;
+        border-radius: 999px; background: #ffffff14; }
+      .meet-who .mw-chip { position: relative; width: 24px; height: 24px; border-radius: 50%;
+        display: grid; place-items: center; color: #2a2330; font: 700 12px "Segoe UI", sans-serif; flex: 0 0 auto; }
+      .meet-who .mw-dot { position: absolute; right: -1px; bottom: -1px; width: 8px; height: 8px;
+        border-radius: 50%; border: 2px solid #23242a; }
+      .meet-who span { font: 500 12.5px "Segoe UI", sans-serif; color: #e7e9ee; white-space: nowrap; }
+      .meet-who.self span { font-weight: 700; }
+      .meet-empty { font: 12.5px "Segoe UI", sans-serif; color: #9aa0a8; margin-top: 8px; }
+
       /* ---- preferences modal: left nav + one pane at a time ---- */
       #prefs-modal { position: fixed; inset: 0; z-index: 72; background: #0b0b1066; display: none;
         place-items: center; font-family: "Segoe UI", sans-serif; }
@@ -921,6 +947,18 @@
       </div>
 
     </aside>
+    <!-- who is in the meeting room; shown only while you are standing in it -->
+    <div id="meet-panel">
+      <div class="meet-head">
+        <span class="meet-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="14" height="12" rx="2"/><path d="M16 10l6-3v10l-6-3z"/></svg>
+        </span>
+        <b id="meet-title">ห้องประชุม</b>
+        <span class="meet-count" id="meet-count">0</span>
+      </div>
+      <div id="meet-people"></div>
+    </div>
+
     <input id="chat" type="text" maxlength="140" autocomplete="off"
       placeholder="พิมพ์แล้ว Enter เพื่อคุยกับคนใกล้ ๆ…"
       style="position:fixed; left:50%; bottom:56px; transform:translateX(-50%); z-index:20;

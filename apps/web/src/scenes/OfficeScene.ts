@@ -109,6 +109,8 @@ export class OfficeScene extends Phaser.Scene {
   private myLabel?: Phaser.GameObjects.Container; // my own name tag above my head
   private myDesk = "";                          // id of my claimed home desk ("" = none)
   private zoomLevel = ZOOM_DEFAULT;             // whole step; the camera gets it x dpr
+  private meetPanelKey = "";                    // last rendered occupancy, to skip redraws
+  private meetPanelAt = 0;
   private walkable: boolean[][] = [];           // tiles with no wall and no solid prop
   private path: { x: number; y: number }[] = []; // remaining click-to-move waypoints
   private moveMarker?: Phaser.GameObjects.Arc;
@@ -1277,10 +1279,74 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  private inMeetingRoom(): boolean {
-    const tx = this.player.x / TILE, ty = this.player.y / TILE;
+  /** the same test for anyone, so the panel and the status dot cannot disagree */
+  private isInMeeting(x: number, y: number): boolean {
+    const tx = x / TILE, ty = y / TILE;
     return tx >= MEETING_ROOM.x0 && tx <= MEETING_ROOM.x1 + 1
         && ty >= MEETING_ROOM.y0 && ty <= MEETING_ROOM.y1 + 1;
+  }
+
+  private inMeetingRoom(): boolean {
+    return this.isInMeeting(this.player.x, this.player.y);
+  }
+
+  /**
+   * The floating card naming everyone standing in the meeting room. Shown only
+   * while you are in there yourself — it answers "who am I in here with", so
+   * outside the room there is nothing to answer.
+   */
+  private refreshMeetingPanel() {
+    if (this.time.now - this.meetPanelAt < 250) return; // polled, not per frame
+    this.meetPanelAt = this.time.now;
+    const panel = document.getElementById("meet-panel");
+    if (!panel) return;
+    const inside = this.inMeetingRoom();
+    panel.classList.toggle("on", inside);
+    if (!inside) return;
+
+    const here: { name: string; status: string; self: boolean }[] = [];
+    this.room?.state.players.forEach((p: any, sid: string) => {
+      const self = sid === this.mySessionId;
+      // my own position is local truth; the server copy lags a frame behind
+      const x = self ? this.player.x : p.x, y = self ? this.player.y : p.y;
+      if (!this.isInMeeting(x, y)) return;
+      here.push({ name: p.name || "Guest", self, status: self ? this.myStatus : (p.status || "online") });
+    });
+    if (!this.room) here.push({ name: this.myName, self: true, status: this.myStatus });
+    here.sort((a, b) => Number(b.self) - Number(a.self) || a.name.localeCompare(b.name));
+
+    // rebuilding only when the contents change keeps this off the render path
+    const key = here.map((h) => `${h.name}:${h.status}:${h.self}`).join("|");
+    if (key === this.meetPanelKey) return;
+    this.meetPanelKey = key;
+
+    document.getElementById("meet-count")!.textContent = String(here.length);
+    const list = document.getElementById("meet-people")!;
+    list.innerHTML = "";
+    if (here.length <= 1) {
+      const alone = document.createElement("div");
+      alone.className = "meet-empty";
+      alone.textContent = "ยังมีแค่คุณในห้องนี้ — ชวนเพื่อนร่วมงานเข้ามาได้เลย";
+      list.appendChild(alone);
+      return;
+    }
+    for (const h of here) {
+      const { initial, color } = this.chipParts(h.name);
+      const who = document.createElement("div");
+      who.className = "meet-who" + (h.self ? " self" : "");
+      const chip = document.createElement("span");
+      chip.className = "mw-chip";
+      chip.style.background = color;
+      chip.textContent = initial;
+      const dot = document.createElement("i");
+      dot.className = "mw-dot";
+      dot.style.background = statusMeta(h.status).css;
+      chip.appendChild(dot);
+      const nm = document.createElement("span");
+      nm.textContent = h.name + (h.self ? " (คุณ)" : "");
+      who.append(chip, nm);
+      list.appendChild(who);
+    }
   }
 
   /** derive my presence and broadcast it when it changes (called from update, throttled) */
@@ -1715,6 +1781,7 @@ export class OfficeScene extends Phaser.Scene {
     this.player.setDepth(this.sitting && this.satChair ? this.sitDepth(this.satChair.depth, this.facing) : this.player.y);
     this.myLabel?.setPosition(this.player.x, this.player.y - 34);
     this.updateMyStatus();
+    this.refreshMeetingPanel();
 
     // --- send my state to server (throttled + only when it changes) ---
     const moving = vx !== 0 || vy !== 0;
