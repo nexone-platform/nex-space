@@ -8,6 +8,7 @@ import { API, authHeaders, authToken } from "./api";
 import { mountMemberPanel, type MemberPanel } from "./memberPanel";
 import { mountGuestPanel, type GuestPanel } from "./guestPanel";
 import { inviteLink, themeOverride } from "./workspace";
+import { colorMode, setColorMode, lang, setLang, type ColorMode } from "./appearance";
 import { THEMES } from "./scenes/mapThemes";
 import { ART_CREDITS } from "./artCredits";
 
@@ -193,8 +194,32 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
       : "ต้องเป็นเจ้าของหรือผู้ดูแลจึงจะแก้ไขการตั้งค่าของ Space ได้";
   };
 
+  /**
+   * Language and colour mode belong to the person, not the space, so they are
+   * wired once and stay live even where the workspace fields are refused — in
+   * the public space, or for a member who may not rename anything.
+   */
+  const wirePersonal = () => {
+    const color = $<HTMLSelectElement>("pf-color");
+    if (color) {
+      color.value = colorMode();
+      color.onchange = () => setColorMode(color.value as ColorMode);
+    }
+    const language = $<HTMLSelectElement>("pf-lang");
+    if (language) {
+      language.value = lang();
+      language.onchange = () => {
+        // English is offered but disabled until the strings exist; a stray value
+        // must not leave the app pointing at a language it cannot render
+        if (language.value !== "th") return void (language.value = lang());
+        setLang("th");
+      };
+    }
+  };
+
   const loadGeneral = async () => {
     say("");
+    wirePersonal();
     if (isPublic) {
       $("pf-gen-note")!.textContent = "พื้นที่สาธารณะนี้ไม่มีการตั้งค่าให้แก้ไข";
       for (const id of ["pf-name", "pf-guests"]) $<HTMLInputElement>(id)!.disabled = true;

@@ -1,6 +1,12 @@
 import Phaser from "phaser";
 import { OfficeScene } from "./scenes/OfficeScene";
 import { runAuthFlow } from "./authUI";
+import { applyColorMode, watchSystemColorMode } from "./appearance";
+
+// The head script already painted the right palette; this re-applies it from the
+// same source of truth and starts following the OS while the choice is "system".
+applyColorMode();
+watchSystemColorMode();
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
