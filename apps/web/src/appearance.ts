@@ -1,8 +1,9 @@
-// Display language and colour mode — the two personal settings under "ทั่วไป".
+// Colour mode — one of the two personal settings under "ทั่วไป" (the other,
+// display language, lives in i18n.ts).
 //
-// Both are per device, not per account: "ตรงกับระบบ" only means anything on the
-// device asking, and someone who wants dark on their laptop has not said
-// anything about their phone.
+// Per device, not per account: "ตรงกับระบบ" only means anything on the device
+// asking, and someone who wants dark on their laptop has not said anything about
+// their phone.
 //
 // The palette itself lives in index.html; all this does is decide which of the
 // two <html data-theme> values is in force. The same rule runs in a small inline
@@ -10,10 +11,8 @@
 // import would land after it and flash white.
 
 export type ColorMode = "light" | "dark" | "system";
-export type Lang = "th";
 
 const MODE_KEY = "nexspace-color-mode";
-const LANG_KEY = "nexspace-lang";
 
 const MODES: ColorMode[] = ["light", "dark", "system"];
 
@@ -36,20 +35,6 @@ export const applyColorMode = (mode: ColorMode = colorMode()) => {
 export const setColorMode = (mode: ColorMode) => {
   try { localStorage.setItem(MODE_KEY, mode); } catch { /* private mode: this visit only */ }
   applyColorMode(mode);
-};
-
-/**
- * Only Thai ships today. The setting exists because it is where a display
- * language belongs, and storing it now means an English build has somewhere to
- * read the choice from — but offering English before the strings are translated
- * would leave the app half in each language.
- */
-export const lang = (): Lang => {
-  try { return (localStorage.getItem(LANG_KEY) as Lang) === "th" ? "th" : "th"; } catch { return "th"; }
-};
-
-export const setLang = (l: Lang) => {
-  try { localStorage.setItem(LANG_KEY, l); } catch { /* ignore */ }
 };
 
 /** follow the OS while the choice is "ตรงกับระบบ" — it can change under us */

@@ -8,9 +8,10 @@ import { API, authHeaders, authToken } from "./api";
 import { mountMemberPanel, type MemberPanel } from "./memberPanel";
 import { mountGuestPanel, type GuestPanel } from "./guestPanel";
 import { inviteLink, themeOverride } from "./workspace";
-import { colorMode, setColorMode, lang, setLang, type ColorMode } from "./appearance";
+import { colorMode, setColorMode, type ColorMode } from "./appearance";
 import { THEMES } from "./scenes/mapThemes";
 import { ART_CREDITS } from "./artCredits";
+import { t, lang, setLang, onLangChange, type Lang } from "./i18n";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T | null;
 
@@ -36,6 +37,7 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
   let inviteCode = "";
   let allowGuests = true;
   let creditsDrawn = false;
+  let currentPane = "members";
 
   const say = (text: string, kind: "ok" | "err" = "ok") => {
     const el = $("pf-gen-msg");
@@ -45,13 +47,14 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
   };
 
   const showPane = (pane: string) => {
+    currentPane = pane;
     for (const p of PANES) {
       const el = $(`pane-${p}`);
       if (el) el.hidden = p !== pane;
     }
     modal.querySelectorAll<HTMLElement>(".pf-item").forEach((b) =>
       b.classList.toggle("active", b.dataset.pane === pane));
-    $("pf-title")!.textContent = TITLES[pane] ?? "ตั้งค่า";
+    $("pf-title")!.textContent = t(TITLES[pane] ?? "ตั้งค่า");
     if (pane === "members") mountMembers();
     if (pane === "guests") mountGuests();
     if (pane === "general") void loadGeneral();
@@ -71,9 +74,9 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
       const card = document.createElement("div");
       card.className = "cr-card";
       const h = document.createElement("h3");
-      h.textContent = g.title;
+      h.textContent = t(g.title);
       const what = document.createElement("p");
-      what.textContent = g.what;
+      what.textContent = t(g.what);
       card.append(h, what);
 
       const row = (label: string, fill: (s: HTMLElement) => void) => {
@@ -87,8 +90,8 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
         card.appendChild(r);
       };
 
-      row(g.authors.length > 1 ? "ศิลปิน" : "ศิลปิน", (s) => { s.textContent = g.authors.join(", "); });
-      row("สัญญาอนุญาต", (s) => {
+      row(t("ศิลปิน"), (s) => { s.textContent = g.authors.join(", "); });
+      row(t("สัญญาอนุญาต"), (s) => {
         for (const l of g.licenses) {
           const chip = document.createElement("i");
           chip.className = "cr-lic";
@@ -97,17 +100,17 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
         }
       });
       if (g.urls.length || g.fullList) {
-        row("แหล่งที่มา", (s) => {
+        row(t("แหล่งที่มา"), (s) => {
           for (const u of g.urls) {
             const a = document.createElement("a");
             a.href = u.href; a.target = "_blank"; a.rel = "noopener noreferrer";
-            a.textContent = u.label;
+            a.textContent = t(u.label);
             s.appendChild(a);
           }
           if (g.fullList) {
             const a = document.createElement("a");
             a.href = g.fullList; a.target = "_blank"; a.rel = "noopener noreferrer";
-            a.textContent = "รายการครบทุกชิ้น";
+            a.textContent = t("รายการครบทุกชิ้น");
             s.appendChild(a);
           }
         });
@@ -121,7 +124,7 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
     const link = inviteLink();
     try {
       await navigator.clipboard.writeText(link);
-      panelSay("คัดลอกลิงก์เชิญแล้ว — ส่งให้เพื่อนร่วมงานได้เลย");
+      panelSay(t("คัดลอกลิงก์เชิญแล้ว — ส่งให้เพื่อนร่วมงานได้เลย"));
     } catch { panelSay(link); }
   };
 
@@ -138,7 +141,7 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
       host.innerHTML = "";
       const note = document.createElement("p");
       note.className = "pf-note";
-      note.textContent = "พื้นที่สาธารณะนี้เข้าได้ทุกคน ไม่มีการกำหนดสิทธิ์ — สร้าง Space ของทีมเพื่อจัดการสมาชิก";
+      note.textContent = t("พื้นที่สาธารณะนี้เข้าได้ทุกคน ไม่มีการกำหนดสิทธิ์ — สร้าง Space ของทีมเพื่อจัดการสมาชิก");
       host.appendChild(note);
       return;
     }
@@ -166,7 +169,7 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
       host.innerHTML = "";
       const note = document.createElement("p");
       note.className = "pf-note";
-      note.textContent = "พื้นที่สาธารณะนี้เข้าได้ทุกคนอยู่แล้ว จึงไม่มีบัตรผู้เยี่ยมชม — สร้าง Space ของทีมเพื่อคุมทางเข้า";
+      note.textContent = t("พื้นที่สาธารณะนี้เข้าได้ทุกคนอยู่แล้ว จึงไม่มีบัตรผู้เยี่ยมชม — สร้าง Space ของทีมเพื่อคุมทางเข้า");
       host.appendChild(note);
       return;
     }
@@ -191,7 +194,7 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
     $("pf-invite-row")!.style.display = hideInvite ? "none" : "flex";
     $("pf-gen-note")!.textContent = manager
       ? ""
-      : "ต้องเป็นเจ้าของหรือผู้ดูแลจึงจะแก้ไขการตั้งค่าของ Space ได้";
+      : t("ต้องเป็นเจ้าของหรือผู้ดูแลจึงจะแก้ไขการตั้งค่าของ Space ได้");
   };
 
   /**
@@ -208,20 +211,32 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
     const language = $<HTMLSelectElement>("pf-lang");
     if (language) {
       language.value = lang();
-      language.onchange = () => {
-        // English is offered but disabled until the strings exist; a stray value
-        // must not leave the app pointing at a language it cannot render
-        if (language.value !== "th") return void (language.value = lang());
-        setLang("th");
-      };
+      language.onchange = () => setLang(language.value as Lang);
     }
   };
+
+  /**
+   * The dialog's own chrome is markup, so translateDom has already swapped it.
+   * The panels are dropped and mounted again rather than reloaded: a reload
+   * re-renders their rows, but their tabs, column headings and placeholders were
+   * built by t() at mount time, and a panel first mounted in English has no Thai
+   * for the walker to restore.
+   */
+  onLangChange(() => {
+    $("pf-title")!.textContent = t(TITLES[currentPane] ?? "ตั้งค่า");
+    panel = null;
+    guests = null;
+    if (currentPane === "members") mountMembers();
+    if (currentPane === "guests") mountGuests();
+    if (currentPane === "general") void loadGeneral();
+    if (creditsDrawn) { creditsDrawn = false; $("pf-credits")!.innerHTML = ""; drawCredits(); }
+  });
 
   const loadGeneral = async () => {
     say("");
     wirePersonal();
     if (isPublic) {
-      $("pf-gen-note")!.textContent = "พื้นที่สาธารณะนี้ไม่มีการตั้งค่าให้แก้ไข";
+      $("pf-gen-note")!.textContent = t("พื้นที่สาธารณะนี้ไม่มีการตั้งค่าให้แก้ไข");
       for (const id of ["pf-name", "pf-guests"]) $<HTMLInputElement>(id)!.disabled = true;
       $("pf-save")!.style.display = "none";
       $("pf-invite-row")!.style.display = "none";
@@ -237,11 +252,12 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
       const theme = w.theme ?? "classic";
       $<HTMLInputElement>("pf-name")!.value = w.name ?? slug;
       $<HTMLInputElement>("pf-guests")!.checked = !!w.allowGuests;
-      $("pf-theme-name")!.textContent = THEMES[theme]?.label ?? theme;
+      // the theme's label is Thai data, like the map's own labels
+      $("pf-theme-name")!.textContent = THEMES[theme] ? t(THEMES[theme].label) : theme;
       $<HTMLInputElement>("pf-invite")!.value = inviteCode ? inviteLink() : "—";
       applyRole();
-      if (themeOverride()) say(`กำลังดูตัวอย่างธีม "${themeOverride()}" จาก URL — ไม่ใช่ธีมที่ Space นี้ใช้จริง`);
-    } catch { say("โหลดการตั้งค่าไม่ได้", "err"); }
+      if (themeOverride()) say(t('กำลังดูตัวอย่างธีม "{theme}" จาก URL — ไม่ใช่ธีมที่ Space นี้ใช้จริง', { theme: themeOverride() }));
+    } catch { say(t("โหลดการตั้งค่าไม่ได้"), "err"); }
   };
 
   // ---- wiring ----
@@ -257,19 +273,19 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
 
   $("pf-copy")!.onclick = async () => {
     const btn = $("pf-copy")!;
-    try { await navigator.clipboard.writeText($<HTMLInputElement>("pf-invite")!.value); btn.textContent = "คัดลอกแล้ว"; }
+    try { await navigator.clipboard.writeText($<HTMLInputElement>("pf-invite")!.value); btn.textContent = t("คัดลอกแล้ว"); }
     catch { /* leave the link visible to copy by hand */ }
-    setTimeout(() => (btn.textContent = "คัดลอก"), 1500);
+    setTimeout(() => (btn.textContent = t("คัดลอก")), 1500);
   };
 
   $("pf-reset")!.onclick = async () => {
-    if (!confirm("สร้างรหัสเชิญใหม่? ลิงก์เดิมที่แจกไปแล้วจะใช้ไม่ได้")) return;
+    if (!confirm(t("สร้างรหัสเชิญใหม่? ลิงก์เดิมที่แจกไปแล้วจะใช้ไม่ได้"))) return;
     const r = await fetch(`${API}/workspaces/${encodeURIComponent(slug)}/invite/reset`,
       { method: "POST", headers: authHeaders() });
     const d = await r.json().catch(() => ({} as any));
-    if (!r.ok) return say(d.error === "forbidden" ? "คุณไม่มีสิทธิ์รีเซ็ตลิงก์เชิญ" : (d.error || "รีเซ็ตไม่สำเร็จ"), "err");
+    if (!r.ok) return say(d.error === "forbidden" ? t("คุณไม่มีสิทธิ์รีเซ็ตลิงก์เชิญ") : (d.error || t("รีเซ็ตไม่สำเร็จ")), "err");
     inviteCode = d.inviteCode ?? inviteCode;
-    say("สร้างรหัสเชิญใหม่แล้ว");
+    say(t("สร้างรหัสเชิญใหม่แล้ว"));
   };
 
   // the theme is deliberately not editable here — it is chosen once, when the
@@ -284,9 +300,9 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
       }),
     });
     const d = await r.json().catch(() => ({} as any));
-    if (!r.ok) return say(d.error === "forbidden" ? "คุณไม่มีสิทธิ์แก้ไข Space นี้"
-      : (d.error || "บันทึกไม่สำเร็จ"), "err");
-    say("บันทึกแล้ว");
+    if (!r.ok) return say(d.error === "forbidden" ? t("คุณไม่มีสิทธิ์แก้ไข Space นี้")
+      : (d.error || t("บันทึกไม่สำเร็จ")), "err");
+    say(t("บันทึกแล้ว"));
     allowGuests = $<HTMLInputElement>("pf-guests")!.checked;
     // the sidebar header and the cached name should follow the rename
     const name = d.workspace?.name ?? $<HTMLInputElement>("pf-name")!.value.trim();

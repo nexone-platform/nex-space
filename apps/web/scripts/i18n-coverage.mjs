@@ -1,0 +1,80 @@
+// Does every Thai string the user can see have an English translation?
+//
+// The Thai text is the key (see src/i18n.ts), which makes a missing entry
+// invisible at runtime: the phrase simply stays Thai. This script is what
+// notices instead.
+//
+//   npm run -w @nexspace/web i18n
+//
+// Two checks:
+//   missing English — a key routed through t() or sitting in index.html with no
+//                     entry in the dictionary
+//   unwrapped       — a Thai literal in the source that never reaches t()
+//
+// A handful of "unwrapped" hits are expected: data tables (STATE_LABEL, TABS,
+// TITLES, the theme labels) deliberately hold Thai and are translated where they
+// are displayed, and this script cannot see that from one line of source.
+import { readFileSync, readdirSync, statSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const files = [];
+const walk = (d) => {
+  for (const n of readdirSync(d)) {
+    const p = join(d, n);
+    if (statSync(p).isDirectory()) { if (!["node_modules", "dist", "public", "scripts"].includes(n)) walk(p); }
+    // i18n.ts is the dictionary; artCredits.ts and mapThemes.ts are data whose
+    // display sites call t()
+    else if (/\.(ts|html)$/.test(n) && !/(i18n|artCredits|mapThemes)\.ts$/.test(n)) files.push(p);
+  }
+};
+walk(join(ROOT, "src"));
+files.push(join(ROOT, "index.html"));
+
+const THAI = /[฀-๿]/;
+const dict = new Set();
+for (const m of readFileSync(join(ROOT, "src/i18n.ts"), "utf8").matchAll(/^\s*"((?:[^"\\]|\\.)+)":/gm)) {
+  dict.add(m[1].replace(/\\"/g, '"'));
+}
+
+let missing = 0, unwrapped = 0;
+
+for (const f of files.filter((f) => f.endsWith(".ts"))) {
+  const code = readFileSync(f, "utf8");
+  const rel = f.replace(ROOT, "web");
+  for (const m of code.matchAll(/\bt(?:r)?\(\s*"((?:[^"\\]|\\.)*)"/g)) {
+    const k = m[1].replace(/\\"/g, '"');
+    if (THAI.test(k) && !dict.has(k)) { missing++; console.log(`no EN     ${rel}: ${k.slice(0, 70)}`); }
+  }
+  code.split("\n").forEach((line, i) => {
+    const s = line.trim();
+    if (s.startsWith("//") || s.startsWith("*") || s.startsWith("/*")) return;
+    for (const m of line.matchAll(/"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g)) {
+      const body = m[1] ?? m[2] ?? m[3] ?? "";
+      if (!THAI.test(body)) continue;
+      const before = line.slice(0, m.index);
+      if (/\bt(?:r)?\(\s*$/.test(before)) continue;
+      if (/\blabel:\s*$/.test(before)) continue;           // a data table's label
+      unwrapped++;
+      console.log(`unwrapped ${rel}:${i + 1}  ${body.slice(0, 70)}`);
+    }
+  });
+}
+
+const html = readFileSync(join(ROOT, "index.html"), "utf8")
+  .replace(/<style[\s\S]*?<\/style>/g, "").replace(/<script[\s\S]*?<\/script>/g, "");
+const norm = (s) => s.replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+for (const m of html.matchAll(/>([^<>]+)</g)) {
+  const s = norm(m[1]);
+  if (s && THAI.test(s) && !dict.has(s)) { missing++; console.log(`no EN     index.html text: ${s.slice(0, 70)}`); }
+}
+for (const m of html.matchAll(/(?:placeholder|title|alt|aria-label)="([^"]+)"/g)) {
+  const s = norm(m[1]);
+  if (THAI.test(s) && !dict.has(s)) { missing++; console.log(`no EN     index.html attr: ${s.slice(0, 70)}`); }
+}
+
+console.log(`\ndictionary entries: ${dict.size}`);
+console.log(`missing English:    ${missing}`);
+console.log(`unwrapped literals: ${unwrapped}  (data tables are expected here)`);
+process.exit(missing ? 1 : 0);

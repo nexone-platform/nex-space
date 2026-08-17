@@ -11,6 +11,7 @@
 import { API, authHeaders, authToken } from "./api";
 import { sinceLabel } from "./memberPanel";
 import { guestLinkFor } from "./workspace";
+import { t, locale } from "./i18n";
 
 export type GuestState = "active" | "expired" | "revoked" | "archived";
 
@@ -45,16 +46,17 @@ const DURATIONS: { days: number | null; label: string }[] = [
 const initial = (s: string) => (s.trim()[0] ?? "?").toUpperCase();
 
 const untilLabel = (p: GuestPass) => {
-  if (p.state === "archived") return "เก็บถาวรแล้ว";
-  if (p.state === "revoked") return "ถูกเพิกถอนแล้ว";
-  if (!p.expiresAt) return "ไม่มีวันหมดอายุ";
+  if (p.state === "archived") return t("เก็บถาวรแล้ว");
+  if (p.state === "revoked") return t("ถูกเพิกถอนแล้ว");
+  if (!p.expiresAt) return t("ไม่มีวันหมดอายุ");
   const d = new Date(p.expiresAt);
   const left = d.getTime() - Date.now();
-  if (left <= 0) return `หมดอายุ ${d.toLocaleDateString("th-TH")}`;
+  if (left <= 0) return t("หมดอายุ {date}", { date: d.toLocaleDateString(locale()) });
   const hours = Math.floor(left / 3_600_000);
   // rounded up: a pass issued for 7 days has 167-and-a-bit hours left the moment
   // it exists, and "เหลือ 6 วัน" on a brand-new pass reads as a bug
-  return hours < 24 ? `เหลือ ${Math.max(1, hours)} ชม.` : `เหลือ ${Math.ceil(hours / 24)} วัน`;
+  return hours < 24 ? t("เหลือ {n} ชม.", { n: Math.max(1, hours) })
+    : t("เหลือ {n} วัน", { n: Math.ceil(hours / 24) });
 };
 
 export interface GuestPanelOptions {
@@ -78,7 +80,7 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
   o.host.className = "mp mp-table gp";
 
   let passes: GuestPass[] = [];
-  let tab: "all" | GuestState = "all";
+  let state: "all" | GuestState = "all";   // which tab is showing
   let sortKey: "name" | "seen" = "name";
   let sortAsc = true;
   let denied = false;
@@ -87,12 +89,12 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
   const tabs = document.createElement("div");
   tabs.className = "gp-tabs";
   const tabButtons = new Map<string, HTMLButtonElement>();
-  for (const t of TABS) {
+  for (const tab of TABS) {
     const b = document.createElement("button");
-    b.textContent = t.label;
-    b.classList.toggle("active", tab === t.key);
-    b.onclick = () => { tab = t.key; tabButtons.forEach((el, k) => el.classList.toggle("active", k === t.key)); render(); };
-    tabButtons.set(t.key, b);
+    b.textContent = t(tab.label);
+    b.classList.toggle("active", state === tab.key);
+    b.onclick = () => { state = tab.key; tabButtons.forEach((el, k) => el.classList.toggle("active", k === tab.key)); render(); };
+    tabButtons.set(tab.key, b);
     tabs.appendChild(b);
   }
 
@@ -100,11 +102,11 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
   tools.className = "mp-tools";
   const search = document.createElement("input");
   search.type = "text";
-  search.placeholder = "ค้นหา";
+  search.placeholder = t("ค้นหา");
   search.autocomplete = "off";
   const add = document.createElement("button");
   add.className = "mp-invite";
-  add.title = "เชิญผู้เยี่ยมชมใหม่";
+  add.title = t("เชิญผู้เยี่ยมชมใหม่");
   add.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"'
     + ' stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/>'
     + '<path d="M3 20a6 6 0 0 1 12 0"/><path d="M18 8v6M15 11h6"/></svg>';
@@ -155,7 +157,7 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
     };
     const stateCol = document.createElement("span");
     stateCol.className = "mp-h-role";
-    el.append(col("name", "ชื่อ", "mp-h-name"), stateCol, col("seen", "ใช้งานล่าสุด", "mp-h-seen"));
+    el.append(col("name", t("ชื่อ"), "mp-h-name"), stateCol, col("seen", t("ใช้งานล่าสุด"), "mp-h-seen"));
     const gap = document.createElement("span");
     gap.className = "mp-h-gap";
     el.appendChild(gap);
@@ -170,15 +172,15 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
     const d = await r.json().catch(() => ({} as any));
     if (r.ok) return d;
     throw new Error(
-      d.error === "forbidden" ? "ต้องเป็นเจ้าของหรือผู้ดูแลจึงจะจัดการผู้เยี่ยมชมได้"
-      : d.error === "not found" ? "ไม่พบบัตรผู้เยี่ยมชมนี้"
-      : d.error === "name required" ? "กรอกชื่อผู้เยี่ยมชมก่อน"
-      : d.error || "ทำรายการไม่สำเร็จ");
+      d.error === "forbidden" ? t("ต้องเป็นเจ้าของหรือผู้ดูแลจึงจะจัดการผู้เยี่ยมชมได้")
+      : d.error === "not found" ? t("ไม่พบบัตรผู้เยี่ยมชมนี้")
+      : d.error === "name required" ? t("กรอกชื่อผู้เยี่ยมชมก่อน")
+      : d.error || t("ทำรายการไม่สำเร็จ"));
   };
 
   const copyLink = async (p: GuestPass) => {
     const link = guestLinkFor(o.slug, p.code);
-    try { await navigator.clipboard.writeText(link); say(`คัดลอกลิงก์ของ ${p.name} แล้ว`); }
+    try { await navigator.clipboard.writeText(link); say(t("คัดลอกลิงก์ของ {name} แล้ว", { name: p.name })); }
     catch { say(link); } // clipboard blocked: leave it on screen to copy by hand
   };
 
@@ -193,21 +195,21 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
   // ---- the invite form ----
   const nameInput = document.createElement("input");
   nameInput.type = "text";
-  nameInput.placeholder = "ชื่อผู้เยี่ยมชม เช่น คุณสมชาย (ลูกค้า)";
+  nameInput.placeholder = t("ชื่อผู้เยี่ยมชม เช่น คุณสมชาย (ลูกค้า)");
   const daysSelect = document.createElement("select");
   for (const d of DURATIONS) {
     const opt = document.createElement("option");
     opt.value = d.days === null ? "" : String(d.days);
-    opt.textContent = d.label;
+    opt.textContent = t(d.label);
     daysSelect.appendChild(opt);
   }
   daysSelect.value = "7";
   const create = document.createElement("button");
   create.className = "wm-btn wm-primary";
-  create.textContent = "สร้างลิงก์";
+  create.textContent = t("สร้างลิงก์");
   const cancel = document.createElement("button");
   cancel.className = "wm-btn wm-ghost";
-  cancel.textContent = "ยกเลิก";
+  cancel.textContent = t("ยกเลิก");
   const formRow = document.createElement("div");
   formRow.className = "gp-form-row";
   formRow.append(nameInput, daysSelect, create, cancel);
@@ -223,8 +225,8 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
     made.hidden = true;
     if (!on) return;
     formNote.textContent = o.openDoor?.()
-      ? "Space นี้เปิดให้ผู้เยี่ยมชมเข้าได้อยู่แล้ว — บัตรยังมีประโยชน์เพราะระบุชื่อผู้มาเยี่ยม บันทึกการเข้า และเพิกถอนรายคนได้"
-      : "Space นี้ปิดรับผู้เยี่ยมชม — คนที่ได้รับบัตรนี้จะเข้าได้เฉพาะคนเดียว ตามอายุบัตรที่กำหนด";
+      ? t("Space นี้เปิดให้ผู้เยี่ยมชมเข้าได้อยู่แล้ว — บัตรยังมีประโยชน์เพราะระบุชื่อผู้มาเยี่ยม บันทึกการเข้า และเพิกถอนรายคนได้")
+      : t("Space นี้ปิดรับผู้เยี่ยมชม — คนที่ได้รับบัตรนี้จะเข้าได้เฉพาะคนเดียว ตามอายุบัตรที่กำหนด");
     nameInput.value = "";
     nameInput.focus();
   };
@@ -235,13 +237,13 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
 
   create.onclick = async () => {
     const name = nameInput.value.trim();
-    if (!name) return say("กรอกชื่อผู้เยี่ยมชมก่อน", "err");
+    if (!name) return say(t("กรอกชื่อผู้เยี่ยมชมก่อน"), "err");
     create.disabled = true;
     try {
       const days = daysSelect.value === "" ? null : Number(daysSelect.value);
       const d = await write("POST", "", { name, days });
       const pass: GuestPass = d.guest;
-      say(`สร้างบัตรของ ${pass.name} แล้ว`);
+      say(t("สร้างบัตรของ {name} แล้ว", { name: pass.name }));
       // hand the link over straight away — an invite nobody can send is useless
       made.hidden = false;
       made.innerHTML = "";
@@ -252,11 +254,11 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
       link.onclick = () => link.select();
       const copy = document.createElement("button");
       copy.className = "wm-btn wm-ghost";
-      copy.textContent = "คัดลอก";
+      copy.textContent = t("คัดลอก");
       copy.onclick = async () => {
-        try { await navigator.clipboard.writeText(link.value); copy.textContent = "คัดลอกแล้ว"; }
+        try { await navigator.clipboard.writeText(link.value); copy.textContent = t("คัดลอกแล้ว"); }
         catch { link.select(); }
-        setTimeout(() => (copy.textContent = "คัดลอก"), 1500);
+        setTimeout(() => (copy.textContent = t("คัดลอก")), 1500);
       };
       made.append(link, copy);
       nameInput.value = "";
@@ -276,35 +278,35 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
   const menuItems = (p: GuestPass): MenuItem[] => {
     const items: MenuItem[] = [];
     if (p.state === "archived") {
-      items.push({ label: "เอาออกจากที่เก็บถาวร", icon: "↩", run: () => void patch(p, { archived: false }, `กู้คืนบัตรของ ${p.name} แล้ว`) });
+      items.push({ label: t("เอาออกจากที่เก็บถาวร"), icon: "↩", run: () => void patch(p, { archived: false }, t("กู้คืนบัตรของ {name} แล้ว", { name: p.name })) });
       return items;
     }
     if (p.state === "active") {
-      items.push({ label: "คัดลอกลิงก์เชิญ", icon: "⧉", run: () => void copyLink(p) });
+      items.push({ label: t("คัดลอกลิงก์เชิญ"), icon: "⧉", run: () => void copyLink(p) });
     }
     if (p.state === "revoked") {
-      items.push({ label: "คืนสิทธิ์เข้าใช้งาน", icon: "↩", run: () => void patch(p, { revoked: false }, `คืนสิทธิ์ ${p.name} แล้ว`) });
+      items.push({ label: t("คืนสิทธิ์เข้าใช้งาน"), icon: "↩", run: () => void patch(p, { revoked: false }, t("คืนสิทธิ์ {name} แล้ว", { name: p.name })) });
     }
     if (p.state === "expired" || p.state === "revoked") {
       for (const days of [7, 30]) {
         items.push({
-          label: `ต่ออายุ ${days} วัน`, icon: "⟳",
-          run: () => void patch(p, { days, revoked: false }, `ต่ออายุบัตรของ ${p.name} อีก ${days} วัน`),
+          label: t("ต่ออายุ {n} วัน", { n: days }), icon: "⟳",
+          run: () => void patch(p, { days, revoked: false }, t("ต่ออายุบัตรของ {name} อีก {n} วัน", { name: p.name, n: days })),
         });
       }
     }
     if (p.state === "active") {
       items.push({
-        label: "เพิกถอนบัตร", icon: "⊘", danger: true,
+        label: t("เพิกถอนบัตร"), icon: "⊘", danger: true,
         run: () => {
-          if (!confirm(`เพิกถอนบัตรของ ${p.name}? ลิงก์เดิมจะใช้เข้าไม่ได้ทันที`)) return;
-          void patch(p, { revoked: true }, `เพิกถอนบัตรของ ${p.name} แล้ว`);
+          if (!confirm(t("เพิกถอนบัตรของ {name}? ลิงก์เดิมจะใช้เข้าไม่ได้ทันที", { name: p.name }))) return;
+          void patch(p, { revoked: true }, t("เพิกถอนบัตรของ {name} แล้ว", { name: p.name }));
         },
       });
     }
     items.push({
-      label: "เก็บถาวร", icon: "🗄", danger: p.state === "active",
-      run: () => void patch(p, { archived: true }, `เก็บถาวรบัตรของ ${p.name} แล้ว`),
+      label: t("เก็บถาวร"), icon: "🗄", danger: p.state === "active",
+      run: () => void patch(p, { archived: true }, t("เก็บถาวรบัตรของ {name} แล้ว", { name: p.name })),
     });
     return items;
   };
@@ -338,7 +340,7 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
     if (denied) return;
     const q = search.value.trim().toLowerCase();
     const shown = passes.filter((p) =>
-      (tab === "all" ? p.state !== "archived" : p.state === tab)
+      (state === "all" ? p.state !== "archived" : p.state === state)
       && (!q || p.name.toLowerCase().includes(q)));
 
     const by = {
@@ -355,7 +357,7 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
     if (!shown.length) {
       const empty = document.createElement("div");
       empty.className = "mp-empty";
-      empty.textContent = passes.length ? "ไม่พบผู้เยี่ยมชม" : "ยังไม่มีผู้เยี่ยมชม — กดปุ่มขวาบนเพื่อสร้างลิงก์เชิญ";
+      empty.textContent = passes.length ? t("ไม่พบผู้เยี่ยมชม") : t("ยังไม่มีผู้เยี่ยมชม — กดปุ่มขวาบนเพื่อสร้างลิงก์เชิญ");
       list.appendChild(empty);
       return;
     }
@@ -374,18 +376,18 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
       name.textContent = p.name;
       const sub = document.createElement("small");
       sub.textContent = p.visits
-        ? `${untilLabel(p)} · เข้ามาแล้ว ${p.visits} ครั้ง`
-        : `${untilLabel(p)} · ยังไม่เคยเข้า`;
+        ? t("{until} · เข้ามาแล้ว {n} ครั้ง", { until: untilLabel(p), n: p.visits })
+        : t("{until} · ยังไม่เคยเข้า", { until: untilLabel(p) });
       info.append(name, sub);
 
       const chip = document.createElement("i");
       chip.className = `mp-role gp-${p.state}`;
-      chip.textContent = STATE_LABEL[p.state];
+      chip.textContent = t(STATE_LABEL[p.state]);
 
       const seen = document.createElement("i");
       seen.className = "mp-seen";
       seen.textContent = sinceLabel(p.lastSeenAt);
-      if (p.createdAt) seen.title = `สร้างเมื่อ ${new Date(p.createdAt).toLocaleDateString("th-TH")}`;
+      if (p.createdAt) seen.title = t("สร้างเมื่อ {date}", { date: new Date(p.createdAt).toLocaleDateString(locale()) });
 
       row.append(ava, info, chip, seen);
 
@@ -394,7 +396,7 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
       wrap.className = "mp-kebab";
       const btn = document.createElement("button");
       btn.textContent = "⋮";
-      btn.title = "ตัวเลือก";
+      btn.title = t("ตัวเลือก");
       btn.onclick = (e) => {
         e.stopPropagation();
         const open = wrap.querySelector(".mp-menu");
@@ -416,7 +418,7 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
       passes = [];
       tools.style.display = "none";
       list.innerHTML = "";
-      say("เข้าสู่ระบบเพื่อจัดการผู้เยี่ยมชม", "err");
+      say(t("เข้าสู่ระบบเพื่อจัดการผู้เยี่ยมชม"), "err");
       return;
     }
     try {
@@ -428,16 +430,16 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
         tools.style.display = "none";
         form.hidden = true;
         list.innerHTML = "";
-        return say(d.error === "forbidden" ? "ต้องเป็นเจ้าของหรือผู้ดูแลจึงจะจัดการผู้เยี่ยมชมได้"
-          : d.error === "not found" ? "ไม่พบ Space นี้"
-          : d.error || "โหลดรายชื่อผู้เยี่ยมชมไม่ได้", "err");
+        return say(d.error === "forbidden" ? t("ต้องเป็นเจ้าของหรือผู้ดูแลจึงจะจัดการผู้เยี่ยมชมได้")
+          : d.error === "not found" ? t("ไม่พบ Space นี้")
+          : d.error || t("โหลดรายชื่อผู้เยี่ยมชมไม่ได้"), "err");
       }
       denied = false;
       tools.style.display = "";
       passes = d.guests ?? [];
       o.onCount?.(passes.filter((p) => p.state === "active").length);
       render();
-    } catch { say("เชื่อมต่อ API ไม่ได้", "err"); }
+    } catch { say(t("เชื่อมต่อ API ไม่ได้"), "err"); }
   };
 
   search.oninput = render;

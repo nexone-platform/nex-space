@@ -2,11 +2,14 @@ import Phaser from "phaser";
 import { OfficeScene } from "./scenes/OfficeScene";
 import { runAuthFlow } from "./authUI";
 import { applyColorMode, watchSystemColorMode } from "./appearance";
+import { applyLang } from "./i18n";
 
 // The head script already painted the right palette; this re-applies it from the
 // same source of truth and starts following the OS while the choice is "system".
 applyColorMode();
 watchSystemColorMode();
+// and put the markup in the chosen language before anyone reads it
+applyLang();
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,

@@ -4,6 +4,8 @@ import {
   getCatalog, buildFrameCanvas, itemThumb,
   type BodyType, type Category, type LpcConfig,
 } from "./avatarCompose";
+// `t` is taken by a local in the category loop, so the translator comes in as tr
+import { translateDom, t as tr } from "../i18n";
 
 // simple line icons per category (stroke = currentColor, so they invert on the active tab)
 const svg = (inner: string) =>
@@ -118,6 +120,9 @@ export async function openAvatarEditor(
           <button class="ave-btn ave-done">เสร็จสิ้น</button>
         </div>
       </div>`;
+    // the markup above is Thai, like index.html's, so the same walker translates
+    // it — cheaper and less error-prone than threading t() through a template
+    translateDom(overlay);
     document.body.appendChild(overlay);
 
     const sideEl = overlay.querySelector(".ave-side") as HTMLElement;
@@ -143,7 +148,7 @@ export async function openAvatarEditor(
       for (const c of cats) {
         const t = document.createElement("div");
         t.className = "ave-tab" + (c === active ? " on" : "");
-        t.innerHTML = `<span class="ic">${ICONS[c.key] ?? ""}</span><span>${c.label}</span>`;
+        t.innerHTML = `<span class="ic">${ICONS[c.key] ?? ""}</span><span>${tr(c.label)}</span>`;
         t.onclick = () => { active = c; renderSide(); renderGrid(); renderSwatches(); };
         sideEl.appendChild(t);
       }

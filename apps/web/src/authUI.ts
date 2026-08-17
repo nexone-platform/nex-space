@@ -9,6 +9,7 @@ import { API, TOKEN_KEY, authToken as token, authHeaders } from "./api";
 import { mountMemberPanel, roleLabel, type PanelMember } from "./memberPanel";
 import { THEMES } from "./scenes/mapThemes";
 import { renderThemePreview } from "./themePreview";
+import { t } from "./i18n";
 
 export interface StartInfo { name: string; avatar: string; desk: string; }
 interface User {
@@ -82,12 +83,12 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
   // Google hands the token back in the URL fragment; consume it before anything reads the URL.
   (() => {
     const h = new URLSearchParams(location.hash.slice(1));
-    const t = h.get("token");
+    const tok = h.get("token");
     // `totp` means Google verified the account but it also has an authenticator:
     // this token stays out of localStorage until the code step promotes it.
     const half = h.get("totp");
-    if (t) {
-      localStorage.setItem(TOKEN_KEY, t);
+    if (tok) {
+      localStorage.setItem(TOKEN_KEY, tok);
       history.replaceState(null, "", location.pathname + location.search);
     } else if (half) {
       pendingTotp = half;
@@ -98,16 +99,16 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       // the API passes Google's own error code through, so the message can say
       // what to fix instead of just "it failed"
       const MSG: Record<string, string> = {
-        access_denied: "Google ปฏิเสธการเข้าสู่ระบบ — แอปยังไม่ได้เผยแพร่ ให้เพิ่มอีเมลนี้ใน Test users หรือกด Publish app",
-        admin_policy_enforced: "ผู้ดูแล Google Workspace ขององค์กรบล็อกแอปนี้ไว้",
-        redirect_uri_mismatch: "Redirect URI ไม่ตรงกับที่ลงทะเบียนใน Google Cloud Console",
-        invalid_client: "Client ID หรือ Client secret ไม่ถูกต้อง",
-        invalid_grant: "รหัสจาก Google หมดอายุหรือถูกใช้แล้ว — ลองอีกครั้ง",
-        token_exchange: "แลกโทเคนกับ Google ไม่สำเร็จ — ตรวจ Client secret",
-        no_code: "Google ไม่ได้ส่งรหัสยืนยันกลับมา",
-        no_email: "บัญชี Google นี้ไม่มีอีเมล",
+        access_denied: t("Google ปฏิเสธการเข้าสู่ระบบ — แอปยังไม่ได้เผยแพร่ ให้เพิ่มอีเมลนี้ใน Test users หรือกด Publish app"),
+        admin_policy_enforced: t("ผู้ดูแล Google Workspace ขององค์กรบล็อกแอปนี้ไว้"),
+        redirect_uri_mismatch: t("Redirect URI ไม่ตรงกับที่ลงทะเบียนใน Google Cloud Console"),
+        invalid_client: t("Client ID หรือ Client secret ไม่ถูกต้อง"),
+        invalid_grant: t("รหัสจาก Google หมดอายุหรือถูกใช้แล้ว — ลองอีกครั้ง"),
+        token_exchange: t("แลกโทเคนกับ Google ไม่สำเร็จ — ตรวจ Client secret"),
+        no_code: t("Google ไม่ได้ส่งรหัสยืนยันกลับมา"),
+        no_email: t("บัญชี Google นี้ไม่มีอีเมล"),
       };
-      setErr("auth-err", MSG[reason] ?? `เข้าสู่ระบบด้วย Google ไม่สำเร็จ (${reason})`);
+      setErr("auth-err", MSG[reason] ?? t("เข้าสู่ระบบด้วย Google ไม่สำเร็จ ({reason})", { reason }));
     }
   })();
 
@@ -128,7 +129,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
         if (d.workspace.theme) rememberTheme(WORKSPACE, d.workspace.theme);
         if (!d.workspace.name) return;
         const sub = document.querySelector<HTMLElement>("#auth-step .sub");
-        if (sub) sub.textContent = `เข้าสู่ workspace: ${d.workspace.name}`;
+        if (sub) sub.textContent = t("เข้าสู่ workspace: {name}", { name: d.workspace.name });
         localStorage.setItem(wsKey("nexspace-ws-name"), d.workspace.name);
       }).catch(() => {});
   }
@@ -138,7 +139,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
   };
 
   /** a thrown TypeError from fetch means the API is unreachable, not a bad request */
-  const NET_ERR = "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจสอบว่า API ทำงานอยู่";
+  const NET_ERR = t("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจสอบว่า API ทำงานอยู่");
 
   const requestCode = async (email: string) => {
     let r: Response;
@@ -150,9 +151,9 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     const d = await r.json().catch(() => ({} as any));
     if (!r.ok) {
       throw new Error(
-        d.error === "invalid email" ? "อีเมลไม่ถูกต้อง"
-        : d.error === "could not send email" ? "ส่งอีเมลไม่สำเร็จ — ตรวจการตั้งค่า SMTP"
-        : d.error || "ส่งรหัสไม่สำเร็จ");
+        d.error === "invalid email" ? t("อีเมลไม่ถูกต้อง")
+        : d.error === "could not send email" ? t("ส่งอีเมลไม่สำเร็จ — ตรวจการตั้งค่า SMTP")
+        : d.error || t("ส่งรหัสไม่สำเร็จ"));
     }
     return d as { delivered: boolean };
   };
@@ -160,7 +161,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
   $("a-send-code")!.onclick = async () => {
     const email = emailInput?.value.trim() ?? "";
     setErr("auth-err", "");
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return setErr("auth-err", "กรอกอีเมลให้ถูกต้อง");
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return setErr("auth-err", t("กรอกอีเมลให้ถูกต้อง"));
     try {
       const d = await requestCode(email);
       pendingEmail = email;
@@ -169,8 +170,8 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       const sub = $("code-sub");
       if (sub) {
         sub.textContent = d.delivered
-          ? `เราส่งรหัส 6 หลักไปที่ ${email} แล้ว หากไม่พบให้ตรวจในกล่องสแปม`
-          : `ระบบยังไม่ได้ตั้งค่าอีเมล — ดูรหัสได้ที่ log ของเซิร์ฟเวอร์ (${email})`;
+          ? t("เราส่งรหัส 6 หลักไปที่ {email} แล้ว หากไม่พบให้ตรวจในกล่องสแปม", { email })
+          : t("ระบบยังไม่ได้ตั้งค่าอีเมล — ดูรหัสได้ที่ log ของเซิร์ฟเวอร์ ({email})", { email });
       }
       codeInputs()[0]?.focus();
     } catch (e) { setErr("auth-err", (e as Error).message); }
@@ -192,23 +193,23 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
         codeInputs().forEach((i) => (i.value = ""));
         codeInputs()[0]?.focus();
         return setErr("code-err",
-          d.error === "invalid code" ? "รหัสไม่ถูกต้อง"
-          : d.error === "code expired" ? "รหัสหมดอายุแล้ว — ขอรหัสใหม่"
-          : d.error === "too many attempts" ? "กรอกผิดหลายครั้งเกินไป — ขอรหัสใหม่"
-          : d.error || "ยืนยันรหัสไม่สำเร็จ");
+          d.error === "invalid code" ? t("รหัสไม่ถูกต้อง")
+          : d.error === "code expired" ? t("รหัสหมดอายุแล้ว — ขอรหัสใหม่")
+          : d.error === "too many attempts" ? t("กรอกผิดหลายครั้งเกินไป — ขอรหัสใหม่")
+          : d.error || t("ยืนยันรหัสไม่สำเร็จ"));
       }
       if (d.totpRequired) return toTotp(d.pendingToken);
       localStorage.setItem(TOKEN_KEY, d.token);
       user = d.user;
       afterSignIn();
-    } catch { setErr("code-err", "เชื่อมต่อ API ไม่ได้"); }
+    } catch { setErr("code-err", t("เชื่อมต่อ API ไม่ได้")); }
   };
 
   wireCodeBoxes(codeInputs(), () => void verifyCode());
 
   $("code-resend")!.onclick = async () => {
     setErr("code-err", "");
-    try { await requestCode(pendingEmail); setErr("code-err", "ส่งรหัสใหม่แล้ว"); }
+    try { await requestCode(pendingEmail); setErr("code-err", t("ส่งรหัสใหม่แล้ว")); }
     catch (e) { setErr("code-err", (e as Error).message); }
   };
   $("code-cancel")!.onclick = () => { codeInputs().forEach((i) => (i.value = "")); showStep("auth-step"); };
@@ -222,10 +223,10 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     $("totp-boxes")!.style.display = on ? "none" : "flex";
     $("totp-rc")!.style.display = on ? "block" : "none";
     $("totp-rc-go")!.style.display = on ? "block" : "none";
-    $("totp-rc-toggle")!.textContent = on ? "กลับไปใช้รหัสจากแอป" : "ทำโทรศัพท์หาย? ใช้รหัสสำรอง";
+    $("totp-rc-toggle")!.textContent = on ? t("กลับไปใช้รหัสจากแอป") : t("ทำโทรศัพท์หาย? ใช้รหัสสำรอง");
     $("totp-sub")!.textContent = on
-      ? "กรอกรหัสสำรองที่คุณเก็บไว้ตอนเปิดใช้งาน — ใช้ได้รหัสละครั้ง"
-      : "กรอกรหัส 6 หลักจากแอป Authenticator ของคุณ";
+      ? t("กรอกรหัสสำรองที่คุณเก็บไว้ตอนเปิดใช้งาน — ใช้ได้รหัสละครั้ง")
+      : t("กรอกรหัส 6 หลักจากแอป Authenticator ของคุณ");
     setErr("totp-err", "");
     (on ? $<HTMLInputElement>("totp-rc") : totpBoxes()[0])?.focus();
   };
@@ -244,7 +245,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     // a reload during this step drops the pending token — start over rather than
     // sit there doing nothing when the button is pressed
     if (!pendingTotp) {
-      setErr("auth-err", "หมดเวลายืนยันตัวตน — เข้าสู่ระบบใหม่อีกครั้ง");
+      setErr("auth-err", t("หมดเวลายืนยันตัวตน — เข้าสู่ระบบใหม่อีกครั้ง"));
       return showStep("auth-step");
     }
     setErr("totp-err", "");
@@ -261,20 +262,20 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
         if (r.status === 429 || d.error === "session expired") {
           pendingTotp = "";
           setErr("auth-err", r.status === 429
-            ? "กรอกรหัสผิดหลายครั้งเกินไป — เข้าสู่ระบบใหม่อีกครั้ง"
-            : "หมดเวลายืนยันตัวตน — เข้าสู่ระบบใหม่อีกครั้ง");
+            ? t("กรอกรหัสผิดหลายครั้งเกินไป — เข้าสู่ระบบใหม่อีกครั้ง")
+            : t("หมดเวลายืนยันตัวตน — เข้าสู่ระบบใหม่อีกครั้ง"));
           return showStep("auth-step");
         }
-        const left = typeof d.attemptsLeft === "number" ? ` (เหลือ ${d.attemptsLeft} ครั้ง)` : "";
+        const left = typeof d.attemptsLeft === "number" ? " " + t("(เหลือ {n} ครั้ง)", { n: d.attemptsLeft }) : "";
         return setErr("totp-err",
-          d.reused ? "รหัสนี้ถูกใช้ไปแล้ว — รอรหัสถัดไปในแอป"
-          : `รหัสไม่ถูกต้อง${left}`);
+          d.reused ? t("รหัสนี้ถูกใช้ไปแล้ว — รอรหัสถัดไปในแอป")
+          : t("รหัสไม่ถูกต้อง") + left);
       }
       localStorage.setItem(TOKEN_KEY, d.token);
       pendingTotp = "";
       user = d.user;
       afterSignIn();
-    } catch { setErr("totp-err", "เชื่อมต่อ API ไม่ได้"); }
+    } catch { setErr("totp-err", t("เชื่อมต่อ API ไม่ได้")); }
   };
 
   wireCodeBoxes(totpBoxes(), (code) => void submitTotp(code));
@@ -300,8 +301,8 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       const p = document.createElement("div");
       p.className = "sp-empty";
       p.textContent = mySpaces.length
-        ? "ไม่พบ Space ที่ค้นหา"
-        : "ยังไม่มี Space — กด “＋ สร้าง Space” หรือกรอกรหัสเชิญด้านบน";
+        ? t("ไม่พบ Space ที่ค้นหา")
+        : t("ยังไม่มี Space — กด “＋ สร้าง Space” หรือกรอกรหัสเชิญด้านบน");
       grid.appendChild(p);
       return;
     }
@@ -311,7 +312,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       const thumb = document.createElement("div");
       thumb.className = "sp-thumb";
       thumb.textContent = initial(s.name);
-      thumb.title = "เข้า Space นี้";
+      thumb.title = t("เข้า Space นี้");
       thumb.onclick = () => enterSpace(s);
       const foot = document.createElement("div");
       foot.className = "sp-card-foot";
@@ -319,12 +320,12 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       nm.className = "sp-name";
       const b = document.createElement("b"); b.textContent = s.name;
       const sm = document.createElement("small");
-      sm.textContent = roleLabel(s.role) + (s.members ? ` · ${s.members} คน` : "");
+      sm.textContent = roleLabel(s.role) + (s.members ? " " + t("· {n} คน", { n: s.members }) : "");
       nm.append(b, sm);
       const menu = document.createElement("button");
       menu.className = "sp-menu-btn";
       menu.textContent = "⋮";
-      menu.title = "ตั้งค่า / สมาชิก";
+      menu.title = t("ตั้งค่า / สมาชิก");
       menu.onclick = (e) => { e.stopPropagation(); void openSettings(s); };
       foot.append(nm, menu);
       card.append(thumb, foot);
@@ -350,7 +351,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       const d = await r.json();
       mySpaces = d.workspaces ?? [];
       renderSpaces();
-    } catch { setErr("sp-err", "โหลดรายการ Space ไม่ได้"); }
+    } catch { setErr("sp-err", t("โหลดรายการ Space ไม่ได้")); }
   };
 
   $("sp-search")!.oninput = renderSpaces;
@@ -364,22 +365,22 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     | { key: "name"; q: string };
 
   const STEPS: Step[] = [
-    { key: "role", q: "บทบาทของคุณตรงกับข้อไหนมากที่สุด?",
-      opts: ["ผู้ก่อตั้ง", "ผู้บริหาร", "ผู้อำนวยการ", "ผู้จัดการ", "สมาชิกทีม"] },
-    { key: "companySize", q: "บริษัทของคุณมีขนาดเท่าไหร่?",
+    { key: "role", q: t("บทบาทของคุณตรงกับข้อไหนมากที่สุด?"),
+      opts: [t("ผู้ก่อตั้ง"), t("ผู้บริหาร"), t("ผู้อำนวยการ"), t("ผู้จัดการ"), t("สมาชิกทีม")] },
+    { key: "companySize", q: t("บริษัทของคุณมีขนาดเท่าไหร่?"),
       opts: ["1 - 10", "11 - 50", "51+"] },
-    { key: "useCase", q: "คุณจะใช้ออฟฟิศเสมือนนี้เป็นหลักอย่างไร?", other: true,
-      opts: ["พื้นที่ทำงานประจำวันของทีม", "พื้นที่ทำงานสัปดาห์ละ 1-2 ครั้ง",
-             "อีเวนต์ครั้งเดียว (เช่น Hackathon)", "อีเวนต์ประจำ (เช่น Workshop)", "อื่น ๆ (ระบุ)"] },
+    { key: "useCase", q: t("คุณจะใช้ออฟฟิศเสมือนนี้เป็นหลักอย่างไร?"), other: true,
+      opts: [t("พื้นที่ทำงานประจำวันของทีม"), t("พื้นที่ทำงานสัปดาห์ละ 1-2 ครั้ง"),
+             t("อีเวนต์ครั้งเดียว (เช่น Hackathon)"), t("อีเวนต์ประจำ (เช่น Workshop)"), t("อื่น ๆ (ระบุ)")] },
     // asked here and only here: the layout decides where the desks are, and
     // changing it later would cancel every desk the team had claimed
-    { key: "theme", q: "เลือกแผนผังออฟฟิศของคุณ" },
-    { key: "name", q: "ตั้งชื่อ Space ของคุณ" },
+    { key: "theme", q: t("เลือกแผนผังออฟฟิศของคุณ") },
+    { key: "name", q: t("ตั้งชื่อ Space ของคุณ") },
   ];
 
   const answers: Record<string, string> = {};
   const otherKey = (key: string) => `${key}__other`;
-  const isOther = (v: string) => v.startsWith("อื่น ๆ");
+  const isOther = (v: string) => v.startsWith(t("อื่น ๆ"));
   let stepIx = 0;
   let allowGuests = true;
 
@@ -426,16 +427,16 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       // defaulted at render, not in startWizard: pre-answering it there would
       // make the skip-what-is-already-answered loop jump straight past this step
       if (!answers.theme) answers.theme = "classic";
-      e.next.textContent = "ถัดไป →";
+      e.next.textContent = t("ถัดไป →");
       const row = document.createElement("div");
       row.className = "wiz-themes";
-      for (const [id, t] of Object.entries(THEMES)) {
+      for (const [id, theme] of Object.entries(THEMES)) {
         const card = document.createElement("button");
         card.className = "wiz-theme" + (answers.theme === id ? " on" : "");
         const shot = document.createElement("span");
         shot.className = "wiz-shot";     // shimmering until the preview is drawn
         const name = document.createElement("b");
-        name.textContent = t.label;
+        name.textContent = t(theme.label);
         card.append(shot, name);
         card.onclick = () => {
           answers.theme = id;
@@ -445,7 +446,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
         row.appendChild(card);
 
         // drawn from the theme's own data, so it can never show a stale layout
-        void renderThemePreview(t, 360).then((canvas) => {
+        void renderThemePreview(theme, 360).then((canvas) => {
           if (!shot.isConnected) return; // stepped away before it finished
           shot.appendChild(canvas);
           card.classList.add("ready");
@@ -454,7 +455,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       e.opts.appendChild(row);
       const note = document.createElement("p");
       note.style.cssText = "margin:14px 0 0;font-size:12.5px;color:#8a8f98;line-height:1.6";
-      note.textContent = "ทุกคนใน Space จะใช้แผนผังนี้ร่วมกัน และเลือกได้เฉพาะตอนสร้างเท่านั้น";
+      note.textContent = t("ทุกคนใน Space จะใช้แผนผังนี้ร่วมกัน และเลือกได้เฉพาะตอนสร้างเท่านั้น");
       e.opts.appendChild(note);
       e.next.disabled = false;
       return;
@@ -465,7 +466,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       const input = document.createElement("input");
       input.type = "text";
       input.id = "wiz-name";
-      input.placeholder = "เช่น บริษัท A";
+      input.placeholder = t("เช่น บริษัท A");
       input.value = answers.name ?? "";
       input.style.cssText = "width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #dfe1e6;border-radius:10px;font-size:14px;outline:none";
       input.oninput = () => { answers.name = input.value.trim(); e.next.disabled = !answers.name; };
@@ -474,15 +475,15 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       const cb = document.createElement("input");
       cb.type = "checkbox"; cb.checked = allowGuests;
       cb.onchange = () => (allowGuests = cb.checked);
-      label.append(cb, document.createTextNode("ให้คนที่ไม่ได้สมัครสมาชิก (Guest) เข้าได้"));
+      label.append(cb, document.createTextNode(t("ให้คนที่ไม่ได้สมัครสมาชิก (Guest) เข้าได้")));
       e.opts.append(input, label);
-      e.next.textContent = "สร้าง Space";
+      e.next.textContent = t("สร้าง Space");
       e.next.disabled = !answers.name;
       input.focus();
       return;
     }
 
-    e.next.textContent = "ถัดไป →";
+    e.next.textContent = t("ถัดไป →");
     for (const opt of step.opts) {
       const b = document.createElement("button");
       b.className = "wiz-opt" + (answers[step.key] === opt ? " on" : "");
@@ -520,7 +521,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       stepIx++;
       return renderStep();
     }
-    if (!answers.name) return setErr("wiz-err", "ใส่ชื่อ Space ก่อน");
+    if (!answers.name) return setErr("wiz-err", t("ใส่ชื่อ Space ก่อน"));
     const btn = wizEls().next;
     btn.disabled = true;
     setErr("wiz-err", "");
@@ -537,24 +538,24 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
         }),
       });
       const d = await r.json();
-      if (!r.ok) { btn.disabled = false; return setErr("wiz-err", d.error || "สร้างไม่สำเร็จ"); }
+      if (!r.ok) { btn.disabled = false; return setErr("wiz-err", d.error || t("สร้างไม่สำเร็จ")); }
       wizEls().bar.style.width = "100%";
       enterSpace(d.workspace);
-    } catch { btn.disabled = false; setErr("wiz-err", "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้"); }
+    } catch { btn.disabled = false; setErr("wiz-err", t("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้")); }
   };
 
   $("sp-join")!.onclick = async () => {
     const code = $<HTMLInputElement>("sp-code")?.value.trim() ?? "";
-    if (!code) return setErr("sp-err", "ใส่รหัสเชิญก่อน");
+    if (!code) return setErr("sp-err", t("ใส่รหัสเชิญก่อน"));
     setErr("sp-err", "");
     try {
       const r = await fetch(`${API}/workspaces/join`, {
         method: "POST", headers: authHeaders(), body: JSON.stringify({ code }),
       });
       const d = await r.json();
-      if (!r.ok) return setErr("sp-err", d.error === "workspace not found" ? "ไม่พบรหัสเชิญนี้" : (d.error || "เข้าร่วมไม่สำเร็จ"));
+      if (!r.ok) return setErr("sp-err", d.error === "workspace not found" ? t("ไม่พบรหัสเชิญนี้") : (d.error || t("เข้าร่วมไม่สำเร็จ")));
       enterSpace(d.workspace);
-    } catch { setErr("sp-err", "เชื่อมต่อ API ไม่ได้"); }
+    } catch { setErr("sp-err", t("เชื่อมต่อ API ไม่ได้")); }
   };
 
   $("sp-logout")!.onclick = async () => {
@@ -620,10 +621,10 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     const d = await r.json().catch(() => ({} as any));
     if (!r.ok) {
       throw new Error(
-        d.error === "invalid code" ? "รหัสไม่ถูกต้อง"
-        : d.error === "already enabled" ? "เปิดใช้งานอยู่แล้ว"
-        : d.error === "start setup first" ? "เริ่มขั้นตอนตั้งค่าใหม่อีกครั้ง"
-        : d.error || "ทำรายการไม่สำเร็จ");
+        d.error === "invalid code" ? t("รหัสไม่ถูกต้อง")
+        : d.error === "already enabled" ? t("เปิดใช้งานอยู่แล้ว")
+        : d.error === "start setup first" ? t("เริ่มขั้นตอนตั้งค่าใหม่อีกครั้ง")
+        : d.error || t("ทำรายการไม่สำเร็จ"));
     }
     return d;
   };
@@ -645,7 +646,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
 
   $("sec-copy")!.onclick = () => {
     void navigator.clipboard?.writeText($<HTMLInputElement>("sec-secret")!.value.replace(/\s/g, ""));
-    setErr("sec-err", "คัดลอกรหัสแล้ว");
+    setErr("sec-err", t("คัดลอกรหัสแล้ว"));
   };
 
   const confirmEnable = async (code: string) => {
@@ -668,12 +669,12 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
 
   $("sec-codes-copy")!.onclick = () => {
     void navigator.clipboard?.writeText(secCodes.join("\n"));
-    setErr("sec-err", "คัดลอกรหัสสำรองแล้ว");
+    setErr("sec-err", t("คัดลอกรหัสสำรองแล้ว"));
   };
 
   $("sec-codes-save")!.onclick = () => {
-    const text = `รหัสสำรอง NexSpace — ${user?.email ?? ""}\n`
-      + `ใช้ได้รหัสละ 1 ครั้ง เมื่อไม่มีแอป Authenticator\n\n${secCodes.join("\n")}\n`;
+    const text = t("รหัสสำรอง NexSpace — {email}", { email: user?.email ?? "" }) + "\n"
+      + t("ใช้ได้รหัสละ 1 ครั้ง เมื่อไม่มีแอป Authenticator") + "\n\n" + secCodes.join("\n") + "\n";
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
     a.download = "nexspace-recovery-codes.txt";
@@ -689,7 +690,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
 
   $("sec-disable")!.onclick = async () => {
     const code = $<HTMLInputElement>("sec-ask")?.value.trim() ?? "";
-    if (!code) return setErr("sec-err", "กรอกรหัสเพื่อยืนยัน");
+    if (!code) return setErr("sec-err", t("กรอกรหัสเพื่อยืนยัน"));
     try {
       applyUser((await secCall("disable", { code })).user);
       setSecState("off");
@@ -698,7 +699,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
 
   $("sec-regen")!.onclick = async () => {
     const code = $<HTMLInputElement>("sec-ask")?.value.trim() ?? "";
-    if (!code) return setErr("sec-err", "กรอกรหัสเพื่อยืนยัน");
+    if (!code) return setErr("sec-err", t("กรอกรหัสเพื่อยืนยัน"));
     try {
       const d = await secCall("recovery", { code });
       applyUser(d.user);
@@ -750,7 +751,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     const m = $("ws-modal");
     if (m) m.style.display = "grid";
     $("wm-title")!.textContent = s.name;
-    $("wm-sub")!.textContent = `ลิงก์: ?w=${s.slug}`;
+    $("wm-sub")!.textContent = t("ลิงก์: ?w={slug}", { slug: s.slug });
     // fresh copy so we get the invite code (only returned to members)
     try {
       const r = await fetch(`${API}/workspaces/${s.slug}`, { headers: authHeaders() });
@@ -772,27 +773,27 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
 
   $("wm-copy")!.onclick = async () => {
     const v = $<HTMLInputElement>("wm-invite")!.value;
-    try { await navigator.clipboard.writeText(v); $("wm-copy")!.textContent = "คัดลอกแล้ว"; }
+    try { await navigator.clipboard.writeText(v); $("wm-copy")!.textContent = t("คัดลอกแล้ว"); }
     catch { /* ignore */ }
-    setTimeout(() => ($("wm-copy")!.textContent = "คัดลอก"), 1500);
+    setTimeout(() => ($("wm-copy")!.textContent = t("คัดลอก")), 1500);
   };
 
   $("wm-reset")!.onclick = async () => {
-    if (!editing || !confirm("สร้างรหัสเชิญใหม่? ลิงก์เดิมจะใช้ไม่ได้")) return;
+    if (!editing || !confirm(t("สร้างรหัสเชิญใหม่? ลิงก์เดิมจะใช้ไม่ได้"))) return;
     const r = await fetch(`${API}/workspaces/${editing.slug}/invite/reset`, { method: "POST", headers: authHeaders() });
     const d = await r.json();
-    if (r.ok) setErr("wm-err", "สร้างรหัสเชิญใหม่แล้ว");
-    else setErr("wm-err", d.error || "รีเซ็ตไม่สำเร็จ");
+    if (r.ok) setErr("wm-err", t("สร้างรหัสเชิญใหม่แล้ว"));
+    else setErr("wm-err", d.error || t("รีเซ็ตไม่สำเร็จ"));
   };
 
   $("wm-leave")!.onclick = async () => {
-    if (!editing || !confirm("ออกจาก workspace นี้?")) return;
+    if (!editing || !confirm(t("ออกจาก workspace นี้?"))) return;
     const me = (await (await fetch(`${API}/workspaces/${editing.slug}/members`, { headers: authHeaders() })).json())
       .members?.find((m: PanelMember) => m.isMe);
     if (!me) return;
     const r = await fetch(`${API}/workspaces/${editing.slug}/members/${me.id}`, { method: "DELETE", headers: authHeaders() });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) return setErr("wm-err", d.error === "the owner cannot be removed" ? "เจ้าของออกเองไม่ได้" : (d.error || "ออกไม่สำเร็จ"));
+    if (!r.ok) return setErr("wm-err", d.error === "the owner cannot be removed" ? t("เจ้าของออกเองไม่ได้") : (d.error || t("ออกไม่สำเร็จ")));
     closeModal();
     void showSpaces();
   };
@@ -808,7 +809,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       method: "PATCH", headers: authHeaders(), body: JSON.stringify(body),
     });
     const d = await r.json();
-    if (!r.ok) return setErr("wm-err", d.error || "บันทึกไม่สำเร็จ");
+    if (!r.ok) return setErr("wm-err", d.error || t("บันทึกไม่สำเร็จ"));
     closeModal();
     void showSpaces();
   };
@@ -850,8 +851,8 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       const d = await r.json();
       guestPass = { name: String(d.name ?? ""), state: String(d.state ?? "") };
       const note = $("a-guest");
-      if (note && guestPass.state === "active") note.textContent = `เข้าเป็นผู้เยี่ยมชม — ${guestPass.name}`;
-      else if (guestPass.state) setErr("auth-err", "บัตรผู้เยี่ยมชมนี้ใช้ไม่ได้แล้ว — ขอลิงก์ใหม่จากผู้ดูแล");
+      if (note && guestPass.state === "active") note.textContent = t("เข้าเป็นผู้เยี่ยมชม — {name}", { name: guestPass.name });
+      else if (guestPass.state) setErr("auth-err", t("บัตรผู้เยี่ยมชมนี้ใช้ไม่ได้แล้ว — ขอลิงก์ใหม่จากผู้ดูแล"));
     } catch { /* the room join is the real gate; a failed lookup only costs the name */ }
   };
 
@@ -862,7 +863,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     showStep("char-step");
     const hello = $("char-hello");
     const pass = !u && guestPass?.state === "active" ? guestPass : null;
-    if (hello) hello.textContent = u ? `สวัสดี ${u.name}` : pass ? `ผู้เยี่ยมชม · ${pass.name}` : "โหมด Guest";
+    if (hello) hello.textContent = u ? t("สวัสดี {name}", { name: u.name }) : pass ? t("ผู้เยี่ยมชม · {name}", { name: pass.name }) : t("โหมด Guest");
     if (cName) cName.value = u?.name ?? pass?.name ?? "";
     if (u?.avatar?.lpc) highlight("custom"); else selectPreset(selected);
   };

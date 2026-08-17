@@ -9,6 +9,7 @@ import { openAvatarEditor } from "../avatar/avatarEditor";
 import { WORKSPACE, IS_DEFAULT_WORKSPACE, workspaceLabel, inviteLink, wsKey,
          rememberTheme, themeOverride, GUEST_CODE } from "../workspace";
 import { API as AUTH_API } from "../api";
+import { t, onLangChange } from "../i18n";
 import { setupPrefsModal } from "../prefsModal";
 import { pickTheme, propPath, THEMES, type Interactive } from "./mapThemes";
 
@@ -621,7 +622,7 @@ export class OfficeScene extends Phaser.Scene {
         this.myDesk = "";
         this.saveDesk("");
         this.refreshDeskPlates();
-        this.toast("สิทธิ์ผู้เยี่ยมชมจองโต๊ะไม่ได้ — ขอให้ผู้ดูแลตั้งคุณเป็นสมาชิก", "warn");
+        this.toast(t("สิทธิ์ผู้เยี่ยมชมจองโต๊ะไม่ได้ — ขอให้ผู้ดูแลตั้งคุณเป็นสมาชิก"), "warn");
       });
       room.onMessage("chat", (msg: { from: string; text: string }) => this.showBubble(msg.from, msg.text));
       room.onMessage("roomchat", (msg: { from: string; name: string; text: string }) => this.appendChatLog(msg.from, msg.name, msg.text));
@@ -697,9 +698,9 @@ export class OfficeScene extends Phaser.Scene {
     } catch (e) {
       const msg = String((e as Error)?.message ?? "");
       if (msg.includes("members-only")) {
-        this.toast("workspace นี้เปิดให้เฉพาะสมาชิก — ขอให้เจ้าของเชิญคุณก่อน", "warn");
+        this.toast(t("workspace นี้เปิดให้เฉพาะสมาชิก — ขอให้เจ้าของเชิญคุณก่อน"), "warn");
       } else if (msg.includes("workspace-not-found")) {
-        this.toast("ไม่พบ workspace นี้ — ตรวจสอบลิงก์เชิญอีกครั้ง", "warn");
+        this.toast(t("ไม่พบ workspace นี้ — ตรวจสอบลิงก์เชิญอีกครั้ง"), "warn");
       }
       console.warn("[nexspace] multiplayer offline — running single-player:", e);
     }
@@ -784,7 +785,7 @@ export class OfficeScene extends Phaser.Scene {
   private setupSidebar() {
     const sidebar = document.getElementById("sidebar");
     const views: Record<string, string> = { people: "view-people", chat: "view-chat" };
-    const titles: Record<string, string> = { people: "NexSpace", chat: "แชตห้องรวม" };
+    const titles: Record<string, string> = { people: "NexSpace", chat: t("แชตห้องรวม") };
     const showView = (v: string) => {
       sidebar?.classList.remove("closed");
       for (const [k, id] of Object.entries(views)) {
@@ -802,6 +803,15 @@ export class OfficeScene extends Phaser.Scene {
     document.getElementById("rail-settings")?.addEventListener("click", () => prefs.open("members"));
     document.getElementById("sb-close")?.addEventListener("click", () => sidebar?.classList.add("closed"));
     document.getElementById("sb-search")?.addEventListener("input", () => this.refreshRoster());
+
+    // The room's markup is swapped by translateDom; these are the parts the scene
+    // draws itself, including the name tag over my own head.
+    onLangChange(() => {
+      this.refreshRoster();
+      this.refreshDeskPlates();
+      this.refreshMyLabel();
+      this.meetPanelKey = "";      // force the meeting tiles to rebuild
+    });
 
     // sidebar shows the workspace's display name (falls back to the slug)
     const title = document.getElementById("sb-title");
@@ -836,9 +846,9 @@ export class OfficeScene extends Phaser.Scene {
     document.getElementById("btn-invite")?.addEventListener("click", async () => {
       const btn = document.getElementById("btn-invite") as HTMLButtonElement;
       const link = inviteLink();
-      try { await navigator.clipboard.writeText(link); btn.textContent = "✓ คัดลอกลิงก์แล้ว!"; }
+      try { await navigator.clipboard.writeText(link); btn.textContent = t("✓ คัดลอกลิงก์แล้ว!"); }
       catch { btn.textContent = link; }
-      setTimeout(() => (btn.textContent = "＋ เชิญ / คัดลอกลิงก์"), 2000);
+      setTimeout(() => (btn.textContent = t("＋ เชิญ / คัดลอกลิงก์")), 2000);
     });
 
     // room-wide chat
@@ -859,7 +869,7 @@ export class OfficeScene extends Phaser.Scene {
     const div = document.createElement("div"); div.className = "msg";
     const who = document.createElement("span");
     who.className = "who" + (from === this.mySessionId ? " me" : "");
-    who.textContent = (from === this.mySessionId ? "คุณ" : name) + ":";
+    who.textContent = (from === this.mySessionId ? t("คุณ") : name) + ":";
     const txt = document.createElement("span"); txt.className = "txt"; txt.textContent = " " + text;
     div.append(who, txt); log.appendChild(div);
     log.scrollTop = log.scrollHeight;
@@ -891,8 +901,8 @@ export class OfficeScene extends Phaser.Scene {
       const dot = document.createElement("i"); dot.className = "p-dot";
       dot.style.background = meta.css; chip.appendChild(dot);
       const info = document.createElement("span"); info.className = "p-info";
-      const nm = document.createElement("b"); nm.textContent = r.name + (r.self ? " (คุณ)" : "");
-      const st = document.createElement("small"); st.textContent = meta.label;
+      const nm = document.createElement("b"); nm.textContent = r.name + (r.self ? " " + t("(คุณ)") : "");
+      const st = document.createElement("small"); st.textContent = t(meta.label);
       info.append(nm, st); row.append(chip, info); list.appendChild(row);
     }
   }
@@ -919,7 +929,7 @@ export class OfficeScene extends Phaser.Scene {
       pop!.appendChild(head);
       if (!items.length) {
         const e = document.createElement("div");
-        e.textContent = "— อนุญาตอุปกรณ์ก่อน (เปิดไมค์/กล้อง) —";
+        e.textContent = t("— อนุญาตอุปกรณ์ก่อน (เปิดไมค์/กล้อง) —");
         e.style.cssText = "padding:4px 8px;opacity:.5;font-size:12px;";
         pop!.appendChild(e);
       }
@@ -936,10 +946,10 @@ export class OfficeScene extends Phaser.Scene {
     };
 
     if (kind === "mic") {
-      section("ไมโครโฟน", dev.mics, w.selMic, (id) => void w.setMic(id), "Microphone");
-      section("ลำโพง", dev.speakers, w.selSpk, (id) => void w.setSpeaker(id), "Speaker");
+      section(t("ไมโครโฟน"), dev.mics, w.selMic, (id) => void w.setMic(id), "Microphone");
+      section(t("ลำโพง"), dev.speakers, w.selSpk, (id) => void w.setSpeaker(id), "Speaker");
     } else {
-      section("กล้อง", dev.cams, w.selCam, (id) => void w.setCam(id), "Camera");
+      section(t("กล้อง"), dev.cams, w.selCam, (id) => void w.setCam(id), "Camera");
     }
 
     const r = anchor.getBoundingClientRect();
@@ -1114,7 +1124,7 @@ export class OfficeScene extends Phaser.Scene {
 
   private refreshCallSidebarTiles() {
     const selfLabel = document.getElementById("call-self-label");
-    if (selfLabel) selfLabel.textContent = this.myName + " (คุณ)";
+    if (selfLabel) selfLabel.textContent = this.myName + " " + t("(คุณ)");
     const container = document.getElementById("call-peers-container");
     if (!container) return;
     container.innerHTML = "";
@@ -1334,7 +1344,7 @@ export class OfficeScene extends Phaser.Scene {
     if (here.length <= 1) {
       const alone = document.createElement("div");
       alone.className = "meet-empty";
-      alone.textContent = "ยังมีแค่คุณในห้องนี้ — ชวนเพื่อนร่วมงานเข้ามาได้เลย";
+      alone.textContent = t("ยังมีแค่คุณในห้องนี้ — ชวนเพื่อนร่วมงานเข้ามาได้เลย");
       list.appendChild(alone);
       return;
     }
@@ -1362,11 +1372,13 @@ export class OfficeScene extends Phaser.Scene {
           + '<path d="M19 11a7 7 0 0 1-.6 2.8"/><path d="M12 19v3"/><path d="M3 3l18 18"/></svg>');
       }
       const nm = document.createElement("span");
-      nm.textContent = h.name + (h.self ? " (คุณ)" : "");
+      nm.textContent = h.name + (h.self ? " " + t("(คุณ)") : "");
       label.appendChild(nm);
 
       who.append(chip, label);
-      who.title = `${h.name} — ${statusMeta(h.status).label}${h.mic ? "" : " · ปิดไมค์"}`;
+      who.title = h.mic
+        ? t("{name} — {status}", { name: h.name, status: t(statusMeta(h.status).label) })
+        : t("{name} — {status} · ปิดไมค์", { name: h.name, status: t(statusMeta(h.status).label) });
       list.appendChild(who);
     }
   }
@@ -1510,15 +1522,15 @@ export class OfficeScene extends Phaser.Scene {
       this.room.state.players.forEach((p: any, sid: string) => {
         if (sid !== this.mySessionId && p.desk === deskId) taken = true;
       });
-      if (taken) { this.toast("โต๊ะนี้มีเจ้าของแล้ว", "warn"); return; }
+      if (taken) { this.toast(t("โต๊ะนี้มีเจ้าของแล้ว"), "warn"); return; }
     }
     this.myDesk = next;
     this.deskClaimAt = this.time.now;
     this.room.send("claimDesk", next);
     this.saveDesk(next);
     this.refreshDeskPlates();
-    if (next) this.toast("จองโต๊ะนี้เป็นโต๊ะของคุณแล้ว", "success");
-    else this.toast("ยกเลิกการจองโต๊ะแล้ว", "info");
+    if (next) this.toast(t("จองโต๊ะนี้เป็นโต๊ะของคุณแล้ว"), "success");
+    else this.toast(t("ยกเลิกการจองโต๊ะแล้ว"), "info");
   }
 
   /** persist the chosen desk: member -> API, everyone -> localStorage */
@@ -1559,7 +1571,7 @@ export class OfficeScene extends Phaser.Scene {
 
   /** teleport to my desk's seat and sit down */
   private goToMyDesk() {
-    if (!this.myDesk) { this.toast("ยังไม่ได้เลือกโต๊ะ — คลิกที่โต๊ะเพื่อจอง", "info"); return; }
+    if (!this.myDesk) { this.toast(t("ยังไม่ได้เลือกโต๊ะ — คลิกที่โต๊ะเพื่อจอง"), "info"); return; }
     const d = DESKS.find((x) => x.id === this.myDesk);
     if (!d) return;
     const tx = d.sx * TILE + TILE / 2, ty = d.sy * TILE + TILE / 2;
@@ -1885,7 +1897,7 @@ export class OfficeScene extends Phaser.Scene {
     const hint = document.getElementById("interact-hint");
     if (hint) {
       hint.style.display = near ? "flex" : "none";
-      if (near) { const l = document.getElementById("interact-label"); if (l) l.textContent = near.label; }
+      if (near) { const l = document.getElementById("interact-label"); if (l) l.textContent = t(near.label); }
     }
   }
 }

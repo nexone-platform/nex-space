@@ -5,6 +5,7 @@
 // canManage/canPromote and this only draws the entries those allow. Nothing here
 // is offered that a write would refuse.
 import { API, authHeaders, authToken } from "./api";
+import { t, locale } from "./i18n";
 
 export interface PanelMember {
   id: string; name: string; email: string; photoUrl?: string; role: string; isMe: boolean;
@@ -14,19 +15,19 @@ export interface PanelMember {
 }
 
 export const roleLabel = (r: string) =>
-  r === "owner" ? "เจ้าของ" : r === "admin" ? "ผู้ดูแล" : r === "guest" ? "ผู้เยี่ยมชม" : "สมาชิก";
+  t(r === "owner" ? "เจ้าของ" : r === "admin" ? "ผู้ดูแล" : r === "guest" ? "ผู้เยี่ยมชม" : "สมาชิก");
 
 const initial = (s: string) => (s.trim()[0] ?? "?").toUpperCase();
 
 /** coarse on purpose — "5 นาทีที่แล้ว" reads better than a timestamp */
 export const sinceLabel = (iso?: string | null) => {
-  if (!iso) return "ยังไม่เคยเข้า";
+  if (!iso) return t("ยังไม่เคยเข้า");
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 6) return "กำลังใช้งาน";
-  if (mins < 60) return `${mins} นาทีที่แล้ว`;
-  if (mins < 1440) return `${Math.floor(mins / 60)} ชม.ที่แล้ว`;
+  if (mins < 6) return t("กำลังใช้งาน");
+  if (mins < 60) return t("{n} นาทีที่แล้ว", { n: mins });
+  if (mins < 1440) return t("{n} ชม.ที่แล้ว", { n: Math.floor(mins / 60) });
   const days = Math.floor(mins / 1440);
-  return days < 30 ? `${days} วันที่แล้ว` : new Date(iso).toLocaleDateString("th-TH");
+  return days < 30 ? t("{n} วันที่แล้ว", { n: days }) : new Date(iso).toLocaleDateString(locale());
 };
 
 export interface MemberPanelOptions {
@@ -86,8 +87,8 @@ export function mountMemberPanel(o: MemberPanelOptions): MemberPanel {
       wrap.appendChild(b);
       return wrap;
     };
-    head.append(col("name", "ชื่อ", "mp-h-name"), col("role", "สิทธิ์", "mp-h-role"),
-                col("seen", "ใช้งานล่าสุด", "mp-h-seen"));
+    head.append(col("name", t("ชื่อ"), "mp-h-name"), col("role", t("สิทธิ์"), "mp-h-role"),
+                col("seen", t("ใช้งานล่าสุด"), "mp-h-seen"));
     const gap = document.createElement("span");
     gap.className = "mp-h-gap";
     head.appendChild(gap);
@@ -97,22 +98,22 @@ export function mountMemberPanel(o: MemberPanelOptions): MemberPanel {
   const tools = document.createElement("div");
   tools.className = "mp-tools";
   const filter = document.createElement("select");
-  for (const [v, label] of [["", "ทุกสิทธิ์"], ["owner", "เจ้าของ"], ["admin", "ผู้ดูแล"],
-                            ["member", "สมาชิก"], ["guest", "ผู้เยี่ยมชม"]]) {
+  for (const [v, label] of [["", t("ทุกสิทธิ์")], ["owner", t("เจ้าของ")], ["admin", t("ผู้ดูแล")],
+                            ["member", t("สมาชิก")], ["guest", t("ผู้เยี่ยมชม")]]) {
     const opt = document.createElement("option");
     opt.value = v; opt.textContent = label;
     filter.appendChild(opt);
   }
   const search = document.createElement("input");
   search.type = "text";
-  search.placeholder = "ค้นหาชื่อหรืออีเมล…";
+  search.placeholder = t("ค้นหาชื่อหรืออีเมล…");
   search.autocomplete = "off";
   // filter first in table mode, matching the "View All … Search  ＋" header row
   tools.append(...(o.table ? [filter, search] : [search, filter]));
   if (o.onInvite) {
     const add = document.createElement("button");
     add.className = "mp-invite";
-    add.title = "เชิญคนเข้า workspace";
+    add.title = t("เชิญคนเข้า workspace");
     add.textContent = "＋";
     add.onclick = () => o.onInvite!();
     tools.appendChild(add);
@@ -141,28 +142,28 @@ export function mountMemberPanel(o: MemberPanelOptions): MemberPanel {
     const d = await r.json().catch(() => ({} as any));
     if (r.ok) return d;
     throw new Error(
-      d.error === "forbidden" ? "คุณไม่มีสิทธิ์ทำรายการนี้"
-      : d.error === "cannot change the owner" ? "เปลี่ยนสิทธิ์เจ้าของไม่ได้"
-      : d.error === "cannot change your own role" ? "เปลี่ยนสิทธิ์ของตัวเองไม่ได้"
-      : d.error === "the owner cannot be removed" ? "นำเจ้าของออกไม่ได้"
-      : d.error === "not a member" ? "คนนี้ไม่ได้อยู่ใน workspace แล้ว"
-      : d.error || "ทำรายการไม่สำเร็จ");
+      d.error === "forbidden" ? t("คุณไม่มีสิทธิ์ทำรายการนี้")
+      : d.error === "cannot change the owner" ? t("เปลี่ยนสิทธิ์เจ้าของไม่ได้")
+      : d.error === "cannot change your own role" ? t("เปลี่ยนสิทธิ์ของตัวเองไม่ได้")
+      : d.error === "the owner cannot be removed" ? t("นำเจ้าของออกไม่ได้")
+      : d.error === "not a member" ? t("คนนี้ไม่ได้อยู่ใน workspace แล้ว")
+      : d.error || t("ทำรายการไม่สำเร็จ"));
   };
 
   const setRole = async (m: PanelMember, role: string) => {
     try {
       await write("PATCH", m.id, { role });
-      say(`${m.name} เป็น${roleLabel(role)}แล้ว`);
+      say(t("{name} เป็น{role}แล้ว", { name: m.name, role: roleLabel(role) }));
       await reload();
     } catch (e) { say((e as Error).message, "err"); }
   };
 
   const remove = async (m: PanelMember) => {
-    if (!confirm(m.isMe ? "ออกจาก workspace นี้?" : `นำ ${m.name} ออกจาก workspace?`)) return;
+    if (!confirm(m.isMe ? t("ออกจาก workspace นี้?") : t("นำ {name} ออกจาก workspace?", { name: m.name }))) return;
     try {
       await write("DELETE", m.id);
       if (m.isMe) return o.onSelfRemoved?.();
-      say(`นำ ${m.name} ออกแล้ว`);
+      say(t("นำ {name} ออกแล้ว", { name: m.name }));
       await reload();
     } catch (e) { say((e as Error).message, "err"); }
   };
@@ -182,13 +183,13 @@ export function mountMemberPanel(o: MemberPanelOptions): MemberPanel {
       items.push({ label, icon: rank[role] > (rank[m.role] ?? 1) ? "↑" : "↓", run: () => void setRole(m, role) });
     };
 
-    to("admin", "ตั้งเป็นผู้ดูแล", m.canPromote);
-    to("member", m.role === "admin" ? "ถอดสิทธิ์ผู้ดูแล" : "ตั้งเป็นสมาชิก", m.canManage);
-    to("guest", "ลดเป็นผู้เยี่ยมชม", m.canManage);
+    to("admin", t("ตั้งเป็นผู้ดูแล"), m.canPromote);
+    to("member", m.role === "admin" ? t("ถอดสิทธิ์ผู้ดูแล") : t("ตั้งเป็นสมาชิก"), m.canManage);
+    to("guest", t("ลดเป็นผู้เยี่ยมชม"), m.canManage);
 
     if (m.role !== "owner" && (m.canManage || m.isMe)) {
       items.push({
-        label: m.isMe ? "ออกจาก Workspace" : "นำออกจาก Workspace",
+        label: m.isMe ? t("ออกจาก Workspace") : t("นำออกจาก Workspace"),
         icon: "⊘", danger: true, run: () => void remove(m),
       });
     }
@@ -250,7 +251,7 @@ export function mountMemberPanel(o: MemberPanelOptions): MemberPanel {
     if (!shown.length) {
       const empty = document.createElement("div");
       empty.className = "mp-empty";
-      empty.textContent = members.length ? "ไม่พบสมาชิกที่ตรงกับการค้นหา" : "ยังไม่มีสมาชิก";
+      empty.textContent = members.length ? t("ไม่พบสมาชิกที่ตรงกับการค้นหา") : t("ยังไม่มีสมาชิก");
       list.appendChild(empty);
       return;
     }
@@ -270,7 +271,7 @@ export function mountMemberPanel(o: MemberPanelOptions): MemberPanel {
       const info = document.createElement("span");
       info.className = "mp-info";
       const name = document.createElement("b");
-      name.textContent = m.name + (m.isMe ? " (คุณ)" : "");
+      name.textContent = m.name + (m.isMe ? " " + t("(คุณ)") : "");
       const mail = document.createElement("small");
       mail.textContent = m.email;
       info.append(name, mail);
@@ -285,7 +286,7 @@ export function mountMemberPanel(o: MemberPanelOptions): MemberPanel {
       const seen = document.createElement("i");
       seen.className = "mp-seen";
       seen.textContent = sinceLabel(m.lastSeenAt);
-      if (m.joinedAt) seen.title = `เข้าร่วมเมื่อ ${new Date(m.joinedAt).toLocaleDateString("th-TH")}`;
+      if (m.joinedAt) seen.title = t("เข้าร่วมเมื่อ {date}", { date: new Date(m.joinedAt).toLocaleDateString(locale()) });
       // table mode keeps chip and seen as direct row children so they are the
       // very same flex columns the headings are; the list variant groups them
       if (o.table) {
@@ -302,7 +303,7 @@ export function mountMemberPanel(o: MemberPanelOptions): MemberPanel {
         wrap.className = "mp-kebab";
         const btn = document.createElement("button");
         btn.textContent = "⋮";
-        btn.title = "ตัวเลือก";
+        btn.title = t("ตัวเลือก");
         btn.onclick = (e) => {
           e.stopPropagation();
           const open = wrap.querySelector(".mp-menu");
@@ -330,7 +331,7 @@ export function mountMemberPanel(o: MemberPanelOptions): MemberPanel {
       list.innerHTML = "";
       const note = document.createElement("div");
       note.className = "mp-empty";
-      note.textContent = "เข้าสู่ระบบเพื่อดูและจัดการสมาชิก";
+      note.textContent = t("เข้าสู่ระบบเพื่อดูและจัดการสมาชิก");
       list.appendChild(note);
       tools.style.display = "none";
       o.onCount?.(0);
@@ -343,16 +344,16 @@ export function mountMemberPanel(o: MemberPanelOptions): MemberPanel {
       if (!r.ok) {
         members = [];
         render();
-        return say(d.error === "forbidden" ? "คุณไม่ได้เป็นสมาชิกของ workspace นี้"
-          : d.error === "not found" ? "ไม่พบ workspace นี้"
-          : d.error || "โหลดสมาชิกไม่ได้", "err");
+        return say(d.error === "forbidden" ? t("คุณไม่ได้เป็นสมาชิกของ workspace นี้")
+          : d.error === "not found" ? t("ไม่พบ workspace นี้")
+          : d.error || t("โหลดสมาชิกไม่ได้"), "err");
       }
       members = d.members ?? [];
       myRole = d.myRole ?? "member";
       o.onMyRole?.(myRole);
       o.onCount?.(members.length);
       render();
-    } catch { say("เชื่อมต่อ API ไม่ได้", "err"); }
+    } catch { say(t("เชื่อมต่อ API ไม่ได้"), "err"); }
   };
 
   search.oninput = render;
