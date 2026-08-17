@@ -9,6 +9,9 @@ export class Player extends Schema {
   @type("string") avatar = "1";
   @type("string") desk = ""; // id of the desk this player has claimed ("" = none)
   @type("string") status = "online"; // online | afk | muted | meeting
+  // The mic is tracked apart from `status` because "meeting" outranks "muted":
+  // inside a meeting the status alone can never say whether you can be heard.
+  @type("boolean") micOn = false;
 }
 
 export class OfficeState extends Schema {

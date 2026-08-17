@@ -302,15 +302,22 @@
       .meet-ico svg { width: 17px; height: 17px; display: block; color: #7fd8cc; }
       .meet-count { padding: 1px 8px; border-radius: 999px; background: #ffffff1f;
         font: 600 11.5px "Segoe UI", sans-serif; color: #cfd4dc; }
-      #meet-people { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
-      .meet-who { display: flex; align-items: center; gap: 7px; padding: 4px 9px 4px 4px;
-        border-radius: 999px; background: #ffffff14; }
-      .meet-who .mw-chip { position: relative; width: 24px; height: 24px; border-radius: 50%;
-        display: grid; place-items: center; color: #2a2330; font: 700 12px "Segoe UI", sans-serif; flex: 0 0 auto; }
-      .meet-who .mw-dot { position: absolute; right: -1px; bottom: -1px; width: 8px; height: 8px;
-        border-radius: 50%; border: 2px solid #23242a; }
-      .meet-who span { font: 500 12.5px "Segoe UI", sans-serif; color: #e7e9ee; white-space: nowrap; }
-      .meet-who.self span { font-weight: 700; }
+      /* participant tiles, the shape a call grid uses */
+      #meet-people { display: flex; gap: 8px; margin-top: 9px; overflow-x: auto; padding-bottom: 2px; }
+      #meet-people::-webkit-scrollbar { height: 5px; }
+      #meet-people::-webkit-scrollbar-thumb { background: #ffffff33; border-radius: 3px; }
+      .meet-who { position: relative; flex: 0 0 auto; width: 116px; height: 76px; border-radius: 11px;
+        background: #17181c; display: grid; place-items: center; overflow: hidden; }
+      .meet-who.self { box-shadow: inset 0 0 0 2px #2bb3a3; }
+      .meet-who .mw-chip { position: relative; width: 38px; height: 38px; border-radius: 50%;
+        display: grid; place-items: center; color: #2a2330; font: 700 17px "Segoe UI", sans-serif; }
+      .meet-who .mw-dot { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px;
+        border-radius: 50%; border: 2px solid #17181c; }
+      .mw-label { position: absolute; left: 5px; bottom: 5px; max-width: calc(100% - 10px);
+        display: flex; align-items: center; gap: 4px; padding: 2px 7px 2px 5px; border-radius: 6px;
+        background: #000000a6; font: 500 11.5px "Segoe UI", sans-serif; color: #eef0f4; }
+      .mw-label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .mw-label svg { width: 12px; height: 12px; flex: 0 0 auto; color: #ff6b6b; }
       .meet-empty { font: 12.5px "Segoe UI", sans-serif; color: #9aa0a8; margin-top: 8px; }
 
       /* ---- preferences modal: left nav + one pane at a time ---- */

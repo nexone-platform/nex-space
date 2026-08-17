@@ -120,6 +120,7 @@ export class OfficeScene extends Phaser.Scene {
   private lastActiveAt = 0;                     // last real user input (for AFK)
   private statusCheckAt = 0;                    // throttle for recomputing my status
   private micEverOn = false;                    // muted only counts once you've actually unmuted
+  private myMicOn = false;                      // last mic state sent to the room
   private deskPlates = new Map<string, Phaser.GameObjects.Container>(); // deskId -> owner nameplate
   private sitting = false;
   private satChair?: Phaser.GameObjects.Image;
@@ -1304,19 +1305,23 @@ export class OfficeScene extends Phaser.Scene {
     panel.classList.toggle("on", inside);
     if (!inside) return;
 
-    const here: { name: string; status: string; self: boolean }[] = [];
+    const here: { name: string; status: string; self: boolean; mic: boolean }[] = [];
     this.room?.state.players.forEach((p: any, sid: string) => {
       const self = sid === this.mySessionId;
       // my own position is local truth; the server copy lags a frame behind
       const x = self ? this.player.x : p.x, y = self ? this.player.y : p.y;
       if (!this.isInMeeting(x, y)) return;
-      here.push({ name: p.name || "Guest", self, status: self ? this.myStatus : (p.status || "online") });
+      here.push({
+        name: p.name || "Guest", self,
+        status: self ? this.myStatus : (p.status || "online"),
+        mic: self ? !!this.webrtc?.micOn : !!p.micOn,
+      });
     });
-    if (!this.room) here.push({ name: this.myName, self: true, status: this.myStatus });
+    if (!this.room) here.push({ name: this.myName, self: true, status: this.myStatus, mic: !!this.webrtc?.micOn });
     here.sort((a, b) => Number(b.self) - Number(a.self) || a.name.localeCompare(b.name));
 
     // rebuilding only when the contents change keeps this off the render path
-    const key = here.map((h) => `${h.name}:${h.status}:${h.self}`).join("|");
+    const key = here.map((h) => `${h.name}:${h.status}:${h.mic}:${h.self}`).join("|");
     if (key === this.meetPanelKey) return;
     this.meetPanelKey = key;
 
@@ -1332,6 +1337,7 @@ export class OfficeScene extends Phaser.Scene {
     }
     for (const h of here) {
       const { initial, color } = this.chipParts(h.name);
+      // a call tile: dark card, the avatar in the middle, name over the corner
       const who = document.createElement("div");
       who.className = "meet-who" + (h.self ? " self" : "");
       const chip = document.createElement("span");
@@ -1342,9 +1348,22 @@ export class OfficeScene extends Phaser.Scene {
       dot.className = "mw-dot";
       dot.style.background = statusMeta(h.status).css;
       chip.appendChild(dot);
+
+      const label = document.createElement("div");
+      label.className = "mw-label";
+      if (!h.mic) {
+        // a crossed mic reads faster than a colour for "cannot be heard"
+        label.insertAdjacentHTML("beforeend",
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
+          + ' stroke-linecap="round"><path d="M9 5a3 3 0 0 1 6 0v5"/><path d="M5 11a7 7 0 0 0 10.5 6"/>'
+          + '<path d="M19 11a7 7 0 0 1-.6 2.8"/><path d="M12 19v3"/><path d="M3 3l18 18"/></svg>');
+      }
       const nm = document.createElement("span");
       nm.textContent = h.name + (h.self ? " (คุณ)" : "");
-      who.append(chip, nm);
+      label.appendChild(nm);
+
+      who.append(chip, label);
+      who.title = `${h.name} — ${statusMeta(h.status).label}${h.mic ? "" : " · ปิดไมค์"}`;
       list.appendChild(who);
     }
   }
@@ -1357,6 +1376,10 @@ export class OfficeScene extends Phaser.Scene {
     // moment they joined. Red now means you were talking and muted yourself;
     // being present and active reads green.
     if (this.webrtc?.micOn) this.micEverOn = true;
+    // broadcast the mic separately from the status: peers need it to tell who can
+    // be heard in a meeting, where every status collapses to "meeting"
+    const mic = !!this.webrtc?.micOn;
+    if (mic !== this.myMicOn) { this.myMicOn = mic; this.room?.send("mic", mic); }
     // away wins: if nobody is at the keyboard, the other states don't say much
     const next =
       this.time.now - this.lastActiveAt > AFK_MS ? "afk"

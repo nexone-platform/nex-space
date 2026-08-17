@@ -71,6 +71,12 @@ export class OfficeRoom extends Room<OfficeState> {
       if (p && STATUSES.includes(status)) p.status = status;
     });
 
+    // mic on/off, shown as the crossed-mic badge on the meeting-room tiles
+    this.onMessage("mic", (client, on: boolean) => {
+      const p = this.state.players.get(client.sessionId);
+      if (p) p.micOn = !!on;
+    });
+
     // claim / release a desk. "" releases. Refuse if another online player owns it.
     this.onMessage("claimDesk", (client, deskId: string) => {
       const p = this.state.players.get(client.sessionId);
