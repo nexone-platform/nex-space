@@ -447,6 +447,36 @@
       .mp-menu hr { border: none; border-top: 1px solid #ffffff1f; margin: 5px 2px; }
       .wm-err { color: #e5484d; font-size: 12.5px; min-height: 16px; }
 
+      /* ---- guest passes ---- */
+      /* one row of state tabs, scrollable rather than wrapping: five labels do
+         not fit a narrow dialog and a second row would push the table down */
+      .gp-tabs { display: flex; gap: 4px; margin: 10px 0 2px; overflow-x: auto; padding-bottom: 2px; }
+      .gp-tabs button { flex: 0 0 auto; border: 1px solid #e7e9ee; background: #fff; cursor: pointer;
+        padding: 6px 11px; border-radius: 9px; font: 600 12.5px "Segoe UI", sans-serif; color: #6b7280; }
+      .gp-tabs button:hover { background: #f4f5f8; }
+      .gp-tabs button.active { background: #eef1fb; border-color: #cdd4f5; color: #4348a8; }
+      .gp .mp-invite svg { width: 17px; height: 17px; }
+      .gp-ava { background: #b06d1c; }
+      .mp-role.gp-active { background: #e4f7ef; color: #16897a; }
+      .mp-role.gp-expired { background: #f2f3f6; color: #6b7280; }
+      .mp-role.gp-revoked { background: #fdecec; color: #c33b3f; }
+      .mp-role.gp-archived { background: #f6f0ff; color: #7a52c0; }
+      /* the invite form: a single line until the dialog is too narrow for it */
+      .gp-form { margin: 8px 0 4px; padding: 11px 12px; border: 1px solid #eceef2;
+        border-radius: 12px; background: #fafbfc; }
+      .gp-form[hidden] { display: none; }
+      .gp-form-row { display: flex; flex-wrap: wrap; gap: 7px; }
+      .gp-form-row input { flex: 1 1 190px; min-width: 0; box-sizing: border-box; padding: 8px 11px;
+        border: 1px solid #e2e4ea; border-radius: 9px; font-size: 13px; outline: none; background: #fff; }
+      .gp-form-row input:focus { border-color: #2bb3a3; }
+      .gp-form-row select { flex: 0 0 auto; border: 1px solid #e2e4ea; border-radius: 9px; padding: 0 8px;
+        background: #fff; font: 13px "Segoe UI", sans-serif; color: #4b5563; outline: none; }
+      .gp-form .pf-note { margin: 9px 0 0; }
+      .gp-made { display: flex; gap: 7px; margin-top: 10px; }
+      .gp-made[hidden] { display: none; }
+      .gp-made input { flex: 1; min-width: 0; box-sizing: border-box; padding: 8px 11px; border: 1px solid #cdd4f5;
+        border-radius: 9px; background: #fff; font: 12.5px "Segoe UI", sans-serif; color: #24262b; outline: none; }
+
       /* two-factor (authenticator app) */
       .sec-p { font-size: 13px; color: #4b5563; line-height: 1.65; margin: 4px 0 0; }
       .sec-steps { margin: 4px 0 14px; padding-left: 20px; font-size: 13px; color: #4b5563; line-height: 1.7; }
@@ -831,6 +861,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6a3 3 0 0 1 0 6"/><path d="M18 20a6 6 0 0 0-3-5"/></svg>
             <span>จัดการสมาชิก</span>
           </button>
+          <button class="pf-item" data-pane="guests" id="pf-nav-guests">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="8" r="3.2"/><path d="M4 20a6 6 0 0 1 12 0"/><path d="M19 8v6M16 11h6"/></svg>
+            <span>จัดการแขก</span>
+          </button>
         </nav>
         <section class="pf-main">
           <header class="pf-head">
@@ -844,6 +878,12 @@
                 <button disabled title="คำเชิญที่รอตอบรับ — เร็ว ๆ นี้">คำเชิญ (0)</button>
               </div>
               <div id="pf-members"></div>
+            </div>
+
+            <div class="pf-pane" id="pane-guests" hidden>
+              <p class="pf-note">บัตรผู้เยี่ยมชมคือลิงก์สำหรับคนนอกทีมหนึ่งคน — ระบุชื่อได้ กำหนดวันหมดอายุได้
+                และเพิกถอนเฉพาะคนนั้นได้ โดยไม่กระทบสมาชิกหรือแขกคนอื่น</p>
+              <div id="pf-guests-panel"></div>
             </div>
 
             <div class="pf-pane" id="pane-general" hidden>

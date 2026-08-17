@@ -6,6 +6,7 @@
 // member never sees controls their write would be refused.
 import { API, authHeaders, authToken } from "./api";
 import { mountMemberPanel, type MemberPanel } from "./memberPanel";
+import { mountGuestPanel, type GuestPanel } from "./guestPanel";
 import { inviteLink, themeOverride } from "./workspace";
 import { THEMES } from "./scenes/mapThemes";
 import { ART_CREDITS } from "./artCredits";
@@ -13,7 +14,7 @@ import { ART_CREDITS } from "./artCredits";
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T | null;
 
 const TITLES: Record<string, string> = {
-  members: "จัดการสมาชิก", general: "ทั่วไป", credits: "เครดิตงานศิลป์",
+  members: "จัดการสมาชิก", guests: "จัดการแขก", general: "ทั่วไป", credits: "เครดิตงานศิลป์",
 };
 const PANES = Object.keys(TITLES);
 
@@ -29,8 +30,10 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
   if (!modal) return { open() {}, close() {} };
 
   let panel: MemberPanel | null = null;
+  let guests: GuestPanel | null = null;
   let myRole = "member";
   let inviteCode = "";
+  let allowGuests = true;
   let creditsDrawn = false;
 
   const say = (text: string, kind: "ok" | "err" = "ok") => {
@@ -49,6 +52,7 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
       b.classList.toggle("active", b.dataset.pane === pane));
     $("pf-title")!.textContent = TITLES[pane] ?? "ตั้งค่า";
     if (pane === "members") mountMembers();
+    if (pane === "guests") mountGuests();
     if (pane === "general") void loadGeneral();
     if (pane === "credits") drawCredits();
   };
@@ -149,9 +153,32 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
     });
   };
 
+  /**
+   * Guest passes are the space's front door, so only owners and admins get the
+   * pane. The public space has no workspace record to hang passes on at all.
+   */
+  const mountGuests = () => {
+    const host = $("pf-guests-panel");
+    if (!host) return;
+    if (isPublic) {
+      host.className = "";
+      host.innerHTML = "";
+      const note = document.createElement("p");
+      note.className = "pf-note";
+      note.textContent = "พื้นที่สาธารณะนี้เข้าได้ทุกคนอยู่แล้ว จึงไม่มีบัตรผู้เยี่ยมชม — สร้าง Space ของทีมเพื่อคุมทางเข้า";
+      host.appendChild(note);
+      return;
+    }
+    if (guests) return void guests.reload();
+    guests = mountGuestPanel({ host, slug, openDoor: () => allowGuests });
+  };
+
   /** hide what this role may not do instead of letting the server refuse later */
   const applyRole = () => {
     const manager = myRole === "owner" || myRole === "admin";
+    // the pane itself refuses below admin; hiding the entry saves the dead end
+    const navGuests = $("pf-nav-guests");
+    if (navGuests) navGuests.style.display = manager && !isPublic ? "" : "none";
     for (const id of ["pf-name", "pf-guests"]) {
       const el = $<HTMLInputElement>(id);
       if (el) el.disabled = !manager;
@@ -181,6 +208,7 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
       const w = d.workspace ?? {};
       myRole = w.role ?? myRole;
       inviteCode = w.inviteCode ?? "";
+      allowGuests = !!w.allowGuests;
       const theme = w.theme ?? "classic";
       $<HTMLInputElement>("pf-name")!.value = w.name ?? slug;
       $<HTMLInputElement>("pf-guests")!.checked = !!w.allowGuests;
@@ -234,6 +262,7 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
     if (!r.ok) return say(d.error === "forbidden" ? "คุณไม่มีสิทธิ์แก้ไข Space นี้"
       : (d.error || "บันทึกไม่สำเร็จ"), "err");
     say("บันทึกแล้ว");
+    allowGuests = $<HTMLInputElement>("pf-guests")!.checked;
     // the sidebar header and the cached name should follow the rename
     const name = d.workspace?.name ?? $<HTMLInputElement>("pf-name")!.value.trim();
     const title = document.getElementById("sb-title");

@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { randomBytes } from "crypto";
 import express from "express";
 import cors from "cors";
 import { prisma } from "./db";
@@ -660,10 +661,144 @@ app.post("/workspaces/:slug/invite/reset", requireAuth, async (req: AuthedReques
   res.json({ inviteCode: updated.inviteCode });
 });
 
+// ---- guest passes ----
+// The open-door setting (allowGuests) admits anyone who has the link and leaves
+// no record. A pass is the accountable form of the same thing: it names the
+// visitor, may expire, can be revoked one at a time, and records each visit.
+
+type PassState = "active" | "expired" | "revoked" | "archived";
+
+/**
+ * Archived wins over revoked, and revoked over expired: each answers a
+ * different question ("still on the list?", "shut out?", "past its date?") and
+ * the list has to put every pass under exactly one tab.
+ */
+const passState = (g: { expiresAt: Date | null; revokedAt: Date | null; archivedAt: Date | null }): PassState =>
+  g.archivedAt ? "archived"
+  : g.revokedAt ? "revoked"
+  : g.expiresAt && g.expiresAt.getTime() <= Date.now() ? "expired"
+  : "active";
+
+const passView = (g: any) => ({
+  id: g.id, name: g.name, code: g.code, note: g.note ?? undefined,
+  state: passState(g), expiresAt: g.expiresAt, revokedAt: g.revokedAt,
+  archivedAt: g.archivedAt, lastSeenAt: g.lastSeenAt, visits: g.visits,
+  createdAt: g.createdAt,
+});
+
+/** guest passes are staff business: resolve the workspace and refuse below admin */
+async function managedWorkspace(slug: string, userId: string) {
+  const w = await prisma.workspace.findUnique({ where: { slug } });
+  if (!w) return { error: 404 as const };
+  const m = await prisma.membership.findUnique({
+    where: { userId_workspaceId: { userId, workspaceId: w.id } },
+  });
+  if (!m || (m.role !== "owner" && m.role !== "admin")) return { error: 403 as const };
+  return { w, role: m.role };
+}
+
+const DAY_MS = 86_400_000;
+const PASS_DAYS = [1, 7, 30, 90];
+
+app.get("/workspaces/:slug/guests", requireAuth, async (req: AuthedRequest, res) => {
+  const got = await managedWorkspace(req.params.slug, req.user!.id);
+  if (got.error) return res.status(got.error).json({ error: got.error === 404 ? "not found" : "forbidden" });
+  const rows = await prisma.guestPass.findMany({
+    where: { workspaceId: got.w.id },
+    orderBy: { createdAt: "desc" },
+  });
+  res.json({ myRole: got.role, guests: rows.map(passView) });
+});
+
+app.post("/workspaces/:slug/guests", requireAuth, async (req: AuthedRequest, res) => {
+  const got = await managedWorkspace(req.params.slug, req.user!.id);
+  if (got.error) return res.status(got.error).json({ error: got.error === 404 ? "not found" : "forbidden" });
+  const name = String((req.body ?? {}).name ?? "").trim().slice(0, 60);
+  if (!name) return res.status(400).json({ error: "name required" });
+  const { days, note } = req.body ?? {};
+  // null days = a pass that never expires; anything else must be one of the
+  // offered lengths, so a caller cannot mint a 50-year pass
+  if (days !== null && days !== undefined && !PASS_DAYS.includes(Number(days)))
+    return res.status(400).json({ error: "invalid days" });
+  const pass = await prisma.guestPass.create({
+    data: {
+      workspaceId: got.w.id, name,
+      // not randomCode(): this one is the whole credential, so it comes from the
+      // CSPRNG rather than Math.random
+      code: randomBytes(16).toString("hex"),
+      note: note ? String(note).slice(0, 200) : null,
+      expiresAt: days === null || days === undefined ? null : new Date(Date.now() + Number(days) * DAY_MS),
+      createdById: req.user!.id,
+    },
+  });
+  res.json({ guest: passView(pass) });
+});
+
+/** revoke / restore / archive / rename a pass */
+app.patch("/workspaces/:slug/guests/:id", requireAuth, async (req: AuthedRequest, res) => {
+  const got = await managedWorkspace(req.params.slug, req.user!.id);
+  if (got.error) return res.status(got.error).json({ error: got.error === 404 ? "not found" : "forbidden" });
+  const pass = await prisma.guestPass.findUnique({ where: { id: req.params.id } });
+  if (!pass || pass.workspaceId !== got.w.id) return res.status(404).json({ error: "not found" });
+  const { revoked, archived, name, days } = req.body ?? {};
+  if (days !== undefined && days !== null && !PASS_DAYS.includes(Number(days)))
+    return res.status(400).json({ error: "invalid days" });
+  const updated = await prisma.guestPass.update({
+    where: { id: pass.id },
+    data: {
+      ...(typeof revoked === "boolean" ? { revokedAt: revoked ? new Date() : null } : {}),
+      ...(typeof archived === "boolean" ? { archivedAt: archived ? new Date() : null } : {}),
+      ...(typeof name === "string" && name.trim() ? { name: name.trim().slice(0, 60) } : {}),
+      // extending a pass is how an expired one comes back — clearing revokedAt
+      // is not enough when the date has already passed
+      ...(days === null ? { expiresAt: null }
+        : days !== undefined ? { expiresAt: new Date(Date.now() + Number(days) * DAY_MS) } : {}),
+    },
+  });
+  res.json({ guest: passView(updated) });
+});
+
+/**
+ * What the holder of a pass link may read about it, so the app can greet them
+ * by the name on the pass instead of "Guest". Unauthenticated on purpose — the
+ * code in their URL is the credential — and it answers with nothing they were
+ * not already told when the link was sent.
+ */
+app.get("/guest-pass/:code", async (req, res) => {
+  const pass = await prisma.guestPass.findUnique({
+    where: { code: String(req.params.code) },
+    include: { workspace: { select: { slug: true, name: true } } },
+  });
+  if (!pass) return res.status(404).json({ error: "not found" });
+  res.json({
+    name: pass.name, state: passState(pass), expiresAt: pass.expiresAt,
+    workspace: pass.workspace,
+  });
+});
+
 /** used by the game server to authorise a room join (members, or guests if allowed) */
 app.get("/workspaces/:slug/access", async (req, res) => {
   const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
   if (!w) return res.json({ allowed: false, reason: "not-found" });
+
+  // A live pass is checked before the open-door setting and before membership
+  // is even looked up: it is the one credential that gets its holder in while
+  // the space is closed to guests. Only its own state can turn it down.
+  const code = String(req.query.guest || "");
+  if (code) {
+    const pass = await prisma.guestPass.findUnique({ where: { code } });
+    if (pass && pass.workspaceId === w.id && passState(pass) === "active") {
+      // stamped at most once a minute — a reconnect loop must not write per join
+      if (!pass.lastSeenAt || Date.now() - pass.lastSeenAt.getTime() > 60_000) {
+        await prisma.guestPass.update({
+          where: { id: pass.id },
+          data: { lastSeenAt: new Date(), visits: { increment: 1 } },
+        });
+      }
+      return res.json({ allowed: true, reason: "guest-pass", role: "guest", name: w.name, guestName: pass.name });
+    }
+  }
+
   const user = await userFromToken(String(req.query.token || "") || undefined);
   if (!user) return res.json({ allowed: w.allowGuests, reason: w.allowGuests ? "guest" : "members-only", name: w.name });
   const m = await prisma.membership.findUnique({

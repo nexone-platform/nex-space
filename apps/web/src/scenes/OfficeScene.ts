@@ -7,7 +7,7 @@ import type { MediaManager } from "../net/media";
 import { buildWalkCanvas, buildSitCanvas, SIT_COLS, SIT_SEATED_COL, decodeAvatar, encodeAvatar, isLpc, avatarKey, defaultDressedConfig, LPC_ROW } from "../avatar/avatarCompose";
 import { openAvatarEditor } from "../avatar/avatarEditor";
 import { WORKSPACE, IS_DEFAULT_WORKSPACE, workspaceLabel, inviteLink, wsKey,
-         rememberTheme, themeOverride } from "../workspace";
+         rememberTheme, themeOverride, GUEST_CODE } from "../workspace";
 import { API as AUTH_API } from "../api";
 import { setupPrefsModal } from "../prefsModal";
 import { pickTheme, propPath, THEMES, type Interactive } from "./mapThemes";
@@ -557,6 +557,9 @@ export class OfficeScene extends Phaser.Scene {
       const room = await client.joinOrCreate("office", {
         workspace: WORKSPACE,
         token: localStorage.getItem("nexspace-token") ?? "",
+        // a guest pass from ?g= — admits a named visitor even to a space that is
+        // otherwise closed to guests
+        guest: GUEST_CODE,
         name: this.myName,
         avatar: this.myAvatar,
       });

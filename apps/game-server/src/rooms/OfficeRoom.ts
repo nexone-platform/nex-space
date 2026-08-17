@@ -24,12 +24,15 @@ export class OfficeRoom extends Room<OfficeState> {
    * guests in. Without this the permission model would be advisory only —
    * anyone could open a socket straight to another company's room.
    */
-  async onAuth(_client: Client, options: { workspace?: string; token?: string } = {}) {
+  async onAuth(_client: Client, options: { workspace?: string; token?: string; guest?: string } = {}) {
     const slug = String(options.workspace || "main").slice(0, 32);
     if (slug === DEFAULT_WORKSPACE) return { role: "member" }; // the shared public space
     try {
+      // `guest` is a guest-pass code from the visitor's ?g= link — the API
+      // decides whether it is still live
       const url = `${API_URL}/workspaces/${encodeURIComponent(slug)}/access`
-        + `?token=${encodeURIComponent(options.token || "")}`;
+        + `?token=${encodeURIComponent(options.token || "")}`
+        + `&guest=${encodeURIComponent(options.guest || "")}`;
       const r = await fetch(url);
       const d = (await r.json()) as { allowed?: boolean; reason?: string; role?: string };
       // the returned object becomes client.auth — the room reads the role from it

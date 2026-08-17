@@ -3,7 +3,8 @@
 // localStorage and hands {name, avatar, desk} to the game.
 import { openAvatarEditor } from "./avatar/avatarEditor";
 import { encodeAvatar, buildFrameCanvas, defaultDressedConfig, type LpcConfig } from "./avatar/avatarCompose";
-import { WORKSPACE, HAS_WORKSPACE_PARAM, gotoWorkspace, wsKey, wsKeyFor, rememberTheme } from "./workspace";
+import { WORKSPACE, HAS_WORKSPACE_PARAM, gotoWorkspace, wsKey, wsKeyFor, rememberTheme,
+         GUEST_CODE } from "./workspace";
 import { API, TOKEN_KEY, authToken as token, authHeaders } from "./api";
 import { mountMemberPanel, roleLabel, type PanelMember } from "./memberPanel";
 import { THEMES } from "./scenes/mapThemes";
@@ -835,14 +836,34 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     highlight("custom");
   };
 
+  /**
+   * A ?g= link names its visitor, so greet them with that name rather than
+   * "Guest" — the room's name tag then matches the row in จัดการแขก that let
+   * them in, which is what makes the visit list worth reading.
+   */
+  let guestPass: { name: string; state: string } | null = null;
+  const loadGuestPass = async () => {
+    if (!GUEST_CODE) return;
+    try {
+      const r = await fetch(`${API}/guest-pass/${encodeURIComponent(GUEST_CODE)}`);
+      if (!r.ok) return;
+      const d = await r.json();
+      guestPass = { name: String(d.name ?? ""), state: String(d.state ?? "") };
+      const note = $("a-guest");
+      if (note && guestPass.state === "active") note.textContent = `เข้าเป็นผู้เยี่ยมชม — ${guestPass.name}`;
+      else if (guestPass.state) setErr("auth-err", "บัตรผู้เยี่ยมชมนี้ใช้ไม่ได้แล้ว — ขอลิงก์ใหม่จากผู้ดูแล");
+    } catch { /* the room join is the real gate; a failed lookup only costs the name */ }
+  };
+
   const toChar = (u: User | null) => {
     if (u?.avatar?.lpc) { customConfig = u.avatar.lpc; selected = encodeAvatar(u.avatar.lpc); setCustomThumb(u.avatar.lpc); }
     else { void defaultDressedConfig().then(setCustomThumb); }
     if (u?.avatar?.avatarId && !u?.avatar?.lpc) selected = u.avatar.avatarId;
     showStep("char-step");
     const hello = $("char-hello");
-    if (hello) hello.textContent = u ? `สวัสดี ${u.name}` : "โหมด Guest";
-    if (cName) cName.value = u?.name ?? "";
+    const pass = !u && guestPass?.state === "active" ? guestPass : null;
+    if (hello) hello.textContent = u ? `สวัสดี ${u.name}` : pass ? `ผู้เยี่ยมชม · ${pass.name}` : "โหมด Guest";
+    if (cName) cName.value = u?.name ?? pass?.name ?? "";
     if (u?.avatar?.lpc) highlight("custom"); else selectPreset(selected);
   };
 
@@ -868,7 +889,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
   (async () => {
     // Google signed us in but the account also has an authenticator
     if (pendingTotp) return toTotp(pendingTotp);
-    if (!token()) return showStep("auth-step");
+    if (!token()) { showStep("auth-step"); return void loadGuestPass(); }
     try {
       const r = await fetch(`${API}/me`, { headers: authHeaders() });
       if (!r.ok) { localStorage.removeItem(TOKEN_KEY); return showStep("auth-step"); }

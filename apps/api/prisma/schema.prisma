@@ -51,7 +51,30 @@ model Workspace {
   ownerId     String
   owner       User         @relation("OwnedWorkspaces", fields: [ownerId], references: [id], onDelete: Cascade)
   members     Membership[]
+  guests      GuestPass[]
   createdAt   DateTime     @default(now())
+}
+
+// A named pass that lets one visitor in without an account, listed under
+// "จัดการแขก". Distinct from allowGuests, which is an open door nobody can
+// account for: a pass names its holder, can expire, and revoking it shuts that
+// one visitor out without closing the space to anyone else.
+model GuestPass {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String // who it was issued to
+  code        String    @unique // the ?g= in the guest link
+  note        String?
+  expiresAt   DateTime? // null = no expiry
+  revokedAt   DateTime?
+  archivedAt  DateTime? // hidden from the default list, kept for the record
+  lastSeenAt  DateTime? // stamped when the pass is used to enter
+  visits      Int       @default(0)
+  createdById String? // the member who issued it
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId])
 }
 
 model Membership {

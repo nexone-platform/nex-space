@@ -33,6 +33,18 @@ export const gotoWorkspace = (slug: string) => {
 export const inviteLink = () =>
   `${location.origin}${location.pathname}?w=${encodeURIComponent(WORKSPACE)}`;
 
+/**
+ * A guest pass carried as ?g=<code>. Deliberately read from the URL only and
+ * never cached: the pass is what an admin revokes, so a copy kept in this
+ * browser would outlive the revocation.
+ */
+export const GUEST_CODE = new URLSearchParams(location.search).get("g") ?? "";
+
+/** the link handed to one named visitor — the pass rides along with the slug */
+export const guestLinkFor = (slug: string, code: string) =>
+  `${location.origin}${location.pathname}?w=${encodeURIComponent(normalizeSlug(slug))}`
+  + `&g=${encodeURIComponent(code)}`;
+
 /** per-workspace localStorage key, so a guest's desk in one space doesn't leak to another */
 export const wsKey = (key: string) => `${key}:${WORKSPACE}`;
 
