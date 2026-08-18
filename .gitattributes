@@ -1,0 +1,4 @@
+# The deploy scripts run on a Linux server: CRLF would make bash fail on the
+# shebang line, and the executable bit does not survive a Windows checkout
+# without this.
+*.sh text eol=lf
