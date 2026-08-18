@@ -161,16 +161,35 @@ ok "all three containers are running"
 
 # -------------------------------------------------------------------- verifying
 fails=0
+
+# "running" only means the entrypoint started. The API spends its first half
+# minute in `prisma db push` and `prisma generate` before it listens, so a check
+# fired the moment the container is up gets ECONNREFUSED — and nginx, asked in the
+# same breath, answers 502. Each check therefore gets a window to come good in.
+READY_WINDOW=${READY_WINDOW:-120}
+
 check() { # check <label> <command...>
   local label="$1"; shift
-  local out
-  if out=$("$@" 2>&1); then
-    ok "$label${out:+ — $out}"
-  else
-    printf '%s\n' "  ${RED}fail${OFF}  $label" >&2
-    [ -n "$out" ] && printf '%s\n' "        $out" >&2
-    fails=$((fails + 1))
-  fi
+  local out waited=0 deadline=$((SECONDS + READY_WINDOW))
+  while :; do
+    if out=$("$@" 2>&1); then
+      [ "$waited" -gt 0 ] && printf '\r%*s\r' 78 ""
+      if [ "$waited" -gt 0 ]; then
+        ok "$label${out:+ - $out} (ready after ${waited}s)"
+      else
+        ok "$label${out:+ - $out}"
+      fi
+      return
+    fi
+    [ "$SECONDS" -ge "$deadline" ] && break
+    sleep 3
+    waited=$((waited + 3))
+    printf '\r  ...   %s - waiting (%ss of %ss)' "$label" "$waited" "$READY_WINDOW"
+  done
+  [ "$waited" -gt 0 ] && printf '\r%*s\r' 78 ""
+  printf '%s\n' "  ${RED}fail${OFF}  $label" >&2
+  [ -n "$out" ] && printf '%s\n' "        $out" >&2
+  fails=$((fails + 1))
 }
 
 # 127.0.0.1, never "localhost". Inside these containers localhost resolves to ::1
@@ -194,7 +213,7 @@ GUEST_ROUTE='out=$(wget -S -O /dev/null http://127.0.0.1/guest-pass/__probe__ 2>
 API_VIA_NGINX='wget -qO- http://127.0.0.1/health 2>/dev/null | grep -q ok || { echo "no JSON from /health through nginx"; exit 1; }'
 WEB_SERVES='wget -qO- http://127.0.0.1/ 2>/dev/null | grep -q "<title>" || { echo "index.html did not come back"; exit 1; }'
 
-say "Verifying"
+say "Verifying (a service still starting gets up to ${READY_WINDOW}s to answer)"
 check "API answers /health"                     $DC exec -T nexspace-api  node -e "$API_HEALTH"
 check "Prisma client matches schema.prisma"     $DC exec -T nexspace-api  node -e "$SCHEMA_MATCH"
 check "game server is listening"                $DC exec -T nexspace-game node -e "$GAME_UP"

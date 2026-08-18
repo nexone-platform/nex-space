@@ -56,6 +56,11 @@ The probes address the containers as `127.0.0.1`, never `localhost`: inside thes
 images `localhost` resolves to `::1` first while the servers bind IPv4 only, so
 every check reports "connection refused" against a stack that is working.
 
+Each check also gets up to 120s to come good (`READY_WINDOW` to change it). A
+container reads `running` the moment its entrypoint starts, but the API spends its
+first half minute in `prisma db push` and `prisma generate` before it listens —
+asked any earlier it answers ECONNREFUSED, and nginx answers 502 on its behalf.
+
 Doing it by hand instead:
 
 ```bash
