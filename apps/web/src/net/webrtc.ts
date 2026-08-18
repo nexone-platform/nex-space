@@ -16,6 +16,12 @@ interface Peer {
   ignoreOffer: boolean;
   tile: HTMLElement;
   video: HTMLVideoElement;
+  /** wall clock and element clock at the moment playback started, so lag that
+   *  builds up afterwards can be measured — see the latency guard */
+  playedAt?: number;
+  playedFrom?: number;
+  lastFix?: number;
+  droppedAt?: number;   // when ICE first said "disconnected"
 }
 
 type SignalMsg = { from: string; kind: "desc" | "ice"; payload: any };
@@ -44,8 +50,11 @@ export class WebRTCManager implements MediaManager {
   selCam?: string;
   selSpk?: string;
 
+  private guardTimer?: number;
+
   constructor(private room: Room, private myId: string, private tilesEl: HTMLElement) {
     room.onMessage("signal", (m: SignalMsg) => void this.onSignal(m));
+    this.guardTimer = window.setInterval(() => this.guardLatency(), 3000);
   }
 
   // ---- media acquisition -------------------------------------------------
@@ -272,14 +281,27 @@ export class WebRTCManager implements MediaManager {
       finally { peer.makingOffer = false; }
     };
     pc.onicecandidate = ({ candidate }) => { if (candidate) this.signal(peerId, "ice", candidate.toJSON()); };
-    pc.ontrack = ({ streams }) => {
+    pc.ontrack = ({ streams, receiver }) => {
+      // Ask for the shortest playout the link allows. Chrome grows this delay
+      // after a rough patch and does not shrink it again, which is how a
+      // conversation ends up running a long way behind the room.
+      const live = receiver as RTCRtpReceiver & { jitterBufferTarget?: number | null; playoutDelayHint?: number | null };
+      try { if ("jitterBufferTarget" in live) live.jitterBufferTarget = 0; } catch { /* not supported */ }
+      try { if ("playoutDelayHint" in live) live.playoutDelayHint = 0; } catch { /* not supported */ }
       video.srcObject = streams[0] ?? null;
       video.style.display = "block";
       tile.style.display = "block"; // reveal the tile only once real media arrives
+      this.play(peerId);
       this.onPeerStream?.(peerId);
     };
     pc.onconnectionstatechange = () => {
-      if (["failed", "closed", "disconnected"].includes(pc.connectionState)) this.disconnect(peerId);
+      const st = pc.connectionState;
+      if (st === "failed" || st === "closed") return this.disconnect(peerId);
+      // "disconnected" is usually a blip that ICE recovers from on its own.
+      // Tearing the connection down here meant a lost packet cost a rebuild, and
+      // a rebuild is what the audio has to catch up from.
+      if (st === "disconnected") { peer.droppedAt = Date.now(); return; }
+      if (st === "connected") { peer.droppedAt = undefined; this.play(peerId); }
     };
   }
 
@@ -293,6 +315,7 @@ export class WebRTCManager implements MediaManager {
 
   /** stop all media + peer connections (used when leaving the room) */
   dispose() {
+    if (this.guardTimer) window.clearInterval(this.guardTimer);
     this.local.getTracks().forEach((tr) => tr.stop());
     this.screenStream?.getTracks().forEach((t) => t.stop());
     for (const id of [...this.peers.keys()]) this.disconnect(id);
@@ -326,6 +349,66 @@ export class WebRTCManager implements MediaManager {
   }
 
   // ---- tiles UI ----------------------------------------------------------
+  /**
+   * Start (or restart) playback of a peer's element and remember the clocks.
+   *
+   * autoplay alone is not enough: a blocked play() leaves the element paused
+   * while the stream keeps arriving, and a paused element queues that audio
+   * rather than dropping it — which is heard, on resume, as the conversation
+   * running a minute behind.
+   */
+  private play(peerId: string) {
+    const peer = this.peers.get(peerId);
+    if (!peer) return;
+    const { video } = peer;
+    video.play().then(() => {
+      peer.playedAt = performance.now();
+      peer.playedFrom = video.currentTime;
+    }).catch(() => {
+      // blocked until the page is interacted with; take the next gesture
+      const retry = () => { document.removeEventListener("pointerdown", retry); this.play(peerId); };
+      document.addEventListener("pointerdown", retry, { once: true });
+    });
+  }
+
+  /**
+   * Live audio has no business being seconds behind, so any lag that builds up
+   * after playback started is dropped by re-attaching the stream: a media element
+   * fed by a MediaStream cannot be seeked to the live edge, but a fresh
+   * attachment starts there.
+   *
+   * Measured from when playback began, not from when the track arrived, so
+   * ordinary setup time is not mistaken for lag.
+   */
+  private guardLatency() {
+    const now = performance.now();
+    for (const [id, peer] of this.peers) {
+      // ICE said "disconnected" and never came back: give it a few seconds to
+      // recover on its own, then rebuild rather than leaving a dead connection in
+      // place. The next proximity pass reconnects if they are still in range.
+      if (peer.droppedAt && Date.now() - peer.droppedAt > 8000) {
+        console.warn(`[webrtc] ${id} stayed disconnected — rebuilding`);
+        this.disconnect(id);
+        continue;
+      }
+      const { video } = peer;
+      if (!(video.srcObject instanceof MediaStream)) continue;
+      if (video.paused) { this.play(id); continue; }
+      if (peer.playedAt == null || peer.playedFrom == null) continue;
+      const behind = (now - peer.playedAt) / 1000 - (video.currentTime - peer.playedFrom);
+      if (behind < 1.5) continue;
+      // once every 10s at most: re-attaching is a small click in the audio, and a
+      // link that is genuinely struggling should not be clicked at every check
+      if (peer.lastFix && now - peer.lastFix < 10_000) continue;
+      peer.lastFix = now;
+      console.warn(`[webrtc] ${id} audio was ${behind.toFixed(1)}s behind — dropping the backlog`);
+      const stream = video.srcObject;
+      video.srcObject = null;
+      video.srcObject = stream;
+      this.play(id);
+    }
+  }
+
   private makeTile(peerId: string): { tile: HTMLElement; video: HTMLVideoElement } {
     const tile = document.createElement("div");
     // hidden until this peer actually sends media (avoids empty black boxes for

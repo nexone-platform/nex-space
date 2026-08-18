@@ -154,6 +154,7 @@ export class OfficeScene extends Phaser.Scene {
   private lastSent = 0;
   private lastState = { x: 0, y: 0, dir: "", moving: false };
   private readonly NEAR = 5 * TILE; // proximity radius (must match server)
+  private mediaPeers = new Set<string>();       // who we currently hold media connections to
   private bubbles = new Map<string, Phaser.GameObjects.Text>();
   private localRing!: Phaser.GameObjects.Arc;
   private webrtc?: MediaManager;
@@ -1863,6 +1864,8 @@ export class OfficeScene extends Phaser.Scene {
 
     // --- interpolate + animate remotes, and compute proximity ("in conversation") ---
     const near2 = this.NEAR * this.NEAR;
+    // a connection already open is kept until they are clearly out of range
+    const keep2 = (this.NEAR * 1.4) * (this.NEAR * 1.4);
     const FULL = 2 * TILE; // distance for full audio volume
     let anyNear = false;
     const nearbyIds = new Set<string>();
@@ -1882,12 +1885,20 @@ export class OfficeScene extends Phaser.Scene {
       const dx = r.sprite.x - this.player.x, dy = r.sprite.y - this.player.y;
       const d2 = dx * dx + dy * dy;
       const near = d2 <= near2;
-      if (near) { anyNear = true; nearbyIds.add(id); }
+      if (near) { anyNear = true; }
+      // Hysteresis on the media connection only — the ring and the volume still
+      // follow the real radius. syncPeers runs every frame, so a single radius
+      // meant standing on the line rebuilt the peer connection frame after
+      // frame, and audio spends the first seconds of a connection catching up.
+      if (d2 <= keep2 && (near || this.mediaPeers.has(id))) nearbyIds.add(id);
       if (near && !r.ring) r.ring = this.add.circle(0, 0, 15).setStrokeStyle(2, 0x2bb3a3, 0.9).setDepth(1);
       if (r.ring) r.ring.setVisible(near).setPosition(r.sprite.x, r.sprite.y + 18);
 
-      // spatial audio: louder when close, fading to silent at the proximity edge
-      if (near) {
+      // Spatial audio: loudest close by, fading to silence at the proximity edge.
+      // Applied to anyone we hold a connection to, not only those inside the
+      // radius — a peer kept open by the hysteresis above would otherwise still be
+      // playing at whatever volume they had when they crossed the line.
+      if (near || this.mediaPeers.has(id)) {
         const dist = Math.sqrt(d2);
         const vol = dist <= FULL ? 1 : 1 - (dist - FULL) / (this.NEAR - FULL);
         this.webrtc?.setPeerVolume(id, Math.max(0, Math.min(1, vol)));
@@ -1901,6 +1912,7 @@ export class OfficeScene extends Phaser.Scene {
     if (this.webrtc?.screenOn) for (const id of this.remotes.keys()) forced.add(id);
     for (const pid of this.screenPresenter.values()) if (this.remotes.has(pid)) forced.add(pid);
     this.webrtc?.syncPeers(nearbyIds, forced);
+    this.mediaPeers = nearbyIds;
 
     // --- keep chat bubbles above their owner ---
     for (const [key, t] of this.bubbles) {
