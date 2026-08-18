@@ -71,19 +71,35 @@ const THEME = pickTheme();
 const COLS = THEME.cols;
 const ROWS = THEME.rows;
 const SPAWN = THEME.spawn;
-// Zoom LEVELS, not camera zoom values — see setZoom. 2 is the readable default,
-// 1 shows the most of the map, and a step is what the +/- buttons and the wheel move.
-const ZOOM_MIN = 1, ZOOM_MAX = 4, ZOOM_DEFAULT = 2;
+// The zoom ladder, as levels rather than camera zoom values — see setZoom. A
+// step is what the +/- buttons and the wheel move. 2 is the readable default; 0.5
+// is half size, which fits a whole floor plan on screen; 6 is close enough to
+// read a desk plate.
+//
+// Only halves and whole numbers are on the ladder, because those are the zooms
+// that keep pixel art sharp: a whole number puts one art pixel on N device
+// pixels, and 0.5 puts a 2x2 block of art pixels on one. Anything between
+// resamples the art into mush, which is the reason this is a ladder at all.
+const ZOOM_STEPS = [0.5, 1, 2, 3, 4, 5, 6];
+const ZOOM_MIN = ZOOM_STEPS[0];
+const ZOOM_MAX = ZOOM_STEPS[ZOOM_STEPS.length - 1];
+const ZOOM_DEFAULT = 2;
 
 /**
  * The drawing buffer holds one pixel per device pixel (see main.ts), so a camera
  * zoom of N puts one art pixel on exactly N device pixels. Multiplying the level
  * by the display scaling keeps the room the same physical size on a 150% display
- * as on a 100% one, and rounding keeps the result whole — which is the whole
- * point: a fractional zoom is what made the art mushy.
+ * as on a 100% one, and the result is then snapped back onto a crisp value.
  */
-const cameraZoomFor = (level: number) =>
-  Math.max(1, Math.round(level * (typeof window === "undefined" ? 1 : window.devicePixelRatio || 1)));
+const cameraZoomFor = (level: number) => {
+  const dpr = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
+  const z = level * dpr;
+  if (z >= 1) return Math.round(z);
+  // Reducing, not enlarging: only 1/n is clean here. At 125% scaling a level of
+  // 0.5 works out to 0.625, which would land 1.6 art pixels on each device pixel
+  // — snapping to 1/2 keeps the block whole.
+  return 1 / Math.max(2, Math.round(1 / z));
+};
 
 const CHAIR_DIRS = ["south", "south-east", "east", "north-east", "north", "north-west", "west", "south-west"];
 
@@ -965,17 +981,22 @@ export class OfficeScene extends Phaser.Scene {
    * the art is resampled into mush, which is why Gather only zooms in whole steps.
    */
   private setZoom(level: number) {
-    this.zoomLevel = Phaser.Math.Clamp(Math.round(level), ZOOM_MIN, ZOOM_MAX);
-    const cam = this.cameras.main;
-    // Integer zoom means we cannot scale the map to fit the window, so on a wide
-    // screen the lowest levels would leave the world floating in background
-    // colour. Raise the floor to the smallest whole zoom that still fills the
-    // view — 1600x900 needs 2, a small window is happy at 1.
-    const fill = Math.ceil(Math.max(cam.width / (COLS * TILE), cam.height / (ROWS * TILE)));
-    cam.setZoom(Math.max(cameraZoomFor(this.zoomLevel), fill));
+    // Snap to the ladder instead of rounding: the ladder *is* the set of zooms
+    // that keep the art crisp, and a plain round would allow 1.5.
+    const target = Phaser.Math.Clamp(level, ZOOM_MIN, ZOOM_MAX);
+    this.zoomLevel = ZOOM_STEPS.reduce((a, b) => (Math.abs(b - target) < Math.abs(a - target) ? b : a));
+    // No floor that forces the map to fill the window any more. Zooming out past
+    // that point is the whole reason someone presses the button, and Phaser
+    // centres the world on its bounds once the view is larger than the map, so
+    // what they get is the floor plan centred rather than pinned to a corner.
+    this.cameras.main.setZoom(cameraZoomFor(this.zoomLevel));
   }
+
+  /** move along the ladder, so a step means the next crisp zoom either way */
   private zoomBy(steps: number) {
-    this.setZoom(this.zoomLevel + steps);
+    const at = ZOOM_STEPS.indexOf(this.zoomLevel);
+    const from = at >= 0 ? at : ZOOM_STEPS.indexOf(ZOOM_DEFAULT);
+    this.setZoom(ZOOM_STEPS[Phaser.Math.Clamp(from + steps, 0, ZOOM_STEPS.length - 1)]);
   }
 
   private setupZoomControls() {

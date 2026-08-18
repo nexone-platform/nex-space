@@ -128,7 +128,7 @@
       .p-info b { font-size: 14px; color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .p-info small { font-size: 12px; color: var(--muted); }
       /* left nav rail */
-      #rail { position: fixed; left: 0; top: 0; height: 100vh; width: 56px; z-index: 26; background: #26292f;
+      #rail { position: fixed; left: 0; top: 0; height: 100vh; height: 100dvh; width: 56px; z-index: 26; background: #26292f;
         display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0; }
       #rail button { position: relative; width: 40px; height: 40px; border: none; border-radius: 12px;
         background: transparent; color: #c7cdd6; cursor: pointer; display: grid; place-items: center; transition: background .15s; }
@@ -136,6 +136,11 @@
       #rail button.active { background: #3a3f47; color: #fff; }
       #rail .spacer { flex: 1; }
       #rail svg { width: 22px; height: 22px; }
+      /* The gear sat hard against the bottom edge, level with the AV bar and reading
+         as an afterthought. Lifting it clear of that row is done on the button
+         rather than the rail's padding, because #rail is declared twice in this
+         stylesheet and the later padding wins. */
+      #rail-settings { margin-bottom: 76px; }
       /* 30deg is half the 60deg tooth pitch, so it reads as the gear turning one notch */
       #rail-settings svg { transition: transform .25s ease; }
       #rail-settings:hover svg { transform: rotate(30deg); }
@@ -646,15 +651,15 @@
       .top-right-actions button:hover { background: #ffffff14; color: #fff; }
 
       /* Rail & Sidebar layout */
-      #rail { position: fixed; left: 0; top: 0; height: 100vh; width: 56px; z-index: 26; background: #26292f;
+      #rail { position: fixed; left: 0; top: 0; height: 100vh; height: 100dvh; width: 56px; z-index: 26; background: #26292f;
         display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0; transition: top .15s, height .15s; }
-      #sidebar { position: fixed; left: 56px; top: 0; height: 100vh; width: 250px; z-index: 25;
+      #sidebar { position: fixed; left: 56px; top: 0; height: 100vh; height: 100dvh; width: 250px; z-index: 25;
         background: var(--surface-2); box-shadow: 2px 0 16px #0002; display: flex; flex-direction: column;
         font-family: "Segoe UI", sans-serif; transition: transform .2s, top .15s, height .15s; }
       #sidebar.closed { transform: translateX(-100%); }
 
-      body.has-screenshare #rail { top: 46px; height: calc(100vh - 46px); }
-      body.has-screenshare #sidebar { top: 46px; height: calc(100vh - 46px); }
+      body.has-screenshare #rail { top: 46px; height: calc(100vh - 46px); height: calc(100dvh - 46px); }
+      body.has-screenshare #sidebar { top: 46px; height: calc(100vh - 46px); height: calc(100dvh - 46px); }
 
       /* Call View Overlay (matching Image 1) */
       #call-view-overlay {
