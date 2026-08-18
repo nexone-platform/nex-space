@@ -128,6 +128,7 @@ export class OfficeScene extends Phaser.Scene {
   private myLabel?: Phaser.GameObjects.Container; // my own name tag above my head
   private myDesk = "";                          // id of my claimed home desk ("" = none)
   private zoomLevel = ZOOM_DEFAULT;             // whole step; the camera gets it x dpr
+  private unread = 0;                           // messages that arrived unseen
   private handUp = false;                       // my hand, broadcast to the room
   private meetGridKey = "";                     // last drawn meeting grid, to skip redraws
   private viewMode: "space" | "call" = "space";
@@ -867,7 +868,7 @@ export class OfficeScene extends Phaser.Scene {
     };
     document.getElementById("btn-edit-avatar")?.addEventListener("click", () => void this.editAvatarInRoom());
     document.getElementById("rail-people")?.addEventListener("click", () => showView("people"));
-    document.getElementById("rail-chat")?.addEventListener("click", () => showView("chat"));
+    document.getElementById("rail-chat")?.addEventListener("click", () => { showView("chat"); this.markChatSeen(); });
     // the gear opens the preferences dialog (members, space settings)
     const prefs = setupPrefsModal(WORKSPACE, IS_DEFAULT_WORKSPACE);
     document.getElementById("rail-settings")?.addEventListener("click", () => prefs.open("members"));
@@ -954,13 +955,29 @@ export class OfficeScene extends Phaser.Scene {
       if (open) meetInput?.focus();
     };
     document.getElementById("meet-chat-close")?.addEventListener("click", () => chat(false));
-    document.getElementById("meet-chat-open")?.addEventListener("click", () => chat(true));
+    document.getElementById("meet-chat-open")?.addEventListener("click", () => { chat(true); this.markChatSeen(); });
     document.getElementById("meet-chat-people")?.addEventListener("click", () => {
       // the roster lives in the sidebar; the meeting view is a place to glance at
       // the count, not a second copy of it
       this.setViewMode("space");
       document.getElementById("sidebar")?.classList.remove("closed");
       document.getElementById("rail-people")?.click();
+    });
+
+    // one chat button for both views: in the meeting view it opens the panel
+    // beside the people, on the map the sidebar's chat — the same conversation
+    // either way
+    document.getElementById("btn-chat")?.addEventListener("click", () => {
+      if (this.viewMode === "call") {
+        const overlay = document.getElementById("call-view-overlay");
+        const open = !overlay?.classList.contains("chat-open");
+        overlay?.classList.toggle("chat-open", open);
+        if (open) (document.getElementById("meet-chat-input") as HTMLInputElement | null)?.focus();
+      } else {
+        showView("chat");
+        (document.getElementById("room-chat-input") as HTMLInputElement | null)?.focus();
+      }
+      this.markChatSeen();
     });
 
     // a raised hand: a request to speak that stays up until it is lowered
@@ -977,6 +994,37 @@ export class OfficeScene extends Phaser.Scene {
    * meeting view is open, down the side of that too — the same messages in both,
    * so nothing said in the meeting is missing from the room afterwards.
    */
+  /**
+   * Whether the conversation is in front of the person right now.
+   *
+   * Two places show it — the sidebar on the map, the panel in the meeting view —
+   * and either one counts. Anything that arrives while neither is showing is what
+   * the badge is for.
+   */
+  private chatIsVisible(): boolean {
+    if (this.viewMode === "call") {
+      return !!document.getElementById("call-view-overlay")?.classList.contains("chat-open");
+    }
+    const sidebar = document.getElementById("sidebar");
+    const view = document.getElementById("view-chat") as HTMLElement | null;
+    return !!sidebar && !sidebar.classList.contains("closed") && !!view && !view.hidden;
+  }
+
+  /** the count on the control bar's chat button */
+  private refreshUnread() {
+    const badge = document.getElementById("chat-unread");
+    if (!badge) return;
+    badge.textContent = this.unread > 9 ? "9+" : String(this.unread);
+    badge.hidden = this.unread === 0;
+  }
+
+  /** called wherever the chat becomes visible, so the count cannot go stale */
+  private markChatSeen() {
+    if (!this.unread) return;
+    this.unread = 0;
+    this.refreshUnread();
+  }
+
   private appendChatLog(from: string, name: string, text: string) {
     for (const id of ["chat-log", "meet-chat-log"]) {
       const log = document.getElementById(id);
@@ -989,6 +1037,10 @@ export class OfficeScene extends Phaser.Scene {
       const txt = document.createElement("span"); txt.className = "txt"; txt.textContent = " " + text;
       div.append(who, txt); log.appendChild(div);
       log.scrollTop = log.scrollHeight;
+    }
+    if (from !== this.mySessionId && !this.chatIsVisible()) {
+      this.unread++;
+      this.refreshUnread();
     }
   }
 
@@ -1218,6 +1270,7 @@ export class OfficeScene extends Phaser.Scene {
       if (mode === "call" && !callOverlay.classList.contains("chat-open")) {
         callOverlay.classList.add("chat-open");   // open the first time, as the reference has it
       }
+      if (mode === "call" && callOverlay.classList.contains("chat-open")) this.markChatSeen();
     }
     if (appContainer) appContainer.style.visibility = mode === "call" ? "hidden" : "visible";
     if (zoomBar) zoomBar.style.display = mode === "call" ? "none" : "flex";
