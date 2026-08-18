@@ -228,6 +228,8 @@ export class WebRTCManager implements MediaManager {
     return s instanceof MediaStream ? s : undefined;
   }
 
+  hasPeer(peerId: string) { return this.peers.has(peerId); }
+
   /** hide/show a peer's small tile (used when their video is routed to the in-scene screen) */
   hidePeerTile(peerId: string, hidden: boolean) {
     const peer = this.peers.get(peerId);

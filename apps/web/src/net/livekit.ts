@@ -16,6 +16,7 @@ export class LiveKitManager implements MediaManager {
   onPeerStream?: (peerId: string) => void;
   onScreenEnd?: () => void;
   onError?: (message: string) => void;
+  private subscribed = new Set<string>();   // who syncPeers last kept audible
   private tiles = new Map<string, HTMLElement>();      // identity -> camera tile
   private audios = new Map<string, HTMLAudioElement>(); // identity -> hidden audio el
 
@@ -117,7 +118,10 @@ export class LiveKitManager implements MediaManager {
   }
 
   // `forced` is unused: the SFU auto-subscribes screen-share tracks room-wide already
+  hasPeer(peerId: string) { return this.subscribed.has(peerId); }
+
   syncPeers(nearby: Set<string>, _forced?: Set<string>) {
+    this.subscribed = new Set(nearby);
     this.room.remoteParticipants.forEach((p) => {
       const near = nearby.has(p.identity);
       p.getTrackPublication(Track.Source.Camera)?.setSubscribed(near); // pull video only when near

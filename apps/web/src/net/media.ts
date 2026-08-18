@@ -17,6 +17,15 @@ export interface MediaManager {
   /** hide/show a peer's small tile (when their video is routed to the in-scene screen) */
   hidePeerTile(peerId: string, hidden: boolean): void;
 
+  /**
+   * Whether a media connection to this peer is open right now.
+   *
+   * The scene's proximity hysteresis needs the truth, not its own memory of what
+   * it asked for last frame: a connection can also start from the other side's
+   * offer, and one the scene does not know about would be torn down again.
+   */
+  hasPeer(peerId: string): boolean;
+
   toggleMic(): Promise<void> | void;
   toggleCam(): Promise<void> | void;
   toggleScreen(): Promise<void> | void;

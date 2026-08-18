@@ -154,7 +154,6 @@ export class OfficeScene extends Phaser.Scene {
   private lastSent = 0;
   private lastState = { x: 0, y: 0, dir: "", moving: false };
   private readonly NEAR = 5 * TILE; // proximity radius (must match server)
-  private mediaPeers = new Set<string>();       // who we currently hold media connections to
   private bubbles = new Map<string, Phaser.GameObjects.Text>();
   private localRing!: Phaser.GameObjects.Arc;
   private webrtc?: MediaManager;
@@ -1936,7 +1935,12 @@ export class OfficeScene extends Phaser.Scene {
       // follow the real radius. syncPeers runs every frame, so a single radius
       // meant standing on the line rebuilt the peer connection frame after
       // frame, and audio spends the first seconds of a connection catching up.
-      if (d2 <= keep2 && (near || this.mediaPeers.has(id))) nearbyIds.add(id);
+      //
+      // "Already connected" is asked of the media manager, not remembered here. A
+      // connection can also begin with the other side's offer, and one this pass
+      // had not asked for would be dropped on the very next frame — which is a
+      // connection built and destroyed forever, in the band between the two radii.
+      if (d2 <= keep2 && (near || !!this.webrtc?.hasPeer(id))) nearbyIds.add(id);
       if (near && !r.ring) r.ring = this.add.circle(0, 0, 15).setStrokeStyle(2, 0x2bb3a3, 0.9).setDepth(1);
       if (r.ring) r.ring.setVisible(near).setPosition(r.sprite.x, r.sprite.y + 18);
 
@@ -1944,7 +1948,7 @@ export class OfficeScene extends Phaser.Scene {
       // Applied to anyone we hold a connection to, not only those inside the
       // radius — a peer kept open by the hysteresis above would otherwise still be
       // playing at whatever volume they had when they crossed the line.
-      if (near || this.mediaPeers.has(id)) {
+      if (near || this.webrtc?.hasPeer(id)) {
         const dist = Math.sqrt(d2);
         const vol = dist <= FULL ? 1 : 1 - (dist - FULL) / (this.NEAR - FULL);
         this.webrtc?.setPeerVolume(id, Math.max(0, Math.min(1, vol)));
@@ -1958,7 +1962,6 @@ export class OfficeScene extends Phaser.Scene {
     if (this.webrtc?.screenOn) for (const id of this.remotes.keys()) forced.add(id);
     for (const pid of this.screenPresenter.values()) if (this.remotes.has(pid)) forced.add(pid);
     this.webrtc?.syncPeers(nearbyIds, forced);
-    this.mediaPeers = nearbyIds;
 
     // --- keep chat bubbles above their owner ---
     for (const [key, t] of this.bubbles) {
