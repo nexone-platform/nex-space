@@ -47,9 +47,14 @@ three containers to report `running`, and then verifies:
 | `/health` through nginx | the proxy chain itself |
 | web serves `index.html` | a bad nginx config or an empty build |
 
-Options: `--all` (rebuild everything), `--no-pull` (deploy the tree as it is),
-`--dry-run` (say what it would do). On failure it prints the logs and the exact
-command to go back.
+Options: `--all` (rebuild everything), `--check` (run only the checks against
+what is already running), `--no-pull` (deploy the tree as it is), `--dry-run`
+(say what it would do). On failure it prints the logs and the exact command to go
+back.
+
+The probes address the containers as `127.0.0.1`, never `localhost`: inside these
+images `localhost` resolves to `::1` first while the servers bind IPv4 only, so
+every check reports "connection refused" against a stack that is working.
 
 Doing it by hand instead:
 
