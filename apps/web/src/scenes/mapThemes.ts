@@ -130,7 +130,13 @@ export const classicTheme: MapTheme = {
     ["pine", 6, 1, true], ["tree", 11, 1, true], ["tree-oval", 16, 1, true],
     ["pine", 21, 1, true], ["tree", 25, 1, true],
     ["tree-oval", 2, 22, true], ["tree", 29, 22, true],
-    ["shrub", 5, 2, false], ["shrub", 9, 2, false], ["shrub", 22, 2, false], ["shrub", 26, 2, false],
+    // Row 1, not 2: a shrub is 64px, so its sprite reaches half a tile past the
+    // tile it sits on. On row 2 that put greenery across the building's top wall
+    // (row 3) — and props are drawn at their own depth while the wall layer sits
+    // at a fixed one, so the shrub won a wall it should never have touched. The
+    // one at x=26 broke the outline exactly at the meeting room's corner, which
+    // read as the room being open to the outside.
+    ["shrub", 5, 1, false], ["shrub", 9, 1, false], ["shrub", 22, 1, false], ["shrub", 26, 1, false],
     ["shrub", 5, 21, false], ["shrub", 26, 21, false],
     ["bench", 7, 23, false], ["bench", 24, 23, false], ["bench-sofa", 2, 15, false],
     ["planter-round", 13, 21, false], ["planter-round", 18, 21, false],

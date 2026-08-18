@@ -276,13 +276,29 @@ export class OfficeScene extends Phaser.Scene {
     // 0.5, not 0.6: halving keeps the pixel grid (each drawn pixel comes from a
     // whole 2x2 block), where 0.6 lands source pixels between screen pixels
     const outdoorScale = (k: string) => (/planter/.test(k) ? 0.5 : 1); // shrink bulky planters
+    /**
+     * Greenery standing behind the building has to be drawn behind its wall.
+     *
+     * Props carry their own depth (their pixel y) while the wall layer carries a
+     * single fixed one, so a prop anywhere below that value paints straight over
+     * a wall. The trees and shrubs along the top of every map are wider than the
+     * tile they sit on, and what spilled over the wall was greenery across the
+     * wall band — which reads as a hole in the room rather than a plant behind it.
+     * The give-away is a wall directly to the prop's south: that only happens when
+     * the prop is outside, north of the building. Anything standing to the south
+     * of a wall is in front of the building and keeps its own depth.
+     */
+    const behindTheWall = (tx: number, ty: number) => isWall(Math.round(tx), Math.round(ty) + 1);
     for (const [k, tx, ty, solid] of OUTDOOR) {
       const px = tx * TILE + TILE / 2;
       const py = ty * TILE + TILE / 2;
+      // below the wall layer's 50, still above the floor's -1000, and ordered
+      // among themselves the same way
+      const depth = behindTheWall(tx, ty) ? py - 500 : py;
       const s = outdoorScale(k);
       if (solid) {
         const img = solids.create(px, py, k) as Phaser.Physics.Arcade.Sprite;
-        img.setScale(s).setDepth(py);
+        img.setScale(s).setDepth(depth);
         img.refreshBody();
         // Collide with the base only, not the whole sprite. These are tall props
         // you should be able to walk behind, and the 4x4 fountain's full body
@@ -294,7 +310,7 @@ export class OfficeScene extends Phaser.Scene {
         body.position.set(img.x - img.displayWidth / 2, img.y + img.displayHeight / 2 - bh);
         body.updateCenter();
       } else {
-        this.add.image(px, py, k).setScale(s).setDepth(py);
+        this.add.image(px, py, k).setScale(s).setDepth(depth);
       }
     }
 
