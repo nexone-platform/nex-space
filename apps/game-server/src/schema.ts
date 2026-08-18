@@ -12,6 +12,9 @@ export class Player extends Schema {
   // The mic is tracked apart from `status` because "meeting" outranks "muted":
   // inside a meeting the status alone can never say whether you can be heard.
   @type("boolean") micOn = false;
+  // Raising a hand is a request to speak, so it has to outlive the moment it is
+  // sent — a chat message would scroll away.
+  @type("boolean") handUp = false;
 }
 
 export class OfficeState extends Schema {

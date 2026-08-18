@@ -710,6 +710,10 @@
       #call-grid { display: grid; gap: 12px; align-content: stretch; justify-content: center;
         grid-auto-rows: minmax(160px, 1fr); width: 100%; height: 100%; }
       #call-view-overlay.grid-only { grid-template-columns: 1fr; }
+      #call-view-overlay.chat-open { grid-template-columns: 1fr 340px; }
+      #call-view-overlay.grid-only.chat-open { grid-template-columns: 1fr 340px; }
+      @media (max-width: 980px) { #call-view-overlay.chat-open,
+        #call-view-overlay.grid-only.chat-open { grid-template-columns: 1fr; } }
       #call-view-overlay.grid-only #call-main-stage,
       #call-view-overlay.grid-only #call-tiles-sidebar { display: none; }
       #call-view-overlay:not(.grid-only) #call-grid { display: none; }
@@ -728,6 +732,59 @@
       .mt-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .mt-name svg { width: 14px; height: 14px; flex: 0 0 auto; color: #ff6b6b; }
       .mt-empty { color: var(--muted); font: 14px "Segoe UI", sans-serif; text-align: center; }
+
+      /* ---- meeting chat: the room's messages, beside the people ----
+         The same conversation as the sidebar chat, not a second one, so nothing
+         said in the meeting is missing from the room and the other way round. */
+      #meet-chat { display: none; flex-direction: column; background: #181a24;
+        border: 1px solid #ffffff14; border-radius: 14px; overflow: hidden; min-height: 0; }
+      #call-view-overlay.chat-open #meet-chat { display: flex; }
+      #meet-chat .mc-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px;
+        color: #eef0f4; font: 600 15px "Segoe UI", sans-serif; }
+      #meet-chat .mc-head .sp { flex: 1; }
+      #meet-chat .mc-x { border: none; background: transparent; color: var(--faint); cursor: pointer;
+        width: 28px; height: 28px; border-radius: 8px; font-size: 15px; }
+      #meet-chat .mc-x:hover { background: #ffffff14; color: #fff; }
+      #meet-chat-log { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 14px;
+        display: flex; flex-direction: column; gap: 7px; }
+      #meet-chat-log .msg { font: 13.5px/1.5 "Segoe UI", sans-serif; color: #cfd4dc; word-break: break-word; }
+      #meet-chat-log .who { font-weight: 700; color: #eef0f4; }
+      #meet-chat-log .who.me { color: var(--teal); }
+      #meet-chat .mc-empty { margin: auto 0; text-align: center; color: var(--faint);
+        font: 13px "Segoe UI", sans-serif; }
+      #meet-chat .mc-compose { margin: 10px 12px 12px; padding: 8px 10px; border-radius: 12px;
+        background: #23262e; border: 1px solid #ffffff12; }
+      #meet-chat .mc-compose input { width: 100%; box-sizing: border-box; border: none; outline: none;
+        background: transparent; color: #eef0f4; font: 13.5px "Segoe UI", sans-serif; }
+      #meet-chat .mc-compose input::placeholder { color: #6f757f; }
+      #meet-chat .mc-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+      #meet-chat .mc-row .sp { flex: 1; }
+      #meet-chat .mc-send { width: 34px; height: 30px; border: none; border-radius: 9px;
+        background: var(--accent); color: #fff; cursor: pointer; display: grid; place-items: center; }
+      #meet-chat .mc-send:hover { background: var(--accent-hover); }
+      #meet-chat .mc-send svg { width: 15px; height: 15px; }
+      /* the strip along the bottom of the panel: who is here, and the chat toggle */
+      #meet-chat .mc-foot { display: flex; align-items: center; justify-content: flex-end; gap: 4px;
+        padding: 0 12px 12px; color: var(--faint); }
+      #meet-chat .mc-foot button { position: relative; width: 32px; height: 32px; border: none;
+        border-radius: 9px; background: transparent; color: var(--faint); cursor: pointer;
+        display: grid; place-items: center; }
+      #meet-chat .mc-foot button:hover { background: #ffffff14; color: #fff; }
+      #meet-chat .mc-foot svg { width: 17px; height: 17px; }
+      #meet-chat .mc-foot .badge { position: absolute; top: -2px; right: -2px; min-width: 15px;
+        padding: 0 4px; border-radius: 8px; background: var(--accent); color: #fff;
+        font: 700 10px "Segoe UI", sans-serif; }
+      /* reopening it once closed */
+      #meet-chat-open { position: fixed; right: 16px; bottom: 88px; z-index: 25; display: none;
+        width: 42px; height: 42px; border: none; border-radius: 12px; background: #23262e;
+        color: #eef0f4; cursor: pointer; place-items: center; box-shadow: 0 6px 22px #0006; }
+      #call-view-overlay.on ~ #meet-chat-open { display: grid; }
+      #call-view-overlay.on.chat-open ~ #meet-chat-open { display: none; }
+      #meet-chat-open svg { width: 20px; height: 20px; }
+      /* a raised hand, on the tile and in the floating panel */
+      .mt-hand { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px;
+        border-radius: 10px; background: #f0b429; display: grid; place-items: center; font-size: 18px; }
+      .mw-hand { position: absolute; top: 4px; right: 4px; font-size: 13px; }
       /* the switcher has to be reachable from inside the meeting room too, not
          only while someone is presenting */
       body.in-meeting #top-nav-bar { display: flex; }
@@ -770,6 +827,26 @@
         <span class="presenter-tag" id="presenter-tag">chalisa's Screenshare</span>
       </div>
       <div id="call-grid"></div>
+      <aside id="meet-chat">
+        <div class="mc-head"><span>แชทในการประชุม</span><span class="sp"></span>
+          <button class="mc-x" id="meet-chat-close" title="ปิด">✕</button></div>
+        <div id="meet-chat-log"><div class="mc-empty">ยังไม่มีข้อความในห้องนี้</div></div>
+        <div class="mc-compose">
+          <input id="meet-chat-input" type="text" maxlength="300" autocomplete="off" placeholder="ส่งข้อความถึงทั้งห้อง…" />
+          <div class="mc-row">
+            <span class="sp"></span>
+            <button class="mc-send" id="meet-chat-send" title="ส่ง">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="mc-foot">
+          <button id="meet-chat-people" title="ผู้เล่น">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6a3 3 0 0 1 0 6"/></svg>
+            <span class="badge" id="meet-chat-count">0</span>
+          </button>
+        </div>
+      </aside>
       <div id="call-tiles-sidebar">
         <div class="peer-card active-speaker" id="call-self-card">
           <div class="peer-avatar-fallback" id="call-self-avatar">👤</div>
@@ -1101,9 +1178,15 @@
       <div class="grp"><button id="btn-cam" class="ctl off" title="กล้อง"></button><button id="btn-cam-menu" class="chev" title="เลือกกล้อง"></button></div>
       <button id="btn-emoji" class="ctl" title="อีโมจิ"></button>
       <button id="btn-screen" class="ctl" title="แชร์จอ"></button>
+      <button id="btn-hand" class="ctl" title="ยกมือ">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11V6.5a1.5 1.5 0 0 1 3 0V11"/><path d="M10 11V5a1.5 1.5 0 0 1 3 0v6"/><path d="M13 11V6.5a1.5 1.5 0 0 1 3 0V12"/><path d="M16 12v-1a1.5 1.5 0 0 1 3 0v4a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6v-3.5a1.5 1.5 0 0 1 3 0"/></svg>
+      </button>
       <span class="sep"></span>
       <button id="btn-leave" class="ctl leave" title="ออกจากห้อง"></button>
     </div>
+    <button id="meet-chat-open" title="แชทในการประชุม">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z"/></svg>
+    </button>
     <div id="zoom-bar">
       <button id="zb-locate" class="zb" title="กลับไปที่ตัวเรา"></button>
       <button id="zb-desk" class="zb" title="ไปโต๊ะของฉัน"></button>

@@ -455,6 +455,11 @@ const EN: Record<string, string> = {
   "เปิดมุมมองการประชุม": "Open the meeting view",
   "ยังไม่มีใครอยู่ในห้องประชุม": "Nobody is in the meeting room",
 
+  "แชทในการประชุม": "Meeting chat",
+  "ส่งข้อความถึง {name}": "Message {name}",
+  "ยังไม่มีข้อความในห้องนี้": "No messages in this room yet",
+  "ยกมือ": "Raise hand",
+
   // ---- map themes ----
   "ออฟฟิศพาสเทล": "Pastel office",
   "ออฟฟิศแบ่งแผนก": "Office by department",

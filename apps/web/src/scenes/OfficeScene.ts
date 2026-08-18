@@ -121,13 +121,14 @@ const statusMeta = (s: string) => STATUS_META[s] ?? STATUS_META.online;
 const AFK_MS = 180_000;              // no input for 3 min -> away
 const MEETING_ROOM = THEME.meetingRoom;
 
-interface MeetingPerson { id: string; name: string; self: boolean; status: string; mic: boolean }
+interface MeetingPerson { id: string; name: string; self: boolean; status: string; mic: boolean; hand: boolean }
 
 export class OfficeScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
   private myLabel?: Phaser.GameObjects.Container; // my own name tag above my head
   private myDesk = "";                          // id of my claimed home desk ("" = none)
   private zoomLevel = ZOOM_DEFAULT;             // whole step; the camera gets it x dpr
+  private handUp = false;                       // my hand, broadcast to the room
   private meetGridKey = "";                     // last drawn meeting grid, to skip redraws
   private viewMode: "space" | "call" = "space";
   private meetPanelKey = "";                    // last rendered occupancy, to skip redraws
@@ -884,10 +885,16 @@ export class OfficeScene extends Phaser.Scene {
 
     // sidebar shows the workspace's display name (falls back to the slug)
     const title = document.getElementById("sb-title");
+    /** the meeting composer names the space, the way the sidebar header does */
+    const nameTheComposer = (name: string) => {
+      const box = document.getElementById("meet-chat-input") as HTMLInputElement | null;
+      if (box && name) box.placeholder = t("ส่งข้อความถึง {name}", { name });
+    };
     if (title) {
       // the default space has no stored name — always show the product name there
       title.textContent = (!IS_DEFAULT_WORKSPACE && localStorage.getItem(wsKey("nexspace-ws-name")))
         || workspaceLabel();
+      nameTheComposer(title.textContent);
       if (!IS_DEFAULT_WORKSPACE) {
         fetch(`${AUTH_API}/workspaces/${encodeURIComponent(WORKSPACE)}`)
           .then((r) => (r.ok ? r.json() : null))
@@ -895,6 +902,7 @@ export class OfficeScene extends Phaser.Scene {
             if (!d?.workspace) return;
             if (d.workspace.name) {
               title.textContent = d.workspace.name;
+              nameTheComposer(d.workspace.name);
               localStorage.setItem(wsKey("nexspace-ws-name"), d.workspace.name);
             }
             // Someone changed the layout (or this is a first visit and the cache
@@ -929,24 +937,64 @@ export class OfficeScene extends Phaser.Scene {
     };
     document.getElementById("room-chat-send")?.addEventListener("click", send);
     input?.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") send(); });
+
+    // the same conversation, from the meeting view's own composer
+    const meetInput = document.getElementById("meet-chat-input") as HTMLInputElement | null;
+    const meetSend = () => {
+      const text = meetInput?.value.trim();
+      if (text && this.room) this.room.send("roomchat", { text });
+      if (meetInput) meetInput.value = "";
+    };
+    document.getElementById("meet-chat-send")?.addEventListener("click", meetSend);
+    // stopPropagation so WASD in a message does not walk the avatar across the room
+    meetInput?.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") meetSend(); });
+
+    const chat = (open: boolean) => {
+      document.getElementById("call-view-overlay")?.classList.toggle("chat-open", open);
+      if (open) meetInput?.focus();
+    };
+    document.getElementById("meet-chat-close")?.addEventListener("click", () => chat(false));
+    document.getElementById("meet-chat-open")?.addEventListener("click", () => chat(true));
+    document.getElementById("meet-chat-people")?.addEventListener("click", () => {
+      // the roster lives in the sidebar; the meeting view is a place to glance at
+      // the count, not a second copy of it
+      this.setViewMode("space");
+      document.getElementById("sidebar")?.classList.remove("closed");
+      document.getElementById("rail-people")?.click();
+    });
+
+    // a raised hand: a request to speak that stays up until it is lowered
+    document.getElementById("btn-hand")?.addEventListener("click", () => {
+      this.handUp = !this.handUp;
+      document.getElementById("btn-hand")?.classList.toggle("active", this.handUp);
+      this.room?.send("hand", this.handUp);
+      this.meetGridKey = ""; this.meetPanelKey = "";   // redraw with the badge
+    });
   }
 
+  /**
+   * The room has one conversation. It is drawn in the sidebar and, while the
+   * meeting view is open, down the side of that too — the same messages in both,
+   * so nothing said in the meeting is missing from the room afterwards.
+   */
   private appendChatLog(from: string, name: string, text: string) {
-    const log = document.getElementById("chat-log");
-    if (!log) return;
-    log.querySelector(".chat-empty")?.remove();
-    const div = document.createElement("div"); div.className = "msg";
-    const who = document.createElement("span");
-    who.className = "who" + (from === this.mySessionId ? " me" : "");
-    who.textContent = (from === this.mySessionId ? t("คุณ") : name) + ":";
-    const txt = document.createElement("span"); txt.className = "txt"; txt.textContent = " " + text;
-    div.append(who, txt); log.appendChild(div);
-    log.scrollTop = log.scrollHeight;
+    for (const id of ["chat-log", "meet-chat-log"]) {
+      const log = document.getElementById(id);
+      if (!log) continue;
+      log.querySelector(".chat-empty, .mc-empty")?.remove();
+      const div = document.createElement("div"); div.className = "msg";
+      const who = document.createElement("span");
+      who.className = "who" + (from === this.mySessionId ? " me" : "");
+      who.textContent = (from === this.mySessionId ? t("คุณ") : name) + ":";
+      const txt = document.createElement("span"); txt.className = "txt"; txt.textContent = " " + text;
+      div.append(who, txt); log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+    }
   }
 
   private refreshRoster() {
     const count = this.room?.state.players.size ?? 0;
-    for (const id of ["sb-count", "rail-count"]) {
+    for (const id of ["sb-count", "rail-count", "meet-chat-count"]) {
       const e = document.getElementById(id);
       if (e) e.textContent = String(count);
     }
@@ -1162,7 +1210,15 @@ export class OfficeScene extends Phaser.Scene {
     spaceBtn?.classList.toggle("active", mode === "space");
     callBtn?.classList.toggle("active", mode === "call");
 
-    if (callOverlay) callOverlay.style.display = mode === "call" ? "grid" : "none";
+    if (callOverlay) {
+      callOverlay.style.display = mode === "call" ? "grid" : "none";
+      // marks the meeting view as showing, which is what reveals the button that
+      // brings the chat panel back after it is closed
+      callOverlay.classList.toggle("on", mode === "call");
+      if (mode === "call" && !callOverlay.classList.contains("chat-open")) {
+        callOverlay.classList.add("chat-open");   // open the first time, as the reference has it
+      }
+    }
     if (appContainer) appContainer.style.visibility = mode === "call" ? "hidden" : "visible";
     if (zoomBar) zoomBar.style.display = mode === "call" ? "none" : "flex";
 
@@ -1403,10 +1459,11 @@ export class OfficeScene extends Phaser.Scene {
         id: sid, name: p.name || "Guest", self,
         status: self ? this.myStatus : (p.status || "online"),
         mic: self ? !!this.webrtc?.micOn : !!p.micOn,
+        hand: self ? this.handUp : !!p.handUp,
       });
     });
     if (!this.room) {
-      here.push({ id: "me", name: this.myName, self: true, status: this.myStatus, mic: !!this.webrtc?.micOn });
+      here.push({ id: "me", name: this.myName, self: true, status: this.myStatus, mic: !!this.webrtc?.micOn, hand: this.handUp });
     }
     here.sort((a, b) => Number(b.self) - Number(a.self) || a.name.localeCompare(b.name));
     return here;
@@ -1429,7 +1486,7 @@ export class OfficeScene extends Phaser.Scene {
     if (presenting) return;
 
     const here = this.peopleInMeeting();
-    const key = here.map((h) => `${h.id}:${h.name}:${h.status}:${h.mic}`).join("|");
+    const key = here.map((h) => `${h.id}:${h.name}:${h.status}:${h.mic}:${h.hand}`).join("|");
     if (key === this.meetGridKey) return;
     this.meetGridKey = key;
 
@@ -1477,6 +1534,13 @@ export class OfficeScene extends Phaser.Scene {
       label.textContent = h.name + (h.self ? " " + t("(คุณ)") : "");
       name.appendChild(label);
 
+      if (h.hand) {
+        const hand = document.createElement("div");
+        hand.className = "mt-hand";
+        hand.textContent = "✋";
+        hand.title = t("ยกมือ");
+        tile.appendChild(hand);
+      }
       tile.append(video, face, name);
       grid.appendChild(tile);
     }
@@ -1503,7 +1567,7 @@ export class OfficeScene extends Phaser.Scene {
     const here = this.peopleInMeeting();
 
     // rebuilding only when the contents change keeps this off the render path
-    const key = here.map((h) => `${h.name}:${h.status}:${h.mic}:${h.self}`).join("|");
+    const key = here.map((h) => `${h.name}:${h.status}:${h.mic}:${h.hand}:${h.self}`).join("|");
     if (key === this.meetPanelKey) return;
     this.meetPanelKey = key;
 
@@ -1544,6 +1608,12 @@ export class OfficeScene extends Phaser.Scene {
       nm.textContent = h.name + (h.self ? " " + t("(คุณ)") : "");
       label.appendChild(nm);
 
+      if (h.hand) {
+        const hand = document.createElement("i");
+        hand.className = "mw-hand";
+        hand.textContent = "✋";
+        who.appendChild(hand);
+      }
       who.append(chip, label);
       who.title = h.mic
         ? t("{name} — {status}", { name: h.name, status: t(statusMeta(h.status).label) })

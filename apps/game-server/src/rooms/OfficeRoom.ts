@@ -80,6 +80,12 @@ export class OfficeRoom extends Room<OfficeState> {
       if (p) p.micOn = !!on;
     });
 
+    // a raised hand, shown on the meeting tiles until it is lowered
+    this.onMessage("hand", (client, on: boolean) => {
+      const p = this.state.players.get(client.sessionId);
+      if (p) p.handUp = !!on;
+    });
+
     // claim / release a desk. "" releases. Refuse if another online player owns it.
     this.onMessage("claimDesk", (client, deskId: string) => {
       const p = this.state.players.get(client.sessionId);
@@ -108,14 +114,6 @@ export class OfficeRoom extends Room<OfficeState> {
       const payload = { from: client.sessionId, name: me.name, text };
       client.send("chat", payload); // echo to sender
       for (const c of this.nearbyClients(client.sessionId)) c.send("chat", payload);
-    });
-
-    // room-wide chat: everyone in the room receives it
-    this.onMessage("roomchat", (client, msg: ChatMsg) => {
-      const me = this.state.players.get(client.sessionId);
-      const text = (msg?.text ?? "").toString().slice(0, 140).trim();
-      if (!me || !text) return;
-      this.broadcast("roomchat", { from: client.sessionId, name: me.name, text });
     });
 
     // room-wide chat: broadcast to EVERYONE in the room (not proximity-limited)
