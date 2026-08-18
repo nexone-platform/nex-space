@@ -324,8 +324,31 @@ export class WebRTCManager implements MediaManager {
   }
 
   private async onSignal({ from, kind, payload }: SignalMsg) {
-    const peer = this.peers.get(from);
-    if (!peer) return; // only handle peers we're proximity-connected to
+    let peer = this.peers.get(from);
+    /**
+     * An offer from someone we have not connected to yet is an invitation, not
+     * noise — accept it.
+     *
+     * Dropping it cost a returning speaker their voice for good. Whoever walks
+     * owns their position, so they notice the distance closing a frame or two
+     * before the other side does, and their offer arrives first. It used to land
+     * on nothing. The other side then built its own connection but never
+     * negotiated, because a peer with no track of its own — anyone whose mic is
+     * off — has nothing to trigger negotiation with. So the speaker sat in
+     * have-local-offer waiting for an answer nobody was going to send.
+     *
+     * That is also why it only happened one way round: when the listener was the
+     * one walking, they built their connection first, and the speaker's later
+     * offer had somewhere to land.
+     *
+     * Connecting here cannot pull in someone out of range: the proximity pass
+     * runs every frame and drops anyone it does not want.
+     */
+    if (!peer && kind === "desc" && (payload as RTCSessionDescriptionInit)?.type === "offer") {
+      this.connect(from);
+      peer = this.peers.get(from);
+    }
+    if (!peer) return; // ice or an answer for a peer that is gone: nothing to apply it to
     const { pc } = peer;
     try {
       if (kind === "desc") {
