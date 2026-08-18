@@ -44,6 +44,16 @@ fi
 [ -f .env ] || warn ".env is missing — Google sign-in, SMTP and LiveKit stay off"
 
 # ------------------------------------------------------------------- what moved
+# What was deployed last, not what HEAD was a moment ago: people pull by hand
+# before running this, and comparing against HEAD would then find no changes and
+# skip the deploy entirely.
+STATE_FILE=".deploy-state"
+DEPLOYED=""
+if [ -f "$STATE_FILE" ]; then
+  DEPLOYED=$(tr -d '[:space:]' < "$STATE_FILE")
+  git cat-file -e "${DEPLOYED}^{commit}" 2>/dev/null || DEPLOYED=""
+fi
+
 BEFORE=$(git rev-parse HEAD)
 
 if [ "$PULL" = 1 ]; then
@@ -54,14 +64,20 @@ else
 fi
 AFTER=$(git rev-parse HEAD)
 
+FROM="${DEPLOYED:-$BEFORE}"
+
 CHANGED=""
 if [ "$ALL" = 1 ]; then
   SERVICES="nexspace-api nexspace-game nexspace-web"
 else
-  CHANGED=$(git diff --name-only "$BEFORE" "$AFTER")
+  CHANGED=$(git diff --name-only "$FROM" "$AFTER")
   if [ -z "$CHANGED" ]; then
     say "Already up to date at $(git log -1 --format='%h %s')"
-    echo "  nothing to rebuild — pass --all to force one anyway"
+    if [ -z "$DEPLOYED" ]; then
+      echo "  no record of an earlier deploy here — run it once with --all"
+    else
+      echo "  nothing new since $(git log -1 --format=%h "$DEPLOYED") was deployed — pass --all to force a rebuild"
+    fi
     exit 0
   fi
   SERVICES=""
@@ -89,8 +105,8 @@ if echo "$CHANGED" | grep -q '^apps/game-server/src/schema\.ts$' && ! echo "$SER
 fi
 
 say "Deploying $(git log -1 --format='%h %s')"
-if [ "$BEFORE" != "$AFTER" ]; then
-  echo "  from $(git log -1 --format=%h "$BEFORE") — $(git rev-list --count "$BEFORE..$AFTER") new commit(s)"
+if [ "$FROM" != "$AFTER" ]; then
+  echo "  from $(git log -1 --format=%h "$FROM") — $(git rev-list --count "$FROM..$AFTER") new commit(s)"
 fi
 echo "  rebuilding: $SERVICES"
 
@@ -186,6 +202,8 @@ if [ "$fails" -gt 0 ]; then
   $DC logs --tail 30 nexspace-api || true
   die "$fails check(s) failed. To go back: git checkout $BEFORE && ./scripts/deploy.sh --no-pull --all"
 fi
+
+git rev-parse HEAD > "$STATE_FILE"
 
 say "${GREEN}Deployed${OFF} $(git log -1 --format='%h %s')"
 $DC ps

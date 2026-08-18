@@ -28,3 +28,4 @@ apps/web/asset-library/
 apps/api/prisma/dev.db
 apps/api/prisma/*.db-journal
 backups/
+.deploy-state
