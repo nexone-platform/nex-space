@@ -26,4 +26,10 @@ ENV PORT=3001
 ENV DATABASE_URL="file:/app/apps/api/data/prisma/prod.db"
 EXPOSE 3001
 
+# The commit this image was built from. Kept last so a new commit only
+# rebuilds this metadata layer, and read back by scripts/deploy.sh to work out
+# what is actually running.
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.revision=$GIT_SHA
+
 CMD ["sh", "-c", "npx prisma db push && npx tsx src/index.ts"]

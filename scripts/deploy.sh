@@ -45,7 +45,6 @@ else
 fi
 [ -f .env ] || warn ".env is missing — Google sign-in, SMTP and LiveKit stay off"
 
-STATE_FILE=".deploy-state"
 BEFORE=$(git rev-parse HEAD)
 SERVICES=""
 
@@ -53,14 +52,18 @@ if [ "$CHECK" = 1 ]; then
   say "Checking what is already running (no pull, no build)"
 else
   # ----------------------------------------------------------------- what moved
-  # What was deployed last, not what HEAD was a moment ago: people pull by hand
-  # before running this, and comparing against HEAD would then find no changes
-  # and skip the deploy entirely.
-  DEPLOYED=""
-  if [ -f "$STATE_FILE" ]; then
-    DEPLOYED=$(tr -d '[:space:]' < "$STATE_FILE")
-    git cat-file -e "${DEPLOYED}^{commit}" 2>/dev/null || DEPLOYED=""
-  fi
+  # Each image is stamped at build time with the commit it came from, so the
+  # question "what is deployed?" is answered by the containers themselves. A state
+  # file next to the repo cannot answer it: a run that fails its checks never
+  # writes one, --check deliberately does not, and pulling by hand before running
+  # this moves HEAD out from under it. The stamp survives all three.
+  deployed_rev() { # deployed_rev <service>
+    local rev
+    rev=$($DC images -q "$1" 2>/dev/null | head -1)
+    [ -n "$rev" ] || return 0
+    rev=$(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$rev" 2>/dev/null || true)
+    git cat-file -e "${rev}^{commit}" 2>/dev/null && printf '%s' "$rev"
+  }
 
   if [ "$PULL" = 1 ]; then
     say "Pulling"
@@ -69,50 +72,56 @@ else
     say "Skipping the pull (--no-pull)"
   fi
   AFTER=$(git rev-parse HEAD)
-  FROM="${DEPLOYED:-$BEFORE}"
 
-  CHANGED=""
+  SERVICES=""
   if [ "$ALL" = 1 ]; then
     SERVICES="nexspace-api nexspace-game nexspace-web"
   else
-    CHANGED=$(git diff --name-only "$FROM" "$AFTER")
-    if [ -z "$CHANGED" ]; then
-      say "Already up to date at $(git log -1 --format='%h %s')"
-      if [ -z "$DEPLOYED" ]; then
-        echo "  no record of an earlier deploy here — run it once with --all"
-      else
-        echo "  nothing new since $(git log -1 --format=%h "$DEPLOYED") was deployed — pass --all to force a rebuild"
+    # a change to any of these can affect every image
+    SHARED=$(git diff --name-only "$BEFORE" "$AFTER" 2>/dev/null \
+      | grep -E '^(docker-compose\.yml|\.dockerignore|package(-lock)?\.json)$' || true)
+    for svc in nexspace-api nexspace-game nexspace-web; do
+      case "$svc" in
+        nexspace-api)  path=apps/api ;;
+        nexspace-game) path=apps/game-server ;;
+        nexspace-web)  path=apps/web ;;
+      esac
+      rev=$(deployed_rev "$svc" || true)
+      if [ -z "$rev" ]; then
+        SERVICES="$SERVICES $svc"                       # never stamped, or not built yet
+        warn "$svc carries no commit stamp — rebuilding it"
+      elif [ "$rev" != "$AFTER" ] && { [ -n "$SHARED" ] || [ -n "$(git diff --name-only "$rev" "$AFTER" -- "$path")" ]; }; then
+        SERVICES="$SERVICES $svc"
       fi
-      exit 0
-    fi
-    # the compose file, the ignore list and the lockfiles can affect any image
-    if echo "$CHANGED" | grep -qE '^(docker-compose\.yml|\.dockerignore|package(-lock)?\.json)$'; then
-      SERVICES="nexspace-api nexspace-game nexspace-web"
-    else
-      echo "$CHANGED" | grep -q '^apps/api/'         && SERVICES="$SERVICES nexspace-api"
-      echo "$CHANGED" | grep -q '^apps/game-server/' && SERVICES="$SERVICES nexspace-game"
-      echo "$CHANGED" | grep -q '^apps/web/'         && SERVICES="$SERVICES nexspace-web"
-    fi
+    done
     SERVICES=$(echo "$SERVICES" | xargs || true)
     if [ -z "$SERVICES" ]; then
-      say "Only documentation changed — nothing to rebuild"
+      say "Everything running is already built from $(git log -1 --format='%h %s')"
+      echo "  nothing to rebuild — pass --all to force one anyway"
       exit 0
     fi
   fi
 
-  # The realtime schema is shared. A field added to apps/game-server/src/schema.ts
-  # reaches clients only once the game image is rebuilt, and a client reading a
-  # field the server never sends just gets undefined — quiet, and easy to miss.
-  if echo "$CHANGED" | grep -q '^apps/game-server/src/schema\.ts$' && ! echo "$SERVICES" | grep -q nexspace-game; then
+  # The realtime schema is shared with the client, so a field added to it reaches
+  # browsers only once the game image is rebuilt — until then the client reads
+  # undefined, quietly.
+  GAME_REV=$(deployed_rev nexspace-game || true)
+  if [ -n "$GAME_REV" ] && [ -n "$(git diff --name-only "$GAME_REV" "$AFTER" -- apps/game-server/src/schema.ts)" ] \
+     && ! echo "$SERVICES" | grep -q nexspace-game; then
     SERVICES="$SERVICES nexspace-game"
     warn "the Colyseus schema changed — adding nexspace-game to the rebuild"
   fi
 
   say "Deploying $(git log -1 --format='%h %s')"
-  if [ "$FROM" != "$AFTER" ]; then
-    echo "  from $(git log -1 --format=%h "$FROM") — $(git rev-list --count "$FROM..$AFTER") new commit(s)"
-  fi
-  echo "  rebuilding: $SERVICES"
+  for svc in $SERVICES; do
+    rev=$(deployed_rev "$svc" || true)
+    if [ -n "$rev" ] && [ "$rev" != "$AFTER" ]; then
+      echo "  $svc: $(git log -1 --format=%h "$rev") -> $(git log -1 --format=%h "$AFTER")"
+    else
+      echo "  $svc: rebuilding"
+    fi
+  done
+
 
   if [ "$DRY" = 1 ]; then
     say "Dry run — stopping here"
@@ -135,6 +144,8 @@ else
 
   # ---------------------------------------------------------------------- build
   say "Building and starting"
+  # stamped into each image so the next run can tell what is deployed
+  export GIT_SHA="$AFTER"
   # shellcheck disable=SC2086
   $DC up -d --build $SERVICES
 fi
@@ -227,8 +238,6 @@ if [ "$fails" -gt 0 ]; then
   $DC logs --tail 30 nexspace-api || true
   die "$fails check(s) failed. To go back: git checkout $BEFORE && ./scripts/deploy.sh --no-pull --all"
 fi
-
-[ "$CHECK" = 1 ] || git rev-parse HEAD > "$STATE_FILE"
 
 say "${GREEN}$([ "$CHECK" = 1 ] && echo 'All checks passed' || echo 'Deployed')${OFF} $(git log -1 --format='%h %s')"
 $DC ps

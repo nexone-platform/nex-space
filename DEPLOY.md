@@ -36,7 +36,17 @@ or unpushed. `--quick` skips the production build.
 
 `scripts/deploy.sh` pulls, works out which images the new commits actually
 affect, backs the database up before the API restarts, rebuilds, waits for all
-three containers to report `running`, and then verifies:
+three containers to report `running`, and then verifies.
+
+It works out what to rebuild by **asking the containers what they are**: every
+image carries the commit it was built from as an OCI revision label, and each
+service is rebuilt only when the files under its own directory moved between that
+commit and HEAD. So an API-only change never pays for the 386 MB web image, and
+pulling by hand before running the script — or a run that failed its checks
+earlier — cannot confuse it. An image with no stamp is rebuilt, which is what
+makes the first run after this change build all three.
+
+The checks:
 
 | check | what it catches |
 |---|---|
