@@ -14,6 +14,9 @@
 # API route with no nginx block, a container stuck restarting.
 set -euo pipefail
 
+# Resolved before the cd, and before a pull can rewrite this file.
+SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
 cd "$(dirname "$0")/.."
 
 RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; BOLD=$'\033[1m'; OFF=$'\033[0m'
@@ -21,6 +24,25 @@ say()  { printf '%s\n' "${BOLD}==>${OFF} $*"; }
 ok()   { printf '%s\n' "  ${GREEN}ok${OFF}    $*"; }
 warn() { printf '%s\n' "  ${YELLOW}warn${OFF}  $*"; }
 die()  { printf '%s\n' "  ${RED}fail${OFF}  $*" >&2; exit 1; }
+
+# Pulling rewrites this very file, and bash reads a script by byte offset as it
+# runs — so after a pull it carries on at that offset in the *new* text and
+# executes whatever now happens to be there. That is how a deploy came out with
+# unstamped images: the lines that set the stamp were never the lines that ran.
+#
+# A function body is parsed in full when the function is defined, so everything
+# below is already in memory before the pull touches the file. If the pull changed
+# this script, the new copy is started from the beginning instead of resumed.
+pull_and_restart_if_changed() {
+  local self_before
+  self_before=$(cksum < "$SELF")
+  git pull --ff-only
+  if [ "$self_before" != "$(cksum < "$SELF")" ] && [ -z "${NEXSPACE_DEPLOY_REEXEC:-}" ]; then
+    say "This script changed in the pull — restarting the new version"
+    export NEXSPACE_DEPLOY_REEXEC=1
+    exec bash "$SELF" --no-pull "$@"
+  fi
+}
 
 PULL=1; ALL=0; DRY=0; CHECK=0
 for arg in "$@"; do
@@ -67,7 +89,7 @@ else
 
   if [ "$PULL" = 1 ]; then
     say "Pulling"
-    git pull --ff-only
+    pull_and_restart_if_changed "$@"
   else
     say "Skipping the pull (--no-pull)"
   fi
@@ -144,8 +166,12 @@ else
 
   # ---------------------------------------------------------------------- build
   say "Building and starting"
-  # stamped into each image so the next run can tell what is deployed
-  export GIT_SHA="$AFTER"
+  # Stamped into each image so the next run can tell what is deployed. Read from
+  # git rather than carried in a variable, and checked: an empty value would reach
+  # compose as its "unknown" default and leave every image unidentifiable.
+  GIT_SHA=$(git rev-parse HEAD)
+  [ ${#GIT_SHA} -eq 40 ] || die "cannot read HEAD to stamp the images"
+  export GIT_SHA
   # shellcheck disable=SC2086
   $DC up -d --build $SERVICES
 fi
@@ -231,6 +257,23 @@ check "game server is listening"                $DC exec -T nexspace-game node -
 check "nginx proxies /guest-pass to the API"    $DC exec -T nexspace-web  sh -c "$GUEST_ROUTE"
 check "nginx reaches the API from the app host" $DC exec -T nexspace-web  sh -c "$API_VIA_NGINX"
 check "web serves the app"                      $DC exec -T nexspace-web  sh -c "$WEB_SERVES"
+
+# The stamp is what the next deploy reads to decide what to rebuild, so a silent
+# failure here would quietly cost every later deploy a full rebuild.
+if [ "$CHECK" = 0 ]; then
+  check "images carry this commit" bash -c '
+    head=$(git rev-parse HEAD)
+    for svc in nexspace-api nexspace-game nexspace-web; do
+      img=$('"$DC"' images -q "$svc" 2>/dev/null | head -1)
+      [ -n "$img" ] || { echo "$svc has no image"; exit 1; }
+      rev=$(docker inspect --format "{{index .Config.Labels \"org.opencontainers.image.revision\"}}" "$img" 2>/dev/null)
+      case "$rev" in
+        "$head") ;;
+        *) echo "$svc is stamped \"$rev\", wanted $head"; exit 1 ;;
+      esac
+    done
+    printf "all three"'
+fi
 
 echo
 if [ "$fails" -gt 0 ]; then
