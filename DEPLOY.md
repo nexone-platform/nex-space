@@ -9,12 +9,49 @@ Three containers behind one nginx (`docker-compose.yml`):
 | `nexspace-api` | auth, workspaces, avatars, maps (SQLite on a named volume) | 3001 |
 
 The client always calls the API and game server **same-origin** (`/auth`, `/me`,
-`/workspaces`, `/colyseus`, `/livekit`), so nginx must keep those `location`
-blocks. Anything new on the API needs a matching block or it 404s in production.
+`/workspaces`, `/guest-pass`, `/colyseus`, `/livekit`), so nginx must keep those
+`location` blocks. Anything new on the API needs a matching block — without one
+the request falls through to the SPA and comes back as `index.html` with a
+**200**, so the caller sees HTML where it expected JSON and nothing looks like an
+error. `npm run preflight` compares the two lists and fails if one is missing.
 
 ---
 
 ## Deploy
+
+Two scripts. Run the first on your machine before pushing, the second on the
+server.
+
+```bash
+npm run preflight          # local: types, translations, routing, build, e2e
+./scripts/deploy.sh        # server: pull, rebuild what changed, verify
+```
+
+`scripts/preflight.sh` checks the things this project has actually shipped
+broken: a type error, a **new API route with no nginx block** (production answers
+`index.html` with a 200 and nothing can parse it), a Thai string with no English,
+a theme the API would refuse, and a Prisma schema that does not parse. It also
+runs the API's e2e suites when a dev server is up, and says what is uncommitted
+or unpushed. `--quick` skips the production build.
+
+`scripts/deploy.sh` pulls, works out which images the new commits actually
+affect, backs the database up before the API restarts, rebuilds, waits for all
+three containers to report `running`, and then verifies:
+
+| check | what it catches |
+|---|---|
+| API `/health` | the API is up at all |
+| Prisma client vs `schema.prisma` | the volume-shadowing failure below — new models missing at runtime |
+| game server listening | a Colyseus crash loop |
+| `/guest-pass` answers 404, not 200 | an API route with no nginx block, silently served as the SPA |
+| `/health` through nginx | the proxy chain itself |
+| web serves `index.html` | a bad nginx config or an empty build |
+
+Options: `--all` (rebuild everything), `--no-pull` (deploy the tree as it is),
+`--dry-run` (say what it would do). On failure it prints the logs and the exact
+command to go back.
+
+Doing it by hand instead:
 
 ```bash
 git pull
@@ -28,6 +65,11 @@ Rebuild only what changed if you prefer:
 | `apps/web/**` (client, assets, nginx.conf) | `docker compose up -d --build nexspace-web` |
 | `apps/game-server/**` (rooms, schema) | `docker compose up -d --build nexspace-game` |
 | `apps/api/**`, `prisma/schema.prisma` | `docker compose up -d --build nexspace-api` |
+
+The realtime schema (`apps/game-server/src/schema.ts`) is shared with the client:
+a field added there reaches browsers only once **nexspace-game** is rebuilt, and
+until then the client reads `undefined` rather than getting an error. The deploy
+script adds that service to the rebuild by itself when the schema moved.
 
 The API runs `prisma db push` on every start, so schema changes apply
 themselves. Adding tables and nullable columns is non-destructive; **renaming or
@@ -215,6 +257,43 @@ Guests are blocked from claiming a desk in two places — the API (`PUT /me/desk
 and the realtime server (`claimDesk`) — so a client talking straight to the
 socket cannot take one either. Demoting someone does not evict them from a desk
 they already hold, but they can release it and cannot take it back.
+
+### Guest passes
+
+**⚙️ → จัดการแขก** (owner/admin only). A pass is a link for one named visitor:
+`?w=<slug>&g=<code>`. It carries their name, may expire, records each visit, and
+can be revoked on its own.
+
+A live pass is checked **before** membership and before the space's own
+`allowGuests` setting, because it is the one credential meant to work while the
+space is closed to guests. Every other state — expired, revoked, archived — falls
+straight back to whatever `allowGuests` says, so revoking one pass never opens or
+closes the door for anyone else. Holders arrive with the `guest` role, which
+means no desk, exactly like a workspace guest.
+
+Worth knowing before support questions:
+
+- Revoking blocks the **next** entry. Someone already in the room stays until
+  they reload — the room checks the pass when they join, not continuously.
+- The code is 128 bits from the CSPRNG, so the link is the credential; anyone it
+  is forwarded to can walk in until it is revoked.
+- `GET /guest-pass/:code` is deliberately unauthenticated: it tells the holder
+  the name on their own pass so the app can greet them by it. It needs its own
+  nginx block (see the routing note at the top).
+- Nothing here needs configuration. Passes live in the `GuestPass` table, which
+  `prisma db push` creates on the first start after deploying.
+
+### Language and colour mode
+
+**⚙️ → ทั่วไป** carries two personal settings, both stored per device and needing
+no server configuration:
+
+- **ภาษาที่แสดง** — ไทย or English, applied live. The Thai text is the
+  translation key, so a phrase with no entry stays Thai rather than breaking;
+  `npm run -w @nexspace/web i18n` fails if any is missing, and `npm run preflight`
+  runs it.
+- **โหมดสี** — light, dark or match-system. The map is not themed: it is pixel
+  art with its own palette.
 
 ### Authenticator app (2FA)
 

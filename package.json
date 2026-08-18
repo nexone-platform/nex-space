@@ -9,7 +9,10 @@
     "dev": "concurrently \"npm run dev --workspace=apps/web\" \"npm run dev --workspace=apps/game-server\" \"npm run dev --workspace=apps/api\"",
     "dev:web": "npm run dev --workspace=apps/web",
     "dev:game": "npm run dev --workspace=apps/game-server",
-    "dev:api": "npm run dev --workspace=apps/api"
+    "dev:api": "npm run dev --workspace=apps/api",
+    "preflight": "bash scripts/preflight.sh",
+    "preflight:quick": "bash scripts/preflight.sh --quick",
+    "deploy": "bash scripts/deploy.sh"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

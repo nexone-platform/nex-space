@@ -27,3 +27,4 @@ apps/web/asset-library/
 # local dev sqlite db (created automatically by apps/api)
 apps/api/prisma/dev.db
 apps/api/prisma/*.db-journal
+backups/
