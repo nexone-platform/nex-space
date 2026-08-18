@@ -121,11 +121,15 @@ const statusMeta = (s: string) => STATUS_META[s] ?? STATUS_META.online;
 const AFK_MS = 180_000;              // no input for 3 min -> away
 const MEETING_ROOM = THEME.meetingRoom;
 
+interface MeetingPerson { id: string; name: string; self: boolean; status: string; mic: boolean }
+
 export class OfficeScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
   private myLabel?: Phaser.GameObjects.Container; // my own name tag above my head
   private myDesk = "";                          // id of my claimed home desk ("" = none)
   private zoomLevel = ZOOM_DEFAULT;             // whole step; the camera gets it x dpr
+  private meetGridKey = "";                     // last drawn meeting grid, to skip redraws
+  private viewMode: "space" | "call" = "space";
   private meetPanelKey = "";                    // last rendered occupancy, to skip redraws
   private meetPanelAt = 0;
   private walkable: boolean[][] = [];           // tiles with no wall and no solid prop
@@ -1138,6 +1142,8 @@ export class OfficeScene extends Phaser.Scene {
     const callBtn = document.getElementById("nav-tab-call");
     spaceBtn?.addEventListener("click", () => this.setViewMode("space"));
     callBtn?.addEventListener("click", () => this.setViewMode("call"));
+    // the same switch, reachable from the map without hunting for the top bar
+    document.getElementById("meet-enter")?.addEventListener("click", () => this.setViewMode("call"));
 
     document.getElementById("btn-fullscreen")?.addEventListener("click", () => {
       if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
@@ -1146,6 +1152,7 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private setViewMode(mode: "space" | "call") {
+    this.viewMode = mode;
     const spaceBtn = document.getElementById("nav-tab-space");
     const callBtn = document.getElementById("nav-tab-call");
     const callOverlay = document.getElementById("call-view-overlay");
@@ -1159,7 +1166,11 @@ export class OfficeScene extends Phaser.Scene {
     if (appContainer) appContainer.style.visibility = mode === "call" ? "hidden" : "visible";
     if (zoomBar) zoomBar.style.display = mode === "call" ? "none" : "flex";
 
-    if (mode === "call") this.updateCallStageUI();
+    if (mode === "call") {
+      this.meetGridKey = "";        // rebuild: what it holds may be stale
+      this.updateCallStageUI();
+      this.refreshMeetingGrid();
+    }
   }
 
   private updateCallStageUI() {
@@ -1190,6 +1201,7 @@ export class OfficeScene extends Phaser.Scene {
       presenterTag.textContent = `${this.activePresenterName}'s Screenshare`;
     }
     this.refreshCallSidebarTiles();
+    this.refreshMeetingGrid();
   }
 
   private refreshCallSidebarTiles() {
@@ -1379,6 +1391,97 @@ export class OfficeScene extends Phaser.Scene {
    * while you are in there yourself — it answers "who am I in here with", so
    * outside the room there is nothing to answer.
    */
+  /** everyone standing in the meeting room, me first — the panel and the grid share it */
+  private peopleInMeeting(): MeetingPerson[] {
+    const here: MeetingPerson[] = [];
+    this.room?.state.players.forEach((p: any, sid: string) => {
+      const self = sid === this.mySessionId;
+      // my own position is local truth; the server copy lags a frame behind
+      const x = self ? this.player.x : p.x, y = self ? this.player.y : p.y;
+      if (!this.isInMeeting(x, y)) return;
+      here.push({
+        id: sid, name: p.name || "Guest", self,
+        status: self ? this.myStatus : (p.status || "online"),
+        mic: self ? !!this.webrtc?.micOn : !!p.micOn,
+      });
+    });
+    if (!this.room) {
+      here.push({ id: "me", name: this.myName, self: true, status: this.myStatus, mic: !!this.webrtc?.micOn });
+    }
+    here.sort((a, b) => Number(b.self) - Number(a.self) || a.name.localeCompare(b.name));
+    return here;
+  }
+
+  /**
+   * The meeting view: one tile per person in the room, filling the screen.
+   *
+   * It is the same list the floating panel shows, at a size you can hold a
+   * conversation in front of. A screen share still takes the stage — the tiles
+   * move to the sidebar beside it, which is what the existing call layout does —
+   * so this grid is only for when nobody is presenting.
+   */
+  private refreshMeetingGrid() {
+    const grid = document.getElementById("call-grid");
+    const overlay = document.getElementById("call-view-overlay");
+    if (!grid || !overlay) return;
+    const presenting = !!this.activeScreenStream;
+    overlay.classList.toggle("grid-only", !presenting);
+    if (presenting) return;
+
+    const here = this.peopleInMeeting();
+    const key = here.map((h) => `${h.id}:${h.name}:${h.status}:${h.mic}`).join("|");
+    if (key === this.meetGridKey) return;
+    this.meetGridKey = key;
+
+    // squarish: two across for a pair, three for up to nine, and so on
+    const cols = Math.max(1, Math.ceil(Math.sqrt(here.length || 1)));
+    grid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, min(46vw, 760px)))`;
+    grid.innerHTML = "";
+    if (!here.length) {
+      const empty = document.createElement("div");
+      empty.className = "mt-empty";
+      empty.textContent = t("ยังไม่มีใครอยู่ในห้องประชุม");
+      grid.appendChild(empty);
+      return;
+    }
+
+    for (const h of here) {
+      const tile = document.createElement("div");
+      tile.className = "mt-tile" + (h.self ? " self" : "");
+
+      const video = document.createElement("video");
+      video.autoplay = true; video.playsInline = true;
+      video.muted = true;                      // the audio already plays through the mesh
+      const stream = h.self ? this.webrtc?.cameraStream : this.webrtc?.getPeerStream(h.id);
+      if (stream && stream.getVideoTracks().some((track: MediaStreamTrack) => track.readyState === "live" && !track.muted)) {
+        video.srcObject = stream;
+        tile.classList.add("has-video");
+        video.play().catch(() => {});
+      }
+
+      const { initial, color } = this.chipParts(h.name);
+      const face = document.createElement("div");
+      face.className = "mt-face";
+      face.style.background = color;
+      face.textContent = initial;
+
+      const name = document.createElement("div");
+      name.className = "mt-name";
+      if (!h.mic) {
+        name.insertAdjacentHTML("beforeend",
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
+          + ' stroke-linecap="round"><path d="M9 5a3 3 0 0 1 6 0v5"/><path d="M5 11a7 7 0 0 0 10.5 6"/>'
+          + '<path d="M19 11a7 7 0 0 1-.6 2.8"/><path d="M12 19v3"/><path d="M3 3l18 18"/></svg>');
+      }
+      const label = document.createElement("span");
+      label.textContent = h.name + (h.self ? " " + t("(คุณ)") : "");
+      name.appendChild(label);
+
+      tile.append(video, face, name);
+      grid.appendChild(tile);
+    }
+  }
+
   private refreshMeetingPanel() {
     if (this.time.now - this.meetPanelAt < 250) return; // polled, not per frame
     this.meetPanelAt = this.time.now;
@@ -1386,22 +1489,18 @@ export class OfficeScene extends Phaser.Scene {
     if (!panel) return;
     const inside = this.inMeetingRoom();
     panel.classList.toggle("on", inside);
-    if (!inside) return;
+    // The switcher lives in the top bar, which until now only appeared while
+    // someone was presenting. Being in the meeting room is the other time you
+    // need it.
+    document.body.classList.toggle("in-meeting", inside);
+    if (!inside) {
+      // walked out: the meeting view is about a room you are no longer in
+      if (this.viewMode === "call" && !this.activeScreenStream) this.setViewMode("space");
+      return;
+    }
+    if (this.viewMode === "call") this.refreshMeetingGrid();
 
-    const here: { name: string; status: string; self: boolean; mic: boolean }[] = [];
-    this.room?.state.players.forEach((p: any, sid: string) => {
-      const self = sid === this.mySessionId;
-      // my own position is local truth; the server copy lags a frame behind
-      const x = self ? this.player.x : p.x, y = self ? this.player.y : p.y;
-      if (!this.isInMeeting(x, y)) return;
-      here.push({
-        name: p.name || "Guest", self,
-        status: self ? this.myStatus : (p.status || "online"),
-        mic: self ? !!this.webrtc?.micOn : !!p.micOn,
-      });
-    });
-    if (!this.room) here.push({ name: this.myName, self: true, status: this.myStatus, mic: !!this.webrtc?.micOn });
-    here.sort((a, b) => Number(b.self) - Number(a.self) || a.name.localeCompare(b.name));
+    const here = this.peopleInMeeting();
 
     // rebuilding only when the contents change keeps this off the render path
     const key = here.map((h) => `${h.name}:${h.status}:${h.mic}:${h.self}`).join("|");

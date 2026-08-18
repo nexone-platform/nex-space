@@ -449,6 +449,12 @@ const EN: Record<string, string> = {
   "เปิด{device}ไม่สำเร็จ ({error})": "Could not turn the {device} on ({error})",
   "แชร์หน้าจอไม่สำเร็จ": "Could not share the screen",
 
+  // ---- meeting view ----
+  "มุมมองออฟฟิศ": "Office view",
+  "มุมมองการประชุม": "Meeting view",
+  "เปิดมุมมองการประชุม": "Open the meeting view",
+  "ยังไม่มีใครอยู่ในห้องประชุม": "Nobody is in the meeting room",
+
   // ---- map themes ----
   "ออฟฟิศพาสเทล": "Pastel office",
   "ออฟฟิศแบ่งแผนก": "Office by department",

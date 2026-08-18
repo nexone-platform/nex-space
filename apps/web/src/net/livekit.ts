@@ -120,6 +120,11 @@ export class LiveKitManager implements MediaManager {
   // `forced` is unused: the SFU auto-subscribes screen-share tracks room-wide already
   hasPeer(peerId: string) { return this.subscribed.has(peerId); }
 
+  get cameraStream(): MediaStream | undefined {
+    const t = this.room.localParticipant.getTrackPublication(Track.Source.Camera)?.track?.mediaStreamTrack;
+    return t && this.camOn ? new MediaStream([t]) : undefined;
+  }
+
   syncPeers(nearby: Set<string>, _forced?: Set<string>) {
     this.subscribed = new Set(nearby);
     this.room.remoteParticipants.forEach((p) => {

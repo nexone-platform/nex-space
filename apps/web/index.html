@@ -383,6 +383,11 @@
       .mw-label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .mw-label svg { width: 12px; height: 12px; flex: 0 0 auto; color: #ff6b6b; }
       .meet-empty { font: 12.5px "Segoe UI", sans-serif; color: var(--faint); margin-top: 8px; }
+      /* the way from the map into the meeting view */
+      #meet-enter { width: 100%; margin-top: 9px; padding: 8px; border: none; border-radius: 10px;
+        background: var(--teal); color: #fff; cursor: pointer;
+        font: 600 12.5px "Segoe UI", sans-serif; }
+      #meet-enter:hover { background: var(--teal-hover); }
 
       /* ---- preferences modal: left nav + one pane at a time ---- */
       #prefs-modal { position: fixed; inset: 0; z-index: 72; background: #0b0b1066; display: none;
@@ -696,6 +701,37 @@
         padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; backdrop-filter: blur(4px);
       }
       .peer-avatar-fallback { font-size: 32px; }
+
+      /* ---- meeting view: everyone in the room, one tile each ----
+         Used when nobody is presenting. A screen share still takes the stage,
+         with these tiles moving to the sidebar beside it. */
+      /* rows share the height rather than collapsing to the tiles' minimum, so two
+         people fill the screen the way a call is expected to */
+      #call-grid { display: grid; gap: 12px; align-content: stretch; justify-content: center;
+        grid-auto-rows: minmax(160px, 1fr); width: 100%; height: 100%; }
+      #call-view-overlay.grid-only { grid-template-columns: 1fr; }
+      #call-view-overlay.grid-only #call-main-stage,
+      #call-view-overlay.grid-only #call-tiles-sidebar { display: none; }
+      #call-view-overlay:not(.grid-only) #call-grid { display: none; }
+      .mt-tile { position: relative; background: #181a24; border: 1px solid #ffffff14;
+        border-radius: 16px; overflow: hidden; display: grid; place-items: center;
+        min-height: 160px; }
+      .mt-tile.self { border-color: var(--teal); }
+      .mt-tile video { width: 100%; height: 100%; object-fit: cover; display: none; }
+      .mt-tile.has-video video { display: block; }
+      .mt-tile.has-video .mt-face { display: none; }
+      .mt-face { width: 92px; height: 92px; border-radius: 50%; display: grid; place-items: center;
+        color: #2a2330; font: 700 38px "Segoe UI", sans-serif; }
+      .mt-name { position: absolute; left: 12px; bottom: 12px; max-width: calc(100% - 24px);
+        display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 9px;
+        background: #000000a6; color: #eef0f4; font: 500 13px "Segoe UI", sans-serif; }
+      .mt-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .mt-name svg { width: 14px; height: 14px; flex: 0 0 auto; color: #ff6b6b; }
+      .mt-empty { color: var(--muted); font: 14px "Segoe UI", sans-serif; text-align: center; }
+      /* the switcher has to be reachable from inside the meeting room too, not
+         only while someone is presenting */
+      body.in-meeting #top-nav-bar { display: flex; }
+      body.in-meeting #rail, body.in-meeting #sidebar { top: 46px; height: calc(100vh - 46px); height: calc(100dvh - 46px); }
     </style>
   </head>
   <body>
@@ -708,12 +744,12 @@
       <div class="top-nav-switcher">
         <button id="nav-tab-space" class="nav-tab active">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8"/><path d="M11.5 3a17 17 0 0 0 0 18M12.5 3a17 17 0 0 1 0 18"/></svg>
-          <span>Space</span>
+          <span>มุมมองออฟฟิศ</span>
         </button>
         <button id="nav-tab-call" class="nav-tab">
           <span class="call-dot"></span>
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>
-          <span>Call</span>
+          <span>มุมมองการประชุม</span>
         </button>
       </div>
       <div class="top-right-actions">
@@ -733,6 +769,7 @@
         </div>
         <span class="presenter-tag" id="presenter-tag">chalisa's Screenshare</span>
       </div>
+      <div id="call-grid"></div>
       <div id="call-tiles-sidebar">
         <div class="peer-card active-speaker" id="call-self-card">
           <div class="peer-avatar-fallback" id="call-self-avatar">👤</div>
@@ -1137,6 +1174,7 @@
         <span class="meet-count" id="meet-count">0</span>
       </div>
       <div id="meet-people"></div>
+      <button id="meet-enter">เปิดมุมมองการประชุม</button>
     </div>
 
     <input id="chat" type="text" maxlength="140" autocomplete="off"

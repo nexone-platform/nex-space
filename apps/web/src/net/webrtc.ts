@@ -219,6 +219,11 @@ export class WebRTCManager implements MediaManager {
     this.renderSelfTile();
   }
 
+  /** what our own camera is producing, if it is on at all */
+  get cameraStream(): MediaStream | undefined {
+    return this.camTrack && this.camOn ? new MediaStream([this.camTrack]) : undefined;
+  }
+
   /** current local screen-share stream (for rendering onto an in-scene screen) */
   get screenMediaStream(): MediaStream | undefined { return this.screenStream; }
 

@@ -38,6 +38,8 @@ export interface MediaManager {
   /** a peer's incoming stream (e.g. their screen-share) for the in-scene screen */
   getPeerStream(peerId: string): MediaStream | undefined;
   readonly screenMediaStream: MediaStream | undefined;
+  /** this user's own camera stream, for drawing yourself alongside the others */
+  readonly cameraStream: MediaStream | undefined;
 
   devices(): Promise<{ mics: MediaDeviceInfo[]; cams: MediaDeviceInfo[]; speakers: MediaDeviceInfo[] }>;
   setMic(id: string): Promise<void> | void;
