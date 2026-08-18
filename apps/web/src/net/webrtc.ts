@@ -3,6 +3,7 @@
 // "perfect negotiation" pattern to avoid offer glare. No media server needed.
 import type { Room } from "colyseus.js";
 import type { MediaManager } from "./media";
+import { t } from "../i18n";
 
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -26,7 +27,10 @@ const plainDesc = (d: RTCSessionDescription | null) =>
 
 export class WebRTCManager implements MediaManager {
   private peers = new Map<string, Peer>();
-  private local?: MediaStream;   // mic + cam
+  // Whatever we have actually been given so far. It starts empty and gains a
+  // track when the person turns that device on — see acquire().
+  private local = new MediaStream();
+  private micTrack?: MediaStreamTrack;
   private camTrack?: MediaStreamTrack;
   private screenStream?: MediaStream;
   micOn = false;
@@ -35,6 +39,7 @@ export class WebRTCManager implements MediaManager {
   onState?: () => void;          // notify UI to refresh button styles
   onPeerStream?: (peerId: string) => void; // fired when a peer's media track arrives
   onScreenEnd?: () => void;      // fired when the OS/browser stops the screen share ("Stop sharing")
+  onError?: (message: string) => void; // a device refused to open, in words for the user
   selMic?: string;               // selected device ids (device picker)
   selCam?: string;
   selSpk?: string;
@@ -44,40 +49,94 @@ export class WebRTCManager implements MediaManager {
   }
 
   // ---- media acquisition -------------------------------------------------
-  private async ensureLocal(): Promise<MediaStream> {
-    if (this.local) return this.local;
-    const audio: MediaTrackConstraints | boolean = this.selMic ? { deviceId: { exact: this.selMic } } : true;
-    const video: MediaTrackConstraints | boolean = this.selCam ? { deviceId: { exact: this.selCam } } : true;
-    this.local = await navigator.mediaDevices.getUserMedia({ audio, video });
-    this.local.getAudioTracks().forEach((t) => (t.enabled = false));
-    this.camTrack = this.local.getVideoTracks()[0];
-    if (this.camTrack) this.camTrack.enabled = false;
-    // add current tracks to any existing peers
+  /**
+   * One device at a time. Asking for the microphone and the camera in a single
+   * getUserMedia call fails outright when either is absent, so a desktop with a
+   * microphone and no webcam could not turn its microphone on at all. Asking
+   * separately also means the camera light stays off while someone is only
+   * talking, and a refused camera does not cost them their voice.
+   */
+  private async acquire(kind: "audio" | "video"): Promise<MediaStreamTrack> {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new DOMException("getUserMedia is unavailable", "SecurityError");
+    }
+    const sel = kind === "audio" ? this.selMic : this.selCam;
+    const ask = (id?: string): MediaStreamConstraints => {
+      const c: MediaTrackConstraints | boolean = id ? { deviceId: { exact: id } } : true;
+      return kind === "audio" ? { audio: c } : { video: c };
+    };
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(ask(sel));
+    } catch (e) {
+      // A remembered device that has since been unplugged fails as
+      // OverconstrainedError. Whatever is still attached will do.
+      if (!sel || (e as DOMException)?.name !== "OverconstrainedError") throw e;
+      if (kind === "audio") this.selMic = undefined; else this.selCam = undefined;
+      stream = await navigator.mediaDevices.getUserMedia(ask());
+    }
+
+    const track = stream.getTracks()[0];
+    if (!track) throw new DOMException("no track", "NotFoundError");
+    track.enabled = false;
+    // a device unplugged mid-call ends its track; forget it so the next toggle
+    // asks for a fresh one instead of flipping a dead switch
+    track.onended = () => {
+      if (kind === "audio") { this.micTrack = undefined; this.micOn = false; }
+      else { this.camTrack = undefined; this.camOn = false; }
+      this.onState?.();
+    };
+    this.local.addTrack(track);
+    if (kind === "audio") this.micTrack = track; else this.camTrack = track;
     for (const { pc } of this.peers.values()) {
-      this.local.getTracks().forEach((t) => {
-        if (!pc.getSenders().some((s) => s.track === t)) pc.addTrack(t, this.local!);
-      });
+      if (!pc.getSenders().some((s) => s.track === track)) pc.addTrack(track, this.local);
     }
     this.renderSelfTile();
-    return this.local;
+    return track;
+  }
+
+  /** why a device would not open, in words the person can act on */
+  private explain(kind: "audio" | "video", e: unknown): string {
+    const name = (e as DOMException)?.name ?? "";
+    const device = kind === "audio" ? t("ไมโครโฟน") : t("กล้อง");
+    if (name === "NotFoundError" || name === "DevicesNotFoundError" || name === "OverconstrainedError") {
+      return kind === "audio" ? t("ไม่พบไมโครโฟนบนเครื่องนี้") : t("ไม่พบกล้องบนเครื่องนี้");
+    }
+    if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+      return t("เบราว์เซอร์ไม่อนุญาตให้ใช้{device} — กดไอคอนหน้าช่อง URL แล้วอนุญาต", { device });
+    }
+    if (name === "NotReadableError" || name === "TrackStartError") {
+      return t("{device}ถูกโปรแกรมอื่นใช้อยู่ — ปิดโปรแกรมนั้นแล้วลองใหม่", { device });
+    }
+    if (name === "SecurityError") return t("ต้องเปิดผ่าน HTTPS จึงจะใช้ไมค์และกล้องได้");
+    return t("เปิด{device}ไม่สำเร็จ ({error})", { device, error: name || String(e) });
   }
 
   async toggleMic() {
     try {
-      const s = await this.ensureLocal();
+      if (!this.micTrack) await this.acquire("audio");
       this.micOn = !this.micOn;
-      s.getAudioTracks().forEach((t) => (t.enabled = this.micOn));
-    } catch (e) { console.warn("mic error", e); }
+      this.micTrack!.enabled = this.micOn;
+    } catch (e) {
+      console.warn("mic error", e);
+      this.micOn = false;
+      this.onError?.(this.explain("audio", e));
+    }
     this.onState?.();
   }
 
   async toggleCam() {
     try {
-      await this.ensureLocal();
+      if (!this.camTrack) await this.acquire("video");
       this.camOn = !this.camOn;
-      if (this.camTrack) this.camTrack.enabled = this.camOn;
+      this.camTrack!.enabled = this.camOn;
       this.renderSelfTile();
-    } catch (e) { console.warn("cam error", e); }
+    } catch (e) {
+      console.warn("cam error", e);
+      this.camOn = false;
+      this.onError?.(this.explain("video", e));
+    }
     this.onState?.();
   }
 
@@ -120,11 +179,13 @@ export class WebRTCManager implements MediaManager {
 
   async setMic(id: string) {
     this.selMic = id;
-    if (!this.local) return;
+    // nothing to swap yet: the choice is remembered and used when the mic opens
+    if (!this.micTrack) return;
     const ns = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: id } } });
     const nt = ns.getAudioTracks()[0]; nt.enabled = this.micOn;
-    this.local.getAudioTracks().forEach((t) => { this.local!.removeTrack(t); t.stop(); });
+    this.local.getAudioTracks().forEach((tr) => { this.local.removeTrack(tr); tr.stop(); });
     this.local.addTrack(nt);
+    this.micTrack = nt;
     for (const { pc } of this.peers.values()) {
       const s = pc.getSenders().find((se) => se.track?.kind === "audio");
       if (s) await s.replaceTrack(nt);
@@ -134,10 +195,10 @@ export class WebRTCManager implements MediaManager {
 
   async setCam(id: string) {
     this.selCam = id;
-    if (!this.local) return;
+    if (!this.camTrack) return;
     const ns = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: id } } });
     const nt = ns.getVideoTracks()[0]; nt.enabled = this.camOn;
-    this.local.getVideoTracks().forEach((t) => { this.local!.removeTrack(t); t.stop(); });
+    this.local.getVideoTracks().forEach((tr) => { this.local.removeTrack(tr); tr.stop(); });
     this.local.addTrack(nt);
     this.camTrack = nt;
     if (!this.screenOn) {
@@ -194,7 +255,7 @@ export class WebRTCManager implements MediaManager {
     const peer: Peer = { pc, polite, makingOffer: false, ignoreOffer: false, tile, video };
     this.peers.set(peerId, peer);
 
-    if (this.local) this.local.getTracks().forEach((t) => pc.addTrack(t, this.local!));
+    this.local.getTracks().forEach((tr) => pc.addTrack(tr, this.local));
     // if we're already screen-sharing, make sure this newly-connected peer gets it too
     if (this.screenOn && this.screenStream) {
       const screen = this.screenStream.getVideoTracks()[0];
@@ -232,7 +293,7 @@ export class WebRTCManager implements MediaManager {
 
   /** stop all media + peer connections (used when leaving the room) */
   dispose() {
-    this.local?.getTracks().forEach((t) => t.stop());
+    this.local.getTracks().forEach((tr) => tr.stop());
     this.screenStream?.getTracks().forEach((t) => t.stop());
     for (const id of [...this.peers.keys()]) this.disconnect(id);
     document.getElementById("tile-self")?.remove();
@@ -300,6 +361,6 @@ export class WebRTCManager implements MediaManager {
       this.tilesEl.prepend(self);
     }
     const v = self.querySelector("video") as HTMLVideoElement;
-    v.srcObject = this.screenOn ? this.screenStream! : this.local!;
+    v.srcObject = this.screenOn ? this.screenStream! : this.local;
   }
 }

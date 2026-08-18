@@ -684,6 +684,9 @@ export class OfficeScene extends Phaser.Scene {
       if (tilesEl) {
         this.webrtc = await this.createMedia(room, tilesEl);
         this.wireAvButtons();
+        // a device that will not open used to fail into console.warn, so the
+        // button simply stayed dark and nobody knew why
+        this.webrtc.onError = (msg) => this.toast(msg, "warn");
         // when a peer's track arrives, refresh any screen they're presenting on
         this.webrtc.onPeerStream = (peerId) => {
           for (const it of INTERACTIVES) {

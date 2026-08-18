@@ -11,6 +11,8 @@ export interface MediaManager {
   onState?: () => void;
   onPeerStream?: (peerId: string) => void;
   onScreenEnd?: () => void;
+  /** a device would not open — a sentence to put in front of the user */
+  onError?: (message: string) => void;
 
   /** hide/show a peer's small tile (when their video is routed to the in-scene screen) */
   hidePeerTile(peerId: string, hidden: boolean): void;

@@ -6,6 +6,7 @@ import {
   type RemoteTrack, type RemoteParticipant,
 } from "livekit-client";
 import type { MediaManager } from "./media";
+import { t } from "../i18n";
 
 export class LiveKitManager implements MediaManager {
   private room: Room;
@@ -14,6 +15,7 @@ export class LiveKitManager implements MediaManager {
   onState?: () => void;
   onPeerStream?: (peerId: string) => void;
   onScreenEnd?: () => void;
+  onError?: (message: string) => void;
   private tiles = new Map<string, HTMLElement>();      // identity -> camera tile
   private audios = new Map<string, HTMLAudioElement>(); // identity -> hidden audio el
 
@@ -65,9 +67,54 @@ export class LiveKitManager implements MediaManager {
   private cleanup(id: string) { this.removeCamTile(id); this.audios.get(id)?.remove(); this.audios.delete(id); }
 
   // ---- MediaManager ----
-  async toggleMic() { this.micOn = !this.micOn; await this.room.localParticipant.setMicrophoneEnabled(this.micOn); this.onState?.(); }
-  async toggleCam() { this.camOn = !this.camOn; await this.room.localParticipant.setCameraEnabled(this.camOn); this.renderSelf(); this.onState?.(); }
-  async toggleScreen() { this.screenOn = !this.screenOn; await this.room.localParticipant.setScreenShareEnabled(this.screenOn); this.renderSelf(); this.onState?.(); }
+  // The flag is flipped first so the button responds, and put back if the device
+  // refuses: leaving it on would show a live microphone that is not sending
+  // anything. The SFU asks for one device at a time already, so a machine with no
+  // camera can still turn its microphone on.
+  private async attempt(kind: "audio" | "video" | "screen", on: boolean, run: () => Promise<unknown>) {
+    try {
+      await run();
+      return true;
+    } catch (e) {
+      console.warn(`${kind} error`, e);
+      const name = (e as DOMException)?.name ?? "";
+      const device = kind === "audio" ? t("ไมโครโฟน") : t("กล้อง");
+      this.onError?.(
+        kind === "screen" ? t("แชร์หน้าจอไม่สำเร็จ")
+        : name === "NotFoundError" || name === "DevicesNotFoundError" || name === "OverconstrainedError"
+          ? (kind === "audio" ? t("ไม่พบไมโครโฟนบนเครื่องนี้") : t("ไม่พบกล้องบนเครื่องนี้"))
+        : name === "NotAllowedError" || name === "PermissionDeniedError"
+          ? t("เบราว์เซอร์ไม่อนุญาตให้ใช้{device} — กดไอคอนหน้าช่อง URL แล้วอนุญาต", { device })
+        : name === "NotReadableError" || name === "TrackStartError"
+          ? t("{device}ถูกโปรแกรมอื่นใช้อยู่ — ปิดโปรแกรมนั้นแล้วลองใหม่", { device })
+        : t("เปิด{device}ไม่สำเร็จ ({error})", { device, error: name || String(e) }));
+      void on;
+      return false;
+    }
+  }
+
+  async toggleMic() {
+    const next = !this.micOn;
+    this.micOn = next;
+    if (!(await this.attempt("audio", next, () => this.room.localParticipant.setMicrophoneEnabled(next)))) this.micOn = false;
+    this.onState?.();
+  }
+
+  async toggleCam() {
+    const next = !this.camOn;
+    this.camOn = next;
+    if (!(await this.attempt("video", next, () => this.room.localParticipant.setCameraEnabled(next)))) this.camOn = false;
+    this.renderSelf();
+    this.onState?.();
+  }
+
+  async toggleScreen() {
+    const next = !this.screenOn;
+    this.screenOn = next;
+    if (!(await this.attempt("screen", next, () => this.room.localParticipant.setScreenShareEnabled(next)))) this.screenOn = false;
+    this.renderSelf();
+    this.onState?.();
+  }
 
   // `forced` is unused: the SFU auto-subscribes screen-share tracks room-wide already
   syncPeers(nearby: Set<string>, _forced?: Set<string>) {

@@ -438,6 +438,17 @@ const EN: Record<string, string> = {
   "ยกเลิกการจองโต๊ะแล้ว": "Desk released",
   "ยังไม่ได้เลือกโต๊ะ — คลิกที่โต๊ะเพื่อจอง": "No desk yet — click one to claim it",
 
+  // ---- microphone and camera ----
+  "ไม่พบไมโครโฟนบนเครื่องนี้": "No microphone found on this device",
+  "ไม่พบกล้องบนเครื่องนี้": "No camera found on this device",
+  "เบราว์เซอร์ไม่อนุญาตให้ใช้{device} — กดไอคอนหน้าช่อง URL แล้วอนุญาต":
+    "Your browser is blocking the {device} — use the icon beside the address bar to allow it",
+  "{device}ถูกโปรแกรมอื่นใช้อยู่ — ปิดโปรแกรมนั้นแล้วลองใหม่":
+    "Another app is using the {device} — close it and try again",
+  "ต้องเปิดผ่าน HTTPS จึงจะใช้ไมค์และกล้องได้": "The mic and camera need the site to be opened over HTTPS",
+  "เปิด{device}ไม่สำเร็จ ({error})": "Could not turn the {device} on ({error})",
+  "แชร์หน้าจอไม่สำเร็จ": "Could not share the screen",
+
   // ---- map themes ----
   "ออฟฟิศพาสเทล": "Pastel office",
   "ออฟฟิศแบ่งแผนก": "Office by department",
