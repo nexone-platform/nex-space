@@ -72,7 +72,10 @@
         background: #00000066; padding: 8px 12px; border-radius: 8px;
       }
       /* Gather-style AV control bar */
-      #av-bar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 20;
+      /* Above the meeting view (24), not below it: at z-index 20 the overlay's
+         background painted straight over the controls, so in the meeting view the
+         bar was neither visible nor clickable. Still below the settings dialog. */
+      #av-bar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 30;
         display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 16px;
         background: #2e3238e6; box-shadow: 0 6px 22px #0006; }
       #av-bar .ava { position: relative; width: 38px; height: 38px; border-radius: 50%; margin-right: 4px;
@@ -785,6 +788,15 @@
       .mt-hand { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px;
         border-radius: 10px; background: #f0b429; display: grid; place-items: center; font-size: 18px; }
       .mw-hand { position: absolute; top: 4px; right: 4px; font-size: 13px; }
+
+      /* the camera thumbnails down the top right of the map */
+      #tiles { position: fixed; top: 12px; right: 12px; z-index: 20;
+        display: flex; flex-direction: column; gap: 8px; width: 180px; }
+
+      /* The meeting view already shows everyone at full size, so the map's own
+         floating panel and camera thumbnails are just the same faces twice. */
+      #call-view-overlay.on ~ #meet-panel,
+      #call-view-overlay.on ~ #tiles { display: none; }
       /* the switcher has to be reachable from inside the meeting room too, not
          only while someone is presenting */
       body.in-meeting #top-nav-bar { display: flex; }
@@ -1167,7 +1179,7 @@
     </div>
 
     <div class="hint">เดิน: <b>WASD</b>/ลูกศร &nbsp;·&nbsp; เก้าอี้: คลิก+ลาก=หมุน &nbsp;·&nbsp; <b>Enter</b>=แชตกับคนที่อยู่ใกล้ &nbsp;·&nbsp; NexSpace</div>
-    <div id="tiles" style="position:fixed; top:12px; right:12px; z-index:20; display:flex; flex-direction:column; gap:8px; width:180px;"></div>
+    <div id="tiles"></div>
     <div id="av-bar">
       <div class="ava" id="ava-chip">N<i class="dot"></i></div>
       <button id="btn-edit-avatar" class="ctl" title="แก้ไขอวาตาร์">
