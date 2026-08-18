@@ -437,20 +437,50 @@ export class OfficeScene extends Phaser.Scene {
     else this.pendingStart = true;
   }
 
+  /**
+   * The hitbox, in the frame's own pixels.
+   *
+   * It used to be a small pad at the feet, which let the character walk forward
+   * until those feet touched a wall's base — putting four fifths of the drawn
+   * body on top of the wall band (more than a whole tile for the tall preset).
+   * Standing against the meeting room's top wall therefore looked like standing
+   * outside the room.
+   *
+   * The box now runs from high on the body down to the feet, so a wall stops the
+   * character with only their head over its band. It is capped to stay inside one
+   * tile: the click-to-move grid marks whole tiles walkable, and a box larger
+   * than a tile would make squares it calls walkable impossible to stand on.
+   */
+  private bodyBox(frameW: number, frameH: number, scale: number) {
+    const FEET_PAD = 2;        // world px between the box's bottom and the drawn feet
+    const HEAD_OVER_WALL = 8;  // world px of the sprite left free to overlap a wall band
+    const MAX_BOX = TILE - 4;  // never larger than the tile it stands on
+    const drawn = frameH * scale;
+    const bottom = drawn / 2 - FEET_PAD;                                  // world, from the sprite centre
+    const top = Math.max(-drawn / 2 + HEAD_OVER_WALL, bottom - MAX_BOX);  // world
+    return {
+      width: Math.max(10, Math.round(8 / scale)),                         // frame px; ~8px on screen
+      height: Math.round((bottom - top) / scale),
+      offsetY: Math.round(top / scale + frameH / 2),
+    };
+  }
+
   private async applyAvatarBody() {
     if (isLpc(this.myAvatar)) {
       const key = await this.ensureLpc(this.myAvatar);
       if (key && this.player) {
         this.player.setTexture(key, this.idleFrameFor(this.myAvatar, this.facing));
         this.player.setScale(LPC_SCALE);
-        this.player.body!.setSize(16, 9).setOffset((64 - 16) / 2, 64 - 13); // hitbox at feet
+        const b = this.bodyBox(64, 64, LPC_SCALE);
+        this.player.body!.setSize(b.width, b.height).setOffset((64 - b.width) / 2, b.offsetY);
       }
       return;
     }
     const a = AVATARS[this.myAvatar] ?? AVATARS["1"];
     this.player.setScale(PRESET_SCALE);
     this.player.setTexture(a.tex, 0);
-    this.player.body!.setSize(12, 8).setOffset((a.fw - 12) / 2, a.fh - 10); // hitbox at feet
+    const b = this.bodyBox(a.fw, a.fh, PRESET_SCALE);
+    this.player.body!.setSize(b.width, b.height).setOffset((a.fw - b.width) / 2, b.offsetY);
   }
 
   // ---- LPC (custom avatar) helpers ----------------------------------------
