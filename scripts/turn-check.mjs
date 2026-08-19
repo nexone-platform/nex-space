@@ -23,6 +23,7 @@
  *   node scripts/turn-check.mjs --host=turn.example --secret=... --port=3478
  */
 import { createSocket } from "dgram";
+import { resolve4 } from "dns/promises";
 import { createHmac, createHash, randomBytes } from "crypto";
 import { readFileSync } from "fs";
 
@@ -173,8 +174,53 @@ const say = (ok, label, detail = "") => {
   console.log(`${ok ? "  ok  " : "! FAIL"}  ${label}${detail ? "  —  " + detail : ""}`);
 };
 
+/**
+ * Ranges that answer for a website but never forward a relay.
+ *
+ * A domain behind a CDN resolves to the CDN, which proxies HTTP and drops
+ * everything else — so the site loads perfectly while TURN gets no answer at
+ * all. It is the most confusing way this can fail, because every other sign
+ * says the host is fine. The list is short and not exhaustive; it exists to
+ * name the usual suspect, not to police the internet.
+ */
+const PROXIES = [
+  { name: "Cloudflare", nets: ["104.16.", "104.17.", "104.18.", "104.19.", "104.20.", "104.21.", "104.22.", "104.23.", "104.24.", "104.25.", "104.26.", "104.27.", "172.64.", "172.65.", "172.66.", "172.67.", "162.159.", "198.41."] },
+  { name: "Fastly", nets: ["151.101."] },
+];
+const proxyFor = (ip) => PROXIES.find((p) => p.nets.some((n) => ip.startsWith(n)))?.name;
+
 async function main() {
   console.log(`\nturn-check  ${HOST}:${PORT}\n`);
+
+  // 0. where does that name actually point
+  let addresses = [];
+  try {
+    addresses = /^[\d.]+$/.test(HOST) ? [HOST] : await resolve4(HOST);
+    const proxied = addresses.map(proxyFor).find(Boolean);
+    say(!proxied, "the name points at a machine that can relay",
+      proxied
+        ? `${HOST} → ${addresses.join(", ")} — that is ${proxied}, which proxies web traffic and drops the rest`
+        : addresses.join(", "));
+    if (proxied) {
+      console.log(`
+  A relay has to be reached directly. ${proxied} answers for the website, so the
+  site works and this does not — nothing here is wrong except the address.
+
+  Give the relay a name of its own that points straight at the server, with the
+  proxy turned OFF for that record (a grey cloud, not an orange one):
+
+      turn.${HOST.split(".").slice(-2).join(".")}   A   <the server's own public address>
+
+  then set TURN_HOST to it and restart the API.
+`);
+      sock.close();
+      process.exit(1);
+    }
+  } catch (e) {
+    say(false, "the name resolves", `${HOST}: ${e.code || e.message}`);
+    sock.close();
+    process.exit(1);
+  }
 
   // 1. is it there
   let reflexive = null;
