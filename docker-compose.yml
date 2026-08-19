@@ -149,3 +149,6 @@ services:
       --no-tlsv1
       --no-tlsv1_1
       --fingerprint
+
+volumes:
+  nexspace-api-data:
