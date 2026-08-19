@@ -2,3 +2,7 @@
 # shebang line, and the executable bit does not survive a Windows checkout
 # without this.
 *.sh text eol=lf
+
+# turn-check.mjs is run on the server and carries a shebang, so it has the same
+# problem the shell scripts had.
+*.mjs text eol=lf
