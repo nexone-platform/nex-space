@@ -164,10 +164,46 @@ const redirectUri = (req: express.Request) =>
   process.env.OAUTH_REDIRECT_URL ||
   `${(req.header("x-forwarded-proto") || req.protocol)}://${req.header("x-forwarded-host") || req.get("host")}/auth/google/callback`;
 
-/** where to hand the token back to the web app */
-const appUrl = (req: express.Request) =>
-  process.env.APP_URL ||
-  `${(req.header("x-forwarded-proto") || req.protocol)}://${req.header("x-forwarded-host") || req.get("host")}/`;
+/**
+ * Where to hand the token back to the web app.
+ *
+ * In production nginx serves the app and proxies this API on one host, so the
+ * host a request arrived on IS the app. In development they are two origins —
+ * the app on 5173, this API on 3001 — and handing the token to the API's own root
+ * lands the user on "Cannot GET /" with their session sitting in the URL.
+ *
+ * So the app says where it is when it starts the flow, and that answer is checked
+ * before it is used: a token in a redirect is a session, and an unchecked "send it
+ * here" would hand a sign-in to any site that asked. Only the configured app, the
+ * host this request came in on, or a loopback address is allowed — the last is the
+ * development case, and it can only ever deliver to the user's own machine.
+ */
+const appUrl = (req: express.Request, wanted?: string) => {
+  const derived = `${(req.header("x-forwarded-proto") || req.protocol)}://${req.header("x-forwarded-host") || req.get("host")}/`;
+  const allowed = process.env.APP_URL || derived;
+  if (!wanted) return allowed;
+  try {
+    const u = new URL(wanted);
+    const loopback = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(u.hostname);
+    if (loopback || u.origin === new URL(allowed).origin || u.origin === new URL(derived).origin) return u.origin + "/";
+    console.warn("[auth] refused to send the token to", u.origin);
+  } catch { /* not a URL at all */ }
+  return allowed;
+};
+
+/**
+ * Google carries one `state` through the round trip and two things have to
+ * survive it: the workspace an invite link named, and where to come back to.
+ * Read leniently, so a sign-in already in flight from the old shape still lands.
+ */
+const packState = (ws: string, app: string) => new URLSearchParams({ w: ws, app }).toString();
+const unpackState = (raw: string) => {
+  if (raw.includes("=")) {
+    const p = new URLSearchParams(raw);
+    return { ws: p.get("w") || "", app: p.get("app") || "" };
+  }
+  return { ws: raw, app: "" };   // the old shape: the slug on its own
+};
 
 app.get("/auth/google", (req, res) => {
   if (!googleEnabled) return res.status(501).send("Google sign-in is not configured");
@@ -177,15 +213,16 @@ app.get("/auth/google", (req, res) => {
     response_type: "code",
     scope: "openid email profile",
     prompt: "select_account",
-    state: String(req.query.w || ""), // carry the workspace slug through the round trip
+    // the workspace slug and where to come back to, both through the round trip
+    state: packState(String(req.query.w || ""), String(req.query.app || "")),
   });
   res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
 });
 
 app.get("/auth/google/callback", async (req, res) => {
   if (!googleEnabled) return res.status(501).send("Google sign-in is not configured");
-  const back = appUrl(req);
-  const ws = String(req.query.state || "");
+  const { ws, app } = unpackState(String(req.query.state || ""));
+  const back = appUrl(req, app);
   const fail = (reason: string) =>
     res.redirect(`${back}#auth_error=${encodeURIComponent(reason.slice(0, 40))}`);
 

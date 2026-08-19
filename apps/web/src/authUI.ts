@@ -135,7 +135,12 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
   }
 
   $("a-google")!.onclick = () => {
-    location.href = `${API}/auth/google${HAS_WORKSPACE_PARAM ? `?w=${encodeURIComponent(WORKSPACE)}` : ""}`;
+    // Tell the API where to come back to. Same origin in production, so nothing
+    // changes there; in development the app and the API are two ports, and
+    // without this the token lands on the API's own root.
+    const q = new URLSearchParams({ app: location.origin });
+    if (HAS_WORKSPACE_PARAM) q.set("w", WORKSPACE);
+    location.href = `${API}/auth/google?${q}`;
   };
 
   /** a thrown TypeError from fetch means the API is unreachable, not a bad request */

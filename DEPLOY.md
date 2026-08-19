@@ -192,6 +192,14 @@ OAUTH_REDIRECT_URL=https://nexspace.xy789.click/auth/google/callback
 Signing in with Google matches on email address, so an account that already
 exists keeps its workspaces, desks and avatar.
 
+**Running it locally** needs no `APP_URL`. The web app tells the API which origin
+to hand the token back to, so the sign-in returns to the dev server on 5173 rather
+than to the API's own root on 3001 — which is where it used to land, as a bare
+"Cannot GET /" with the session sitting in the URL. The API only honours that
+answer for the host it was reached on, the configured `APP_URL`, or a loopback
+address; anything else is refused and it falls back, because a token in a redirect
+is a session and "send it here" cannot be taken on trust.
+
 ### Email sign-in codes
 ```dotenv
 SMTP_HOST=smtp.gmail.com
