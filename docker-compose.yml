@@ -95,40 +95,57 @@ services:
     # advertise an address from the bridge network that nobody outside can reach,
     # and every allocation would need publishing by hand.
     network_mode: host
-    command:
-      - -n                                   # no config file, everything is here
-      - --log-file=stdout
-      - --realm=${TURN_REALM:-nexspace}
-      - --listening-port=${TURN_PORT:-3478}
-      # The secret is never sent to a browser. The API signs a short-lived
-      # username with it and coturn recomputes the same signature to check it,
-      # so there are no accounts and nothing to leak but time-limited passwords.
-      - --use-auth-secret
-      - --static-auth-secret=${TURN_SECRET:?set TURN_SECRET in .env before starting the relay}
-      # One port per live relay. Open this range on the firewall or nothing gets
-      # through — the mistake that looks exactly like TURN not working at all.
-      - --min-port=${TURN_MIN_PORT:-49160}
-      - --max-port=${TURN_MAX_PORT:-49260}
-      # A relay forwards packets wherever it is told to, so it must be told where
-      # it may not: without this, anyone holding a credential could use it to
-      # reach the database, the API, and everything else on this machine and its
-      # private network. This is the most important block here.
-      - --denied-peer-ip=0.0.0.0-0.255.255.255
-      - --denied-peer-ip=10.0.0.0-10.255.255.255
-      - --denied-peer-ip=127.0.0.0-127.255.255.255
-      - --denied-peer-ip=169.254.0.0-169.254.255.255
-      - --denied-peer-ip=172.16.0.0-172.31.255.255
-      - --denied-peer-ip=192.168.0.0-192.168.255.255
-      - --denied-peer-ip=::1
-      - --denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
-      - --denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
-      # caps, so one abused credential cannot take the machine's whole uplink
-      - --user-quota=12
-      - --total-quota=200
-      - --no-cli                             # no admin telnet on a host-networked box
-      - --no-tlsv1
-      - --no-tlsv1_1
-      - --fingerprint
-
-volumes:
-  nexspace-api-data:
+    # One string, not a list, and that is deliberate: an optional argument only
+    # disappears cleanly when the command is lexed as a line. As a list item, an
+    # unset TURN_EXTERNAL_IP would leave an empty argument sitting in argv for
+    # coturn to trip over.
+    #
+    #   --use-auth-secret     the secret is never sent to a browser. The API signs
+    #                         a short-lived username with it and coturn recomputes
+    #                         the same signature, so there are no accounts and
+    #                         nothing to leak but time-limited passwords.
+    #   --min/max-port        one port per live relay. Open this range on the
+    #                         firewall or nothing gets through — the mistake that
+    #                         looks exactly like TURN not working at all.
+    #   --external-ip         say the public address out loud when the machine
+    #                         sits behind NAT and only knows a private one. Unset
+    #                         on a VPS with a real address, and then absent here.
+    #   --denied-peer-ip      a relay forwards packets wherever it is told to, so
+    #                         it must be told where it may not: without these,
+    #                         anyone holding a credential could use it to reach
+    #                         the database and everything else on this machine.
+    #                         The most important line in this file.
+    #   --user/total-quota    caps, so one abused credential cannot take the uplink
+    #   --no-cli              no admin telnet on a host-networked box
+    #
+    # TURN_SECRET has no required-variable guard on purpose. Compose interpolates
+    # the WHOLE file before it runs anything, so a guard here refused every
+    # compose command on a machine without a relay — including deploying the app.
+    # The placeholder keeps the file usable, and a relay started with it rejects
+    # every credential the API mints, which turn-check reports as "the credential
+    # was rejected — check TURN_SECRET".
+    command: >
+      -n
+      --log-file=stdout
+      --realm=${TURN_REALM:-nexspace}
+      --listening-port=${TURN_PORT:-3478}
+      --use-auth-secret
+      --static-auth-secret=${TURN_SECRET:-SET_TURN_SECRET_IN_DOTENV}
+      --min-port=${TURN_MIN_PORT:-49160}
+      --max-port=${TURN_MAX_PORT:-49260}
+      ${TURN_EXTERNAL_IP:+--external-ip=}${TURN_EXTERNAL_IP:-}
+      --denied-peer-ip=0.0.0.0-0.255.255.255
+      --denied-peer-ip=10.0.0.0-10.255.255.255
+      --denied-peer-ip=127.0.0.0-127.255.255.255
+      --denied-peer-ip=169.254.0.0-169.254.255.255
+      --denied-peer-ip=172.16.0.0-172.31.255.255
+      --denied-peer-ip=192.168.0.0-192.168.255.255
+      --denied-peer-ip=::1
+      --denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+      --denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+      --user-quota=12
+      --total-quota=200
+      --no-cli
+      --no-tlsv1
+      --no-tlsv1_1
+      --fingerprint

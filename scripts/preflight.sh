@@ -89,6 +89,18 @@ fi
 # The relay checker is the only thing that can tell a working TURN server from a
 # configured one, so it has to be known-good before anyone trusts its verdict.
 # This runs it against a mock that lies in four different ways.
+# A required-variable guard in docker-compose.yml does not fail the one service
+# that needs the value — compose interpolates the whole file before it runs
+# anything, so it fails EVERY compose command, deploying the app included. That
+# shipped once; it does not get to ship twice.
+say "Compose file"
+if grep -qE '\$\{[A-Z_]+:\?' docker-compose.yml; then
+  bad 'a required-variable guard (${VAR:?...}) would block every compose command, not just the relay'
+  grep -nE '\$\{[A-Z_]+:\?' docker-compose.yml | sed 's/^/        /' >&2
+else
+  ok "every variable has a default — compose works without a .env"
+fi
+
 say "Relay checker"
 if out=$(node scripts/turn-check.test.mjs 2>&1); then
   ok "turn-check — $(echo "$out" | grep -oE '[0-9]+ passed, [0-9]+ failed' | tail -1)"
