@@ -3,6 +3,7 @@ import { OfficeScene } from "./scenes/OfficeScene";
 import { runAuthFlow } from "./authUI";
 import { applyColorMode, watchSystemColorMode } from "./appearance";
 import { applyLang } from "./i18n";
+import { splitLayout } from "./layout";
 
 // The head script already painted the right palette; this re-applies it from the
 // same source of truth and starts following the OS while the choice is "system".
@@ -41,6 +42,9 @@ const game = new Phaser.Game({
   },
   scene: [OfficeScene],
 });
+
+// keep the dock and the stage in step with each other
+splitLayout(game);
 
 // expose for debugging / verification
 (window as unknown as { game: Phaser.Game }).game = game;

@@ -63,11 +63,31 @@
         border-radius: 9px; font-family: "Segoe UI", sans-serif;
       }
       :where(input, textarea)::placeholder { color: var(--faint); }
-      html, body { margin: 0; height: 100%; background: #f3e7ca; overflow: hidden; }
-      #app { width: 100vw; height: 100vh; display: grid; place-items: center; }
+      html, body { margin: 0; height: 100%; background: var(--surface-2); overflow: hidden; }
+      /* ---- the window is two panes, not one pile of overlays ----
+         Left: the rail and the people list, a dock of a known width. Right: the
+         stage — the map, the meeting view, a shared screen. Everything used to be
+         a full-window layer at a different z-index, so the meeting view and a
+         shared screen painted straight over the people list and the list covered
+         the map it was meant to sit beside.
+         The width lives in a variable so the stage can subtract it instead of
+         hiding under it, and everything that used to centre itself on the window
+         can centre on the stage. .dock-narrow is set from layout.ts whenever the
+         people list closes. */
+      body { --rail: 56px; --panel: 250px; --dock: calc(var(--rail) + var(--panel)); }
+      body.dock-narrow { --dock: var(--rail); }
+      /* A 306px dock on a phone would leave no stage at all, so below this the
+         list goes back to covering the map — the same trade Gather makes. */
+      @media (max-width: 760px) { body { --dock: var(--rail); } }
+      /* Centre of the stage, for the things that used to centre on the window.
+         Written out at each site rather than kept in a variable: a variable
+         declared next to --dock would be resolved against the dock's width at
+         that moment and would not follow the list opening and closing. */
+      #app { position: fixed; top: 0; right: 0; bottom: 0; left: var(--dock); width: auto; height: auto;
+        display: grid; place-items: center; }
       canvas { image-rendering: pixelated; }
       .hint {
-        position: fixed; left: 12px; bottom: 12px; z-index: 10;
+        position: fixed; left: calc(var(--dock) + 12px); bottom: 12px; z-index: 10;
         font: 13px/1.5 "Segoe UI", sans-serif; color: #cbd3dc;
         background: #00000066; padding: 8px 12px; border-radius: 8px;
       }
@@ -75,7 +95,8 @@
       /* Above the meeting view (24), not below it: at z-index 20 the overlay's
          background painted straight over the controls, so in the meeting view the
          bar was neither visible nor clickable. Still below the settings dialog. */
-      #av-bar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 30;
+      #av-bar { position: fixed; left: calc(var(--dock) + (100vw - var(--dock)) / 2); bottom: 14px;
+        transform: translateX(-50%); z-index: 30;
         display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 16px;
         background: #2e3238e6; box-shadow: 0 6px 22px #0006; }
       #av-bar .ava { position: relative; width: 38px; height: 38px; border-radius: 50%; margin-right: 4px;
@@ -102,7 +123,8 @@
       #av-bar .sep { width: 1px; height: 26px; background: #ffffff26; margin: 0 4px; }
       #av-bar .ctl svg { width: 22px; height: 22px; }
       #av-bar .chev svg { width: 11px; height: 11px; }
-      #emoji-pop { position: fixed; bottom: 66px; left: 50%; transform: translateX(-50%); z-index: 21;
+      #emoji-pop { position: fixed; bottom: 66px; left: calc(var(--dock) + (100vw - var(--dock)) / 2);
+        transform: translateX(-50%); z-index: 21;
         background: #2e3238f2; border-radius: 12px; padding: 5px; display: none; gap: 2px; box-shadow: 0 6px 20px #0006; }
       #emoji-pop button { border: none; background: transparent; font-size: 20px; cursor: pointer; padding: 4px 7px; border-radius: 8px; }
       #emoji-pop button:hover { background: #ffffff1f; }
@@ -182,13 +204,14 @@
       #room-chat-input { flex: 1; padding: 8px 12px; border: 1px solid var(--border-2); border-radius: 20px; outline: none; font-size: 13px; }
       #room-chat-send { border: none; background: var(--accent); color: #fff; border-radius: 20px; padding: 0 14px; cursor: pointer; font-weight: 600; }
       /* interactive-object prompt + embed modal */
-      #interact-hint { position: fixed; left: 50%; bottom: 74px; transform: translateX(-50%); z-index: 22;
+      #interact-hint { position: fixed; left: calc(var(--dock) + (100vw - var(--dock)) / 2); bottom: 74px;
+        transform: translateX(-50%); z-index: 22;
         background: #1c1b22e6; color: #fff; padding: 8px 14px; border-radius: 20px; font: 13px "Segoe UI", sans-serif;
         display: none; align-items: center; gap: 8px; box-shadow: 0 3px 12px #0004; }
       #interact-hint kbd { background: var(--teal); border-radius: 6px; padding: 2px 8px; font-weight: 700; font-family: inherit; }
       /* transient notifications (desk claim, hints) — DOM so text stays crisp
          instead of being scaled by the pixel-art canvas */
-      #toast { position: fixed; left: 50%; bottom: 120px; z-index: 50;
+      #toast { position: fixed; left: calc(var(--dock) + (100vw - var(--dock)) / 2); bottom: 120px; z-index: 50;
         transform: translateX(-50%) translateY(10px) scale(.97);
         display: none; align-items: center; gap: 11px;
         max-width: min(80vw, 430px); padding: 11px 18px 11px 13px;
@@ -361,14 +384,13 @@
       /* ---- member permissions panel (mounted in the settings dialog and in the
              in-room sidebar, hence no dependence on either container's styles) ---- */
       /* ---- who is in the meeting room ---- */
-      /* centred over the game, not the window: the 56px rail always covers the
-         left edge and the 250px sidebar covers more when it is open */
-      #meet-panel { position: fixed; top: 14px; left: calc(50% + 28px); transform: translate(-50%, -14px); z-index: 24;
+      /* centred over the stage, which now has its own edges to be centred in */
+      #meet-panel { position: fixed; top: 14px; left: calc(var(--dock) + (100vw - var(--dock)) / 2);
+        transform: translate(-50%, -14px); z-index: 24;
         min-width: 216px; max-width: min(86vw, 460px); padding: 10px 12px 8px; border-radius: 14px;
         background: #23242ae8; box-shadow: 0 10px 30px #0006; backdrop-filter: blur(6px);
         font-family: "Segoe UI", sans-serif; opacity: 0; pointer-events: none;
         transition: opacity .18s ease, transform .18s ease; }
-      #sidebar:not(.closed) ~ #meet-panel { left: calc(50% + 153px); }
       #meet-panel.on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
       .meet-head { display: flex; align-items: center; gap: 8px; color: #eef0f4; }
       .meet-head b { flex: 1; font-size: 13.5px; }
@@ -641,7 +663,7 @@
       #zoom-bar .zdiv { height: 1px; background: #ffffff26; margin: 0 8px; }
       /* Top Navigation Bar (Shown ONLY when screen share is active) */
       #top-nav-bar {
-        position: fixed; top: 0; left: 0; right: 0; height: 46px; z-index: 35;
+        position: fixed; top: 0; left: var(--dock); right: 0; height: 46px; z-index: 35;
         background: #181625; color: #e6e9ee; display: none; align-items: center;
         justify-content: space-between; padding: 0 16px; font-family: "Segoe UI", sans-serif;
         box-shadow: 0 2px 10px #0004; border-bottom: 1px solid #ffffff14;
@@ -673,12 +695,15 @@
         font-family: "Segoe UI", sans-serif; transition: transform .2s, top .15s, height .15s; }
       #sidebar.closed { transform: translateX(-100%); }
 
-      body.has-screenshare #rail { top: 46px; height: calc(100vh - 46px); height: calc(100dvh - 46px); }
-      body.has-screenshare #sidebar { top: 46px; height: calc(100vh - 46px); height: calc(100dvh - 46px); }
+      /* The dock runs the full height of the window; the bar that appears with a
+         shared screen belongs to the stage, so it starts where the dock ends and
+         only the stage gives up the 46px. */
+      body.has-screenshare #call-view-overlay { top: 46px; }
+      body.has-screenshare #app { top: 46px; }
 
       /* Call View Overlay (matching Image 1) */
       #call-view-overlay {
-        position: fixed; inset: 0; top: 46px; z-index: 24; background: #0f1017;
+        position: fixed; top: 0; right: 0; bottom: 0; left: var(--dock); z-index: 24; background: #0f1017;
         display: none; grid-template-columns: 1fr 220px; gap: 12px; padding: 12px 16px 74px;
         font-family: "Segoe UI", sans-serif; box-sizing: border-box;
       }
@@ -721,8 +746,10 @@
       #call-view-overlay.grid-only { grid-template-columns: 1fr; }
       #call-view-overlay.chat-open { grid-template-columns: 1fr 340px; }
       #call-view-overlay.grid-only.chat-open { grid-template-columns: 1fr 340px; }
-      @media (max-width: 980px) { #call-view-overlay.chat-open,
-        #call-view-overlay.grid-only.chat-open { grid-template-columns: 1fr; } }
+      @media (max-width: 1286px) { body:not(.dock-narrow) #call-view-overlay.chat-open,
+        body:not(.dock-narrow) #call-view-overlay.grid-only.chat-open { grid-template-columns: 1fr; } }
+      @media (max-width: 1036px) { body.dock-narrow #call-view-overlay.chat-open,
+        body.dock-narrow #call-view-overlay.grid-only.chat-open { grid-template-columns: 1fr; } }
       #call-view-overlay.grid-only #call-main-stage,
       #call-view-overlay.grid-only #call-tiles-sidebar { display: none; }
       #call-view-overlay:not(.grid-only) #call-grid { display: none; }
@@ -1284,7 +1311,8 @@
 
     <input id="chat" type="text" maxlength="140" autocomplete="off"
       placeholder="พิมพ์แล้ว Enter เพื่อคุยกับคนใกล้ ๆ…"
-      style="position:fixed; left:50%; bottom:56px; transform:translateX(-50%); z-index:20;
+      style="position:fixed; left:calc(var(--dock) + (100vw - var(--dock)) / 2); bottom:56px;
+             transform:translateX(-50%); z-index:20;
              width:min(420px,80vw); padding:9px 14px; border-radius:20px; border:2px solid #2bb3a3;
              background:#fffef9; color:#2a2f36; font:14px 'Segoe UI',sans-serif; outline:none;
              box-shadow:0 3px 12px #0002; display:none;" />
