@@ -85,6 +85,33 @@ else
   bad "theme lists differ — web: [$web_themes]  api: [$api_themes]"
 fi
 
+# ------------------------------------------------------------------- the relay
+# The relay checker is the only thing that can tell a working TURN server from a
+# configured one, so it has to be known-good before anyone trusts its verdict.
+# This runs it against a mock that lies in four different ways.
+say "Relay checker"
+if out=$(node scripts/turn-check.test.mjs 2>&1); then
+  ok "turn-check — $(echo "$out" | grep -oE '[0-9]+ passed, [0-9]+ failed' | tail -1)"
+else
+  bad "turn-check is broken — its verdict cannot be trusted"
+  echo "$out" | grep -E '^! FAIL|passed,' | head -8 | sed 's/^/        /' >&2
+fi
+
+# The credential minter and the relay must be told the same secret, and the
+# browser must be told a host it can actually reach. Half a configuration is the
+# worst case: it looks set up and relays nothing.
+if [ -f .env ]; then
+  turn_secret=$(grep -E '^TURN_SECRET=' .env | cut -d= -f2- | tr -d '"' | tr -d "'")
+  turn_host=$(grep -E '^TURN_HOST=' .env | cut -d= -f2- | tr -d '"' | tr -d "'")
+  if [ -n "$turn_secret" ] && [ -n "$turn_host" ]; then
+    ok "relay configured ($turn_host) — run: node scripts/turn-check.mjs"
+  elif [ -z "$turn_secret" ] && [ -z "$turn_host" ]; then
+    warn "no relay configured — calls fail for anyone behind a strict firewall"
+  else
+    bad "half a relay: TURN_SECRET and TURN_HOST must both be set"
+  fi
+fi
+
 # ----------------------------------------------------------------------- build
 if [ "$QUICK" = 0 ]; then
   say "Production build"
@@ -99,7 +126,7 @@ fi
 # failed when the dev stack is down.
 say "End-to-end suites"
 if curl -sf --max-time 2 http://localhost:3001/health >/dev/null 2>&1; then
-  for suite in roles desk guests totp; do
+  for suite in roles desk guests totp ice; do
     if out=$(npm run --silent "test:$suite" -w @nexspace/api 2>&1); then
       ok "$suite — $(echo "$out" | grep -oE '[0-9]+ passed, [0-9]+ failed' | tail -1)"
     else

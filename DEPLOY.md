@@ -216,6 +216,77 @@ written to the API log instead of emailed — fine for testing, not for real use
 docker compose logs -f nexspace-api | grep "sign-in code"
 ```
 
+### Voice relay (TURN) — the one that fails silently
+
+Without this, calls work at home and fail at the office. Two people can only hear
+each other if at least one of them can accept a connection from the outside;
+plenty of corporate networks allow neither. There is no error for it — the call
+just never connects, and both people sit there saying "can you hear me?".
+
+A relay is a machine both ends can reach outbound, which forwards their audio.
+It costs bandwidth, so it is closed: coturn holds a secret, the API signs
+short-lived passwords with the same secret, and nothing else gets in.
+
+**1. Make a secret and put it in `.env`.**
+
+```bash
+openssl rand -hex 32
+```
+
+```dotenv
+TURN_SECRET=<the 64 characters from above>
+TURN_HOST=nexspace.xy789.click     # must resolve to THIS machine
+```
+
+`TURN_HOST` is what browsers dial directly — not through nginx — so it has to be
+a name or address that reaches this server from the internet. If the machine sits
+behind NAT and only knows a private address, add the public one:
+
+```dotenv
+TURN_EXTERNAL_IP=203.0.113.10
+```
+
+**2. Open the firewall.** This is the step that gets missed, and it fails in a way
+that looks exactly like the relay not working at all:
+
+```bash
+sudo ufw allow 3478/udp
+sudo ufw allow 3478/tcp
+sudo ufw allow 49160:49260/udp     # one port per live call
+```
+
+**3. Start it.** The relay sits behind a compose profile, so a deployment without
+a secret is not left with a container that cannot start:
+
+```bash
+docker compose --profile turn up -d nexspace-turn
+docker compose up -d --build nexspace-api nexspace-web
+```
+
+**4. Prove it works** — from another machine, not this one, or the test proves
+only that the server can reach itself:
+
+```bash
+node scripts/turn-check.mjs --host=nexspace.xy789.click --secret=<TURN_SECRET>
+```
+
+It does what a browser does: asks for a relay address with a freshly minted
+credential, and then asks the relay to forward to `127.0.0.1` to confirm it
+refuses. Five lines, all of which must say `ok`. Each failure names its own cause
+— a closed port, a mismatched secret, a private address being advertised, or a
+missing deny rule.
+
+**What you get without it:** everything still works for anyone whose network
+allows a direct path, which is most home connections. `/ice` answers
+`{"relay": false}`, the browser uses STUN alone, and `./scripts/deploy.sh` prints
+`call relay — STUN only` on every deploy so it cannot be forgotten quietly.
+
+**Limits worth knowing.** Ports 3478 and 49160+ are open outbound on most networks
+but not all; the strictest firewalls allow only 443. If you have a spare address,
+moving the relay to 443 catches those too — that needs a second IP, because nginx
+already holds 443 on this one. TLS (`turns:`) needs a certificate and is off
+unless `TURN_TLS_PORT` is set.
+
 ### Map theme
 
 Chosen **once, in the create-space wizard**, and fixed after that. It belongs to

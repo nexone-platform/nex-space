@@ -250,6 +250,18 @@ GUEST_ROUTE='out=$(wget -S -O /dev/null http://127.0.0.1/guest-pass/__probe__ 2>
 API_VIA_NGINX='wget -qO- http://127.0.0.1/health 2>/dev/null | grep -q ok || { echo "no JSON from /health through nginx"; exit 1; }'
 WEB_SERVES='wget -qO- http://127.0.0.1/ 2>/dev/null | grep -q "<title>" || { echo "index.html did not come back"; exit 1; }'
 
+# Relay credentials, seen the way a browser sees them: through nginx, unauthorised.
+# 401 is the right answer to no credential and proves the route reaches the API —
+# a 200 here would mean nginx served the app shell, and the client would read the
+# HTML as "no relay" and fall back to STUN without a word.
+ICE_ROUTE='out=$(wget -S -O /dev/null http://127.0.0.1/ice 2>&1 || true); case "$out" in *401*) exit 0 ;; *200*) echo "answered 200 - nginx served the SPA, or /ice is open to strangers"; exit 1 ;; *) echo "no usable answer: $(echo "$out" | tr -d "\n" | cut -c1-110)"; exit 1 ;; esac'
+
+# Whether this deployment actually has a relay. Not a failure without one — the
+# app works for everyone whose network allows a direct path — but it is the thing
+# nobody discovers until a person on a locked-down network cannot be heard, so it
+# is said out loud on every deploy.
+ICE_RELAY='fetch("http://127.0.0.1:3001/ice").then(r => { if (r.status !== 401) { console.error("expected 401 for an anonymous request, got " + r.status); process.exit(1); } process.stdout.write(process.env.TURN_SECRET && process.env.TURN_HOST ? "relay at " + process.env.TURN_HOST : "STUN only - no relay configured, calls fail behind a strict firewall"); }).catch(e => { console.error(String(e && e.cause || e)); process.exit(1); })'
+
 say "Verifying (a service still starting gets up to ${READY_WINDOW}s to answer)"
 check "API answers /health"                     $DC exec -T nexspace-api  node -e "$API_HEALTH"
 check "Prisma client matches schema.prisma"     $DC exec -T nexspace-api  node -e "$SCHEMA_MATCH"
@@ -257,6 +269,8 @@ check "game server is listening"                $DC exec -T nexspace-game node -
 check "nginx proxies /guest-pass to the API"    $DC exec -T nexspace-web  sh -c "$GUEST_ROUTE"
 check "nginx reaches the API from the app host" $DC exec -T nexspace-web  sh -c "$API_VIA_NGINX"
 check "web serves the app"                      $DC exec -T nexspace-web  sh -c "$WEB_SERVES"
+check "nginx proxies /ice to the API"           $DC exec -T nexspace-web  sh -c "$ICE_ROUTE"
+check "call relay"                              $DC exec -T nexspace-api  node -e "$ICE_RELAY"
 
 # The stamp is what the next deploy reads to decide what to rebuild, so a silent
 # failure here would quietly cost every later deploy a full rebuild.

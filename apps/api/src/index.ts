@@ -8,6 +8,7 @@ import {
   requireAuth, userFromToken, type AuthedRequest,
 } from "./auth";
 import { sendLoginCode, mailEnabled } from "./mailer";
+import { iceConfig, turnEnabled } from "./ice";
 import {
   newTotpSecret, otpauthUri, qrDataUrl, checkTotp,
   newRecoveryCodes, hashRecoveryCodes, countRecoveryCodes, spendRecoveryCode,
@@ -846,6 +847,38 @@ app.get("/workspaces/:slug/access", async (req, res) => {
   res.json({ allowed: w.allowGuests, reason: w.allowGuests ? "guest" : "members-only", name: w.name });
 });
 
+/**
+ * Where to find a way through to the other browsers.
+ *
+ * Credentials are minted per request and expire, so this endpoint has to be
+ * behind the same door as the space itself: a member's session, or a live guest
+ * pass. Left open it would be a free relay for anyone who found the URL, and the
+ * bill for that traffic arrives on our side.
+ *
+ * The workspace is not checked beyond that. Anyone entitled to be in ANY space
+ * here is entitled to talk to the people in it, and tying a credential to one
+ * slug would only mean re-minting it when someone walks into another space.
+ */
+app.get("/ice", async (req, res) => {
+  const token = req.header("authorization")?.replace(/^Bearer\s+/i, "") || String(req.query.token || "");
+  const user = await userFromToken(token || undefined);
+  let who = user ? `u${user.id}` : "";
+
+  if (!who) {
+    const code = String(req.query.guest || "");
+    if (code) {
+      const pass = await prisma.guestPass.findUnique({ where: { code } });
+      if (pass && passState(pass) === "active") who = `g${pass.id}`;
+    }
+  }
+  if (!who) return res.status(401).json({ error: "unauthorized" });
+
+  // Never cached: the credential inside has an expiry, and a proxy holding on to
+  // a stale one would hand out a relay password that no longer opens anything.
+  res.set("Cache-Control", "no-store");
+  res.json(iceConfig(who));
+});
+
 // ---- saved maps ----
 app.get("/maps", requireAuth, async (req: AuthedRequest, res) => {
   const maps = await prisma.savedMap.findMany({
@@ -889,4 +922,5 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   if (!res.headersSent) res.status(500).json({ error: "internal error" });
 });
 
+if (!turnEnabled) console.warn("[ice] no TURN relay configured — calls will fail for anyone behind a strict firewall (set TURN_SECRET and TURN_HOST)");
 app.listen(port, () => console.log(`[api] NexSpace API on http://localhost:${port}  (db: ${process.env.DATABASE_URL})`));

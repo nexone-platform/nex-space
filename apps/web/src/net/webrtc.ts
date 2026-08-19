@@ -4,10 +4,7 @@
 import type { Room } from "colyseus.js";
 import type { MediaManager } from "./media";
 import { t } from "../i18n";
-
-const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-};
+import { iceConfig, loadIce } from "./ice";
 
 interface Peer {
   pc: RTCPeerConnection;
@@ -22,6 +19,7 @@ interface Peer {
   playedFrom?: number;
   lastFix?: number;
   droppedAt?: number;   // when ICE first said "disconnected"
+  retried?: boolean;    // an ICE restart has already been spent on this peer
 }
 
 type SignalMsg = { from: string; kind: "desc" | "ice"; payload: any };
@@ -55,6 +53,22 @@ export class WebRTCManager implements MediaManager {
   constructor(private room: Room, private myId: string, private tilesEl: HTMLElement) {
     room.onMessage("signal", (m: SignalMsg) => void this.onSignal(m));
     this.guardTimer = window.setInterval(() => this.guardLatency(), 3000);
+    void this.refreshIce();
+  }
+
+  /**
+   * Ask for relay credentials and give them to connections that are already up.
+   *
+   * setConfiguration takes effect on the next gathering, so an existing
+   * connection keeps whatever route it found — which is right, a working direct
+   * path should not be torn down for a relay it does not need. What changes is
+   * what it can reach for if that path later breaks.
+   */
+  private async refreshIce() {
+    const cfg = await loadIce();
+    for (const peer of this.peers.values()) {
+      try { peer.pc.setConfiguration(cfg); } catch { /* closing, or an older browser */ }
+    }
   }
 
   // ---- media acquisition -------------------------------------------------
@@ -265,7 +279,11 @@ export class WebRTCManager implements MediaManager {
   }
 
   private connect(peerId: string) {
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+    // Whatever we hold at this moment: the relay if its credentials have arrived,
+    // STUN alone if they have not. loadIce() keeps the answer fresh in the
+    // background, so a call that starts before it lands still gets the upgrade.
+    void loadIce();
+    const pc = new RTCPeerConnection(iceConfig());
     const polite = this.myId > peerId;                 // deterministic role
     const { tile, video } = this.makeTile(peerId);
     const peer: Peer = { pc, polite, makingOffer: false, ignoreOffer: false, tile, video };
@@ -303,6 +321,16 @@ export class WebRTCManager implements MediaManager {
     };
     pc.onconnectionstatechange = () => {
       const st = pc.connectionState;
+      // A first attempt can fail because it was made before the relay
+      // credentials arrived, or on a route that has since died. Restarting ICE
+      // re-gathers with whatever we know now — including the relay — and costs
+      // one round trip. Only once: a second failure is a real one, and retrying
+      // forever would rebuild the connection the audio has to catch up from.
+      if (st === "failed" && !peer.retried) {
+        peer.retried = true;
+        try { peer.pc.setConfiguration(iceConfig()); } catch { /* older browser */ }
+        try { pc.restartIce(); return; } catch { /* fall through to teardown */ }
+      }
       if (st === "failed" || st === "closed") return this.disconnect(peerId);
       // "disconnected" is usually a blip that ICE recovers from on its own.
       // Tearing the connection down here meant a lost packet cost a rebuild, and
