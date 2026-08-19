@@ -137,6 +137,8 @@ export class OfficeScene extends Phaser.Scene {
   private walkable: boolean[][] = [];           // tiles with no wall and no solid prop
   private path: { x: number; y: number }[] = []; // remaining click-to-move waypoints
   private moveMarker?: Phaser.GameObjects.Arc;
+  private panning = false;                      // a drag is moving the camera right now
+  private cameraFree = false;                   // camera let go of the player to be dragged
   private deskClaimAt = 0;                      // scene time of my last claim (grace window for state reconcile)
   private toastTimer?: number;                  // pending hide timer for the DOM toast
   private myStatus = "online";                  // presence broadcast to peers
@@ -372,7 +374,10 @@ export class OfficeScene extends Phaser.Scene {
 
     // click empty floor to walk there. Tracked from pointerdown to pointerup so a
     // drag — which is how a chair gets rotated — never also sends the avatar off.
-    let downAt: { x: number; y: number; onObject: boolean } | null = null;
+    let downAt: { x: number; y: number; onObject: boolean; scrollX: number; scrollY: number } | null = null;
+    // far enough that a shaky click is still a click, short enough that a drag
+    // feels immediate
+    const PAN_START = 6;
 
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       const hits = this.input.hitTestPointer(p);
@@ -380,7 +385,8 @@ export class OfficeScene extends Phaser.Scene {
       if (hit) this.selectChair(hit as Phaser.GameObjects.Image);
       else this.deselectChair();
       // any hit means a desk or chair owns this click and handles it itself
-      downAt = { x: p.x, y: p.y, onObject: hits.length > 0 };
+      const cam = this.cameras.main;
+      downAt = { x: p.x, y: p.y, onObject: hits.length > 0, scrollX: cam.scrollX, scrollY: cam.scrollY };
     });
 
     this.input.on("pointerup", (p: Phaser.Input.Pointer) => {
@@ -391,11 +397,40 @@ export class OfficeScene extends Phaser.Scene {
       this.walkTo(p.worldX, p.worldY);
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
+      // a selected chair owns the drag — that is how it gets turned
       if (this.selected && p.isDown) {
         const ang = Phaser.Math.Angle.Between(this.selected.x, this.selected.y, p.worldX, p.worldY);
         this.rotateChairToAngle(this.selected, ang);
+        return;
       }
+      if (!p.isDown || !downAt || downAt.onObject) return;
+      const dx = p.x - downAt.x, dy = p.y - downAt.y;
+      if (!this.panning && Math.hypot(dx, dy) <= PAN_START) return;
+      const cam = this.cameras.main;
+      if (!this.panning) {
+        // The camera has to let go before it can be moved: while it is following,
+        // it rewrites its own scroll every frame and a drag would be undone as
+        // fast as it was made.
+        this.panning = true;
+        this.cameraFree = true;
+        cam.stopFollow();
+        this.game.canvas.style.cursor = "grabbing";
+      }
+      // Screen pixels over zoom: one art pixel covers zoom of them, so dividing
+      // keeps the map moving exactly with the hand at any zoom level. Phaser
+      // clamps to the camera bounds, so the drag stops at the edge of the map.
+      cam.scrollX = downAt.scrollX - dx / cam.zoom;
+      cam.scrollY = downAt.scrollY - dy / cam.zoom;
     });
+
+    // let go anywhere, including outside the canvas, or the cursor stays a fist
+    const endPan = () => {
+      if (!this.panning) return;
+      this.panning = false;
+      this.game.canvas.style.cursor = "";
+    };
+    this.input.on("pointerup", endPan);
+    this.input.on("pointerupoutside", endPan);
     this.input.on("wheel", (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
       if (this.selected) this.rotateChairStep(this.selected, Math.sign(dy));
       else this.zoomBy(dy > 0 ? -1 : 1); // scroll = zoom the camera, one whole step
@@ -2042,7 +2077,21 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   /** walk to a world position, routing around walls and furniture */
+  /**
+   * Take the camera back to the player after a drag left it somewhere else.
+   *
+   * Moving is the signal: someone who walks after looking around wants to see
+   * where they are going, and the alternative is walking off the edge of a view
+   * that never follows.
+   */
+  private followMeAgain() {
+    if (!this.cameraFree || this.panning) return;
+    this.cameraFree = false;
+    this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
+  }
+
   private walkTo(worldX: number, worldY: number) {
+    this.followMeAgain();
     const goal = this.nearestStandable(Math.floor(worldX / TILE), Math.floor(worldY / TILE));
     if (!goal) return;
     const from = { x: Math.floor(this.player.x / TILE), y: Math.floor(this.player.y / TILE) };
@@ -2071,7 +2120,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // the keys always win: pressing one drops whatever route was running
-    if (vx !== 0 || vy !== 0) this.clearPath();
+    if (vx !== 0 || vy !== 0) { this.clearPath(); this.followMeAgain(); }
     else if (this.path.length) {
       const wp = this.path[0];
       const dx = wp.x - this.player.x, dy = wp.y - this.player.y;
