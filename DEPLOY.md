@@ -246,6 +246,37 @@ behind NAT and only knows a private address, add the public one:
 TURN_EXTERNAL_IP=203.0.113.10
 ```
 
+**1b. If the machine is behind NAT** — it does not hold its own public address.
+Check with `ip -4 addr`: if the address there is a private one (10.x, 172.16–31.x,
+192.168.x) while the world reaches you on something else, this applies.
+
+```dotenv
+TURN_LISTEN_IP=172.24.8.51                       # this machine's own address
+TURN_EXTERNAL_IP=203.151.66.51/172.24.8.51       # public/private
+```
+
+Both matter, for different reasons:
+
+- Without `TURN_LISTEN_IP`, coturn binds every address it can find — which on a
+  docker host includes every bridge network. It will happily hand a caller a
+  relay address on `172.22.0.1`, which nothing outside this machine can reach.
+  `docker compose logs nexspace-turn` shows the full list it discovered; if that
+  list is long, this setting is missing.
+- `TURN_EXTERNAL_IP` in the `public/private` form tells coturn "when you would
+  say 172.24.8.51, say 203.151.66.51 instead". Without it, callers are told to
+  send their audio to an address that only exists inside your network.
+
+**Port forwarding is a separate job.** `ufw` only controls what the machine
+itself accepts; it cannot make the router hand the packets over. On a NAT'd host
+the hypervisor, router, or provider firewall must forward to the private address:
+
+| Port | Protocol | Why |
+|---|---|---|
+| 3478 | UDP and TCP | where callers ask for a relay |
+| 49160–49260 | UDP | the relays themselves, one port per call |
+
+Forgetting the second row is the subtle one: the check passes, calls still fail.
+
 **2. Open the firewall.** This is the step that gets missed, and it fails in a way
 that looks exactly like the relay not working at all:
 

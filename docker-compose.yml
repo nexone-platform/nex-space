@@ -75,6 +75,10 @@ services:
       - TURN_PORT=${TURN_PORT:-3478}
       - TURN_TLS_PORT=${TURN_TLS_PORT:-0}
       - TURN_TTL=${TURN_TTL:-43200}
+      # Only the relay reads these two; they are listed here so every relay
+      # setting lives in one place in .env:
+      #   TURN_LISTEN_IP    the machine's own address, when it has more than one
+      #   TURN_EXTERNAL_IP  the public address, as public/private behind NAT
       - STUN_URL=${STUN_URL:-}
     ports:
       - "3001:3001"
@@ -107,6 +111,11 @@ services:
     #   --min/max-port        one port per live relay. Open this range on the
     #                         firewall or nothing gets through — the mistake that
     #                         looks exactly like TURN not working at all.
+    #   --listening-ip        which address to answer on, and where relays live.
+    #                         Left unset, coturn binds every address it finds —
+    #                         including docker's own bridges — and can then hand
+    #                         a peer a relay address on 172.22.0.1 that nobody
+    #                         outside this machine can reach.
     #   --external-ip         say the public address out loud when the machine
     #                         sits behind NAT and only knows a private one. Unset
     #                         on a VPS with a real address, and then absent here.
@@ -130,6 +139,8 @@ services:
       --realm=${TURN_REALM:-nexspace}
       --listening-port=${TURN_PORT:-3478}
       --use-auth-secret
+      ${TURN_LISTEN_IP:+--listening-ip=}${TURN_LISTEN_IP:-}
+      ${TURN_LISTEN_IP:+--relay-ip=}${TURN_LISTEN_IP:-}
       --static-auth-secret=${TURN_SECRET:-SET_TURN_SECRET_IN_DOTENV}
       --min-port=${TURN_MIN_PORT:-49160}
       --max-port=${TURN_MAX_PORT:-49260}
