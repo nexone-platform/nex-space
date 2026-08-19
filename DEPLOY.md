@@ -246,6 +246,13 @@ behind NAT and only knows a private address, add the public one:
 TURN_EXTERNAL_IP=203.0.113.10
 ```
 
+> **If this machine cannot receive UDP from the internet at all**, stop here and
+> put the relay on its own VPS instead: [`deploy/turn/`](deploy/turn/README.md).
+> A machine behind NAT that nobody will reconfigure is not a problem to be solved
+> in this file — and a dedicated relay can also listen on 443 over TLS, which is
+> the only thing that gets through the strictest corporate networks. The app side
+> is then two lines of `.env` and no code change at all.
+
 **1b. If the machine is behind NAT** — it does not hold its own public address.
 Check with `ip -4 addr`: if the address there is a private one (10.x, 172.16–31.x,
 192.168.x) while the world reaches you on something else, this applies.

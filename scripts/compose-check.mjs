@@ -22,6 +22,7 @@ import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 
 const FILE = fileURLToPath(new URL("../docker-compose.yml", import.meta.url));
+const RELAY = fileURLToPath(new URL("../deploy/turn/docker-compose.yml", import.meta.url));
 const raw = readFileSync(FILE, "utf8");
 
 let pass = 0, fail = 0;
@@ -164,6 +165,46 @@ const full = interp({ TURN_SECRET: "s", TURN_EXTERNAL_IP: "203.0.113.10" }).trim
 ok("an unset external address leaves no empty argument",
   !bare.some((a) => a === "" || a === "--external-ip="), bare.length + " arguments");
 ok("  · and a set one is passed through", full.includes("--external-ip=203.0.113.10"));
+
+// ---- 6. the relay's own file, for a machine of its own ----------------------
+// Same fences, different rule about guards: that file holds one service, and it
+// is the service the secret belongs to, so refusing to start without it is
+// right. The rule is not "never guard" — it is "never make one service's
+// missing setting everyone else's problem".
+
+console.log("\ndeploy/turn/docker-compose.yml\n");
+
+const relayRaw = readFileSync(RELAY, "utf8");
+const relayDoc = parse(relayRaw);
+const relayServices = Object.keys(relayDoc.services ?? {});
+const relayCmd = String(relayDoc.services?.coturn?.command ?? "");
+const relayVars = [...relayRaw.matchAll(/\$\{([^}]+)\}/g)].map((m) => m[1]);
+const relayGuards = relayVars.filter((v) => v.includes(":?"));
+
+ok("it stands alone", relayServices.length === 1 && relayServices[0] === "coturn", relayServices.join(" ") || "no services");
+ok("requiring the secret is allowed here", relayGuards.length === 1 && relayGuards[0].startsWith("TURN_SECRET"),
+  relayGuards.join(", ") || "none — a relay with no secret should not start");
+ok("nothing else is required",
+  relayVars.filter((v) => v.includes(":?") && !v.startsWith("TURN_SECRET")).length === 0);
+
+const relayDeny = (relayCmd.match(/--denied-peer-ip=/g) || []).length;
+ok("the same fences are up", relayDeny >= 9, `${relayDeny} deny rules`);
+ok("  · and no admin console", relayCmd.includes("--no-cli"));
+
+const relayArgs = (env) => relayCmd
+  .replace(/\$\{([A-Z_]+):\?[^}]*\}/g, (_, n) => env[n] ?? "")
+  .replace(/\$\{([A-Z_]+)(:[-+])([^}]*)\}/g, (_, n, op, w) => {
+    const set = env[n] !== undefined && env[n] !== "";
+    return op === ":-" ? (set ? env[n] : w) : (set ? w : "");
+  })
+  .trim().split(/\s+/).filter(Boolean);
+
+const plain = relayArgs({ TURN_SECRET: "s" });
+ok("with only a secret set, nothing optional is left dangling",
+  !plain.some((a) => a.endsWith("=") || a === ""), `${plain.length} arguments`);
+
+const tls = relayArgs({ TURN_SECRET: "s", TURN_TLS_PORT: "443", TURN_CERT: "/certs/a.pem", TURN_KEY: "/certs/b.pem" });
+ok("TLS turns on as one piece", ["--tls-listening-port=443", "--cert=/certs/a.pem", "--pkey=/certs/b.pem"].every((a) => tls.includes(a)));
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

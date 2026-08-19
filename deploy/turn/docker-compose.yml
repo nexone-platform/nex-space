@@ -1,0 +1,68 @@
+# The voice relay, on a machine of its own.
+#
+# This file is complete in itself. Copy this directory to a VPS that holds a
+# public address directly — no NAT in front of it — and the relay needs nothing
+# else from this repository. The app server never talks to it; only browsers do,
+# and the API only ever tells them where to look.
+#
+# The two halves are tied together by one thing: TURN_SECRET here and
+# TURN_SECRET in the app server's .env must be the same string. The API signs a
+# short-lived username with it, coturn recomputes the signature to check it, and
+# nothing else passes between the two machines.
+#
+#   cp .env.example .env      # then put the secret in it
+#   docker compose up -d
+services:
+  coturn:
+    image: coturn/coturn:4.6-alpine
+    container_name: nexspace-turn
+    restart: always
+    # A relay hands out a different UDP port per call and tells the browser its
+    # own address. Behind docker's NAT it would advertise an address from the
+    # bridge network, and every allocation would need publishing by hand.
+    network_mode: host
+    volumes:
+      # Only read when TLS is switched on. Left as it is, this mounts a
+      # directory that certbot would have created anyway.
+      - ${TURN_CERT_DIR:-/etc/letsencrypt}:/certs:ro
+    # A required-variable guard is safe here in a way it was not in the app's
+    # compose file: this file holds one service, and that service is the one the
+    # secret belongs to. Refusing to start without it is exactly right.
+    #
+    #   --external-ip     only needed if this VPS is itself behind NAT. On a
+    #                     machine that holds its own public address, leave it
+    #                     unset — coturn will find the address by itself.
+    #   --cert/--pkey     turns on turns: over TLS. That is the one a corporate
+    #                     firewall which allows nothing but 443 will still let
+    #                     through, and it is worth having here because a machine
+    #                     dedicated to the relay has 443 free.
+    command: >
+      -n
+      --log-file=stdout
+      --realm=${TURN_REALM:-nexspace}
+      --listening-port=${TURN_PORT:-3478}
+      --use-auth-secret
+      --static-auth-secret=${TURN_SECRET:?put TURN_SECRET in .env — it must match the app server}
+      --min-port=${TURN_MIN_PORT:-49160}
+      --max-port=${TURN_MAX_PORT:-49260}
+      ${TURN_LISTEN_IP:+--listening-ip=}${TURN_LISTEN_IP:-}
+      ${TURN_LISTEN_IP:+--relay-ip=}${TURN_LISTEN_IP:-}
+      ${TURN_EXTERNAL_IP:+--external-ip=}${TURN_EXTERNAL_IP:-}
+      ${TURN_TLS_PORT:+--tls-listening-port=}${TURN_TLS_PORT:-}
+      ${TURN_CERT:+--cert=}${TURN_CERT:-}
+      ${TURN_KEY:+--pkey=}${TURN_KEY:-}
+      --denied-peer-ip=0.0.0.0-0.255.255.255
+      --denied-peer-ip=10.0.0.0-10.255.255.255
+      --denied-peer-ip=127.0.0.0-127.255.255.255
+      --denied-peer-ip=169.254.0.0-169.254.255.255
+      --denied-peer-ip=172.16.0.0-172.31.255.255
+      --denied-peer-ip=192.168.0.0-192.168.255.255
+      --denied-peer-ip=::1
+      --denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+      --denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+      --user-quota=12
+      --total-quota=200
+      --no-cli
+      --no-tlsv1
+      --no-tlsv1_1
+      --fingerprint
