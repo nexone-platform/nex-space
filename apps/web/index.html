@@ -31,6 +31,8 @@
          "ตรงกับระบบ" resolves to one of these two, it is not a third palette. */
       :root {
         --surface: #fff; --surface-2: #f7f8fa; --surface-3: #f2f3f6;
+        /* a pane that lets a tint through without taking the wrong side in dark mode */
+        --glass: #ffffffc4;
         --border: #eceef2; --border-2: #e2e4ea; --border-3: #b9bcc4;
         --text: #1c1b22; --text-2: #4b5563; --text-3: #6b7280;
         --muted: #8a8f98; --faint: #9aa0a8; --fainter: #b9bec7;
@@ -42,6 +44,7 @@
       }
       html[data-theme="dark"] {
         --surface: #1e1f26; --surface-2: #24262e; --surface-3: #2b2d36;
+        --glass: #1e1f26cc;
         --border: #33353f; --border-2: #3c3f4a; --border-3: #565a66;
         --text: #eceef2; --text-2: #c5c9d2; --text-3: #a7acb6;
         --muted: #9298a2; --faint: #8b9098; --fainter: #70757f;
@@ -258,40 +261,115 @@
       .nf-row small { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
       .nf-row time { font-size: 11px; color: var(--faint); margin-left: auto; flex: 0 0 auto; }
 
-      /* ---- one person, and what you can do about them ---- */
-      /* border-box: this stylesheet has no global reset, so a plain width plus
-         padding would make the card 34px wider than the number says — which is
-         the difference between fitting beside the sidebar and not. */
-      #person-card { position: fixed; z-index: 28; box-sizing: border-box; width: 288px; max-width: calc(100vw - 24px);
-        background: var(--surface); border: 1px solid var(--border-2); border-radius: 14px;
-        box-shadow: 0 14px 40px #0000002e; padding: 14px 16px 12px; font-family: "Segoe UI", sans-serif; }
+      /* ---- one person, and what you can do about them ----
+         The card is tinted with that person's own colour — the same one their
+         initial has always used — so every card feels like theirs rather than
+         like a form about them. Everything else stays quiet so the tint and the
+         character are the only things doing any talking. */
+      #person-card {
+        position: fixed; z-index: 28; box-sizing: border-box;
+        width: 300px; max-width: calc(100vw - 24px);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        box-shadow: 0 2px 6px #0000000f, 0 18px 44px #00000024;
+        font-family: "Segoe UI", sans-serif;
+        overflow: hidden;
+        animation: pc-in .16s cubic-bezier(.2, .8, .3, 1);
+      }
       #person-card[hidden] { display: none; }
-      .pc-top { display: flex; align-items: center; gap: 10px; }
-      .pc-who { display: flex; flex-direction: column; line-height: 1.3; overflow: hidden; flex: 1; }
-      .pc-who b { font-size: 15px; color: var(--text); }
-      .pc-who small { font-size: 12px; color: var(--muted); }
-      #pc-close { border: none; background: transparent; color: var(--faint); cursor: pointer; font-size: 14px;
-        width: 24px; height: 24px; border-radius: 7px; }
-      #pc-close:hover { background: var(--surface-3); color: var(--text); }
-      #pc-bio { margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--text-3); }
+      @keyframes pc-in { from { opacity: 0; transform: translateY(6px) scale(.985); } }
+      @media (prefers-reduced-motion: reduce) { #person-card { animation: none; } }
+
+      /* the tinted band the character stands on */
+      .pc-band {
+        height: 62px; position: relative;
+        background:
+          radial-gradient(120% 150% at 18% 120%, var(--pc-tint, #2bb3a3) 0%, transparent 62%),
+          linear-gradient(180deg, var(--surface-3), var(--surface-2));
+      }
+      #pc-close {
+        position: absolute; top: 8px; right: 8px;
+        border: none; background: var(--glass); backdrop-filter: blur(4px);
+        color: var(--text-3); cursor: pointer; font-size: 12px;
+        width: 24px; height: 24px; border-radius: 8px; line-height: 1;
+      }
+      #pc-close:hover { background: var(--surface); color: var(--text); }
+      /* their local time, which is the only reason to know somebody's timezone */
+      #pc-clock {
+        position: absolute; top: 10px; left: 12px;
+        font: 600 11.5px/1 "Segoe UI", sans-serif; letter-spacing: .02em;
+        color: var(--text-3); background: var(--glass); backdrop-filter: blur(4px);
+        padding: 5px 9px; border-radius: 20px;
+      }
+      #pc-clock[hidden] { display: none; }
+
+      .pc-top { display: flex; align-items: flex-end; gap: 12px; padding: 0 18px; margin-top: -34px; }
+      /* the character, at their own size, sharp — this is a pixel-art office and
+         a letter in a circle says nothing about who you are about to talk to */
+      .pc-portrait {
+        width: 68px; height: 68px; flex: 0 0 auto; border-radius: 16px;
+        background: var(--surface); border: 2px solid var(--surface);
+        box-shadow: 0 4px 14px #00000018;
+        display: flex; align-items: center; justify-content: center; overflow: hidden;
+      }
+      /* max-* rather than width/height 100%: the holder is a grid row of automatic
+         height, so a percentage height there has nothing to resolve against and
+         a tall sprite grows straight out of the frame. This way a narrow avatar
+         fits by its height and a square one by its width. */
+      /* Fixed pixel limits, not percentages: the holder centres its child, and a
+         percentage there resolves against a track whose height comes from the
+         child — which lets a tall sprite grow straight out of the frame. */
+      .pc-portrait img { max-width: 58px; max-height: 58px; width: auto; height: auto;
+        image-rendering: pixelated; display: block; }
+      .pc-portrait .p-chip { width: 100%; height: 100%; border-radius: 0; font-size: 26px; }
+      .pc-who { display: flex; flex-direction: column; gap: 5px; overflow: hidden; padding-bottom: 4px; }
+      .pc-who b { font-size: 16.5px; color: var(--text); letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .pc-pill {
+        display: inline-flex; align-items: center; gap: 6px; width: max-content;
+        font-size: 11.5px; color: var(--text-2);
+        background: var(--surface-3); border-radius: 20px; padding: 3px 10px 3px 8px;
+      }
+      .pc-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--pc-dot, #39d353); }
+
+      #pc-bio { margin: 14px 18px 0; font-size: 13px; line-height: 1.6; color: var(--text-3); }
       #pc-bio:empty { display: none; }
-      #pc-facts { display: grid; gap: 4px; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+
+      #pc-facts { display: grid; gap: 8px; margin: 14px 18px 0; font-size: 12.5px; }
       #pc-facts:empty { display: none; }
-      #pc-facts span b { color: var(--text-3); font-weight: 600; }
-      #pc-actions { display: flex; gap: 6px; margin-top: 14px; }
-      #pc-actions button { flex: 1; border: 1px solid var(--border-2); background: var(--surface-3);
-        color: var(--text-3); border-radius: 9px; padding: 7px 0; font: 600 12.5px "Segoe UI", sans-serif; cursor: pointer; }
-      #pc-actions button:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+      #pc-facts .pc-fact { display: flex; align-items: center; gap: 9px; color: var(--text-3); }
+      #pc-facts .pc-fact svg { width: 14px; height: 14px; flex: 0 0 auto; color: var(--faint); }
+      #pc-facts .pc-fact span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+      /* icon over label: three of these read as a row of choices, where three
+         text pills read as a paragraph that happens to be clickable */
+      #pc-actions { display: flex; gap: 8px; padding: 16px 18px 18px; }
+      #pc-actions button {
+        flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px;
+        border: 1px solid var(--border-2); background: var(--surface-3); color: var(--text-2);
+        border-radius: 12px; padding: 9px 0 8px;
+        font: 600 11.5px "Segoe UI", sans-serif; cursor: pointer;
+        transition: background .14s, color .14s, border-color .14s, transform .14s;
+      }
+      #pc-actions button svg { width: 17px; height: 17px; }
+      #pc-actions button:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); transform: translateY(-1px); }
+      #pc-actions button:active { transform: none; }
+      #pc-actions button:first-child { background: var(--accent); border-color: var(--accent); color: #fff; }
+      #pc-actions button:first-child:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
       #pc-actions button[hidden] { display: none; }
-      #pc-edit { display: grid; gap: 9px; margin-top: 12px; }
+      #pc-actions[hidden] { display: none; }
+
+      #pc-edit { display: grid; gap: 10px; padding: 16px 18px 18px; }
       #pc-edit[hidden] { display: none; }
-      #pc-edit label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
-      #pc-edit input, #pc-edit textarea { padding: 7px 10px; font-size: 13px; resize: vertical; }
-      .pc-edit-actions { display: flex; gap: 6px; }
-      .pc-edit-actions button { flex: 1; border-radius: 9px; padding: 8px 0; font: 600 13px "Segoe UI", sans-serif; cursor: pointer; }
+      #pc-edit label { display: grid; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: .01em; }
+      #pc-edit input, #pc-edit textarea { padding: 8px 11px; font-size: 13px; resize: vertical; border-radius: 10px; }
+      #pc-edit input:focus, #pc-edit textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+      .pc-edit-actions { display: flex; gap: 8px; margin-top: 2px; }
+      .pc-edit-actions button { flex: 1; border-radius: 11px; padding: 9px 0; font: 600 13px "Segoe UI", sans-serif; cursor: pointer; }
       #pc-save { border: none; background: var(--accent); color: #fff; }
       #pc-save:hover { background: var(--accent-hover); }
       #pc-cancel { border: 1px solid var(--border-2); background: var(--surface-3); color: var(--text-3); }
+      #pc-cancel:hover { background: var(--surface-2); }
 
       /* interactive-object prompt + embed modal */
       #interact-hint { position: fixed; left: calc(var(--dock) + (100vw - var(--dock)) / 2); bottom: 74px;
@@ -1425,20 +1503,32 @@
     </aside>
     <!-- one person, and what you can do about them -->
     <div id="person-card" hidden>
+      <div class="pc-band">
+        <button id="pc-close" title="ปิด">✕</button>
+        <span id="pc-clock" hidden></span>
+      </div>
       <div class="pc-top">
-        <span id="pc-chip" class="p-chip"></span>
+        <span id="pc-portrait" class="pc-portrait"><span id="pc-chip" class="p-chip"></span></span>
         <div class="pc-who">
           <b id="pc-name"></b>
-          <small id="pc-sub"></small>
+          <span id="pc-sub" class="pc-pill"></span>
         </div>
-        <button id="pc-close" title="ปิด">✕</button>
       </div>
       <p id="pc-bio"></p>
       <div id="pc-facts"></div>
       <div id="pc-actions">
-        <button id="pc-dm">ข้อความ</button>
-        <button id="pc-find">ตามตัว</button>
-        <button id="pc-ping">เรียกมาหา</button>
+        <button id="pc-dm">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H7l-3 3z"/></svg>
+          <span>ข้อความ</span>
+        </button>
+        <button id="pc-find">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>
+          <span>ตามตัว</span>
+        </button>
+        <button id="pc-ping">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M5.6 5.6l2.1 2.1M3 12h3M18 12h3M18.4 5.6l-2.1 2.1"/><circle cx="12" cy="14" r="4"/></svg>
+          <span>เรียกมาหา</span>
+        </button>
       </div>
       <div id="pc-edit" hidden>
         <label>ชื่อที่แสดง<input id="pc-f-name" type="text" maxlength="24" /></label>

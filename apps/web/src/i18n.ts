@@ -327,6 +327,7 @@ const EN: Record<string, string> = {
   "(คุณ)": "(you)",
   "คุณ": "you",
   "ก่อนหน้านี้": "earlier",
+  "เวลาของเขา": "Their time",
   "ห้ามรบกวน": "Do not disturb",
   "ห้ามรบกวน — ปิดเสียงคนรอบตัวและเสียงแจ้งเตือน": "Do not disturb — silences the people around you and the alerts",
   "ห้ามรบกวน — ไม่ได้ยินเสียงรอบตัวและไม่มีเสียงแจ้งเตือน": "Do not disturb — you will not hear the room or any alerts",

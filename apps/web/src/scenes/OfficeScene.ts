@@ -1380,8 +1380,26 @@ export class OfficeScene extends Phaser.Scene {
     const me = sessionId === this.mySessionId;
     const name = player.name || "Guest";
     const { initial, color } = this.chipParts(name);
-    const chip = document.getElementById("pc-chip") as HTMLElement | null;
-    if (chip) { chip.style.background = color; chip.textContent = initial; }
+    // their own colour tints the card, so it reads as theirs rather than as a form
+    card.style.setProperty("--pc-tint", color);
+
+    const portrait = document.getElementById("pc-portrait");
+    const png = this.portraitOf(me ? this.myAvatar : (player.avatar || "1"), player.dir || "down");
+    if (portrait) {
+      portrait.innerHTML = "";
+      if (png) {
+        const img = document.createElement("img");
+        img.src = png;
+        img.alt = name;
+        portrait.appendChild(img);
+      } else {
+        const chip = document.createElement("span");
+        chip.className = "p-chip";
+        chip.style.background = color;
+        chip.textContent = initial;
+        portrait.appendChild(chip);
+      }
+    }
     const nameEl = document.getElementById("pc-name");
     if (nameEl) nameEl.textContent = name + (me ? " " + t("(คุณ)") : "");
 
@@ -1392,7 +1410,14 @@ export class OfficeScene extends Phaser.Scene {
     const edit = document.getElementById("pc-edit") as HTMLElement | null;
     if (bio) bio.textContent = "";
     if (facts) facts.innerHTML = "";
-    if (sub) sub.textContent = t(statusMeta(me ? this.myStatus : (player.status || "online")).label);
+    const st = statusMeta(me ? this.myStatus : (player.status || "online"));
+    if (sub) {
+      sub.textContent = t(st.label);
+      sub.style.setProperty("--pc-dot", st.css);
+    }
+    // the clock only appears once the profile says where they are
+    const clock = document.getElementById("pc-clock") as HTMLElement | null;
+    if (clock) { clock.hidden = true; clock.textContent = ""; }
     if (actions) actions.hidden = me;
     if (edit) edit.hidden = !me;
 
@@ -1456,22 +1481,34 @@ export class OfficeScene extends Phaser.Scene {
       if (bio) bio.textContent = profile.bio ?? "";
       const facts = document.getElementById("pc-facts");
       if (!facts) return;
-      const line = (label: string, value: string) => {
-        const row = document.createElement("span");
-        const b = document.createElement("b"); b.textContent = label + " ";
-        row.append(b, document.createTextNode(value));
+      const ICONS: Record<string, string> = {
+        role: '<path d="M20 7h-4V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1z"/><path d="M10 7V5h4v2"/>',
+        team: '<path d="M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1"/><circle cx="9.5" cy="7" r="3"/><path d="M21 19v-1a4 4 0 0 0-3-3.9"/><path d="M15.5 4.1a4 4 0 0 1 0 5.8"/>',
+        zone: '<circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z"/>',
+      };
+      const line = (icon: string, value: string) => {
+        const row = document.createElement("div");
+        row.className = "pc-fact";
+        row.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + ICONS[icon] + "</svg>";
+        const span = document.createElement("span");
+        span.textContent = value;
+        row.appendChild(span);
         facts.appendChild(row);
       };
-      if (profile.role) line(t("ตำแหน่ง"), profile.role);
-      if (profile.team) line(t("ทีม"), profile.team);
+      if (profile.role) line("role", profile.role);
+      if (profile.team) line("team", profile.team);
       if (profile.timezone) {
-        // the time where they are, which is the only reason a timezone is useful
-        let clock = profile.timezone;
+        // The clock goes in the band rather than the list: "half past four for
+        // them" is the thing you actually wanted, and the zone name is the
+        // footnote under it.
+        const clockEl = document.getElementById("pc-clock") as HTMLElement | null;
         try {
-          clock = new Intl.DateTimeFormat(locale(), { hour: "2-digit", minute: "2-digit", timeZone: profile.timezone })
-            .format(new Date()) + " · " + profile.timezone;
-        } catch { /* an invalid zone: show the name they typed */ }
-        line(t("เวลาท้องถิ่น"), clock);
+          const now = new Intl.DateTimeFormat(locale(), {
+            hour: "2-digit", minute: "2-digit", timeZone: profile.timezone,
+          }).format(new Date());
+          if (clockEl) { clockEl.textContent = t("เวลาของเขา") + " " + now; clockEl.hidden = false; }
+        } catch { /* an invalid zone: no clock, just the name below */ }
+        line("zone", profile.timezone);
       }
     } catch (e) {
       console.warn("[profile] could not load:", e);
@@ -1526,6 +1563,43 @@ export class OfficeScene extends Phaser.Scene {
     this.statusCheckAt = 0;            // re-evaluate now, not on the next tick
     this.toast(on ? t("ห้ามรบกวน — ไม่ได้ยินเสียงรอบตัวและไม่มีเสียงแจ้งเตือน") : t("กลับมารับเสียงตามปกติแล้ว"),
       on ? "warn" : "success");
+  }
+
+  /**
+   * Their character, cut out of the sheet it is already drawn from.
+   *
+   * The texture is in memory because the person is on screen, so this costs a
+   * copy of one 64px frame and no network at all. Works for both kinds of
+   * avatar: a composed LPC canvas and a preset spritesheet differ in where the
+   * frame sits, and the frame object knows that either way.
+   *
+   * Returns null when the texture has not finished composing, and the caller
+   * falls back to the initial — a card that waits for a picture is worse than
+   * one that shows a letter.
+   */
+  private portraitOf(avatarRaw: string, dir = "down"): string | null {
+    try {
+      const av = isLpc(avatarRaw) ? avatarRaw : (AVATARS[avatarRaw] ? avatarRaw : "1");
+      const key = this.texKeyFor(av);
+      if (!this.textures.exists(key)) return null;
+      const tex = this.textures.get(key);
+      const frame = tex.get(this.idleFrameFor(av, dir));
+      if (!frame?.cutWidth) return null;
+      const canvas = document.createElement("canvas");
+      canvas.width = frame.cutWidth;
+      canvas.height = frame.cutHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      ctx.imageSmoothingEnabled = false;   // it is pixel art; keep the edges
+      ctx.drawImage(
+        tex.getSourceImage() as CanvasImageSource,
+        frame.cutX, frame.cutY, frame.cutWidth, frame.cutHeight,
+        0, 0, frame.cutWidth, frame.cutHeight,
+      );
+      return canvas.toDataURL();
+    } catch {
+      return null;    // an odd texture is not worth failing a card over
+    }
   }
 
   private closePersonCard() {
