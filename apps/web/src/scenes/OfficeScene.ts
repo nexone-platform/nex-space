@@ -669,6 +669,7 @@ export class OfficeScene extends Phaser.Scene {
       });
       this.room = room;
       this.mySessionId = room.sessionId;
+      void this.loadChatHistory();
       console.log(`[nexspace] joined room ${room.roomId} as ${room.sessionId}`);
       setTimeout(() => console.log(`[nexspace] room ${room.roomId}: ${room.state.players.size} online`), 1200);
       const $ = getStateCallbacks(room);
@@ -1065,17 +1066,67 @@ export class OfficeScene extends Phaser.Scene {
       const log = document.getElementById(id);
       if (!log) continue;
       log.querySelector(".chat-empty, .mc-empty")?.remove();
-      const div = document.createElement("div"); div.className = "msg";
-      const who = document.createElement("span");
-      who.className = "who" + (from === this.mySessionId ? " me" : "");
-      who.textContent = (from === this.mySessionId ? t("คุณ") : name) + ":";
-      const txt = document.createElement("span"); txt.className = "txt"; txt.textContent = " " + text;
-      div.append(who, txt); log.appendChild(div);
+      log.appendChild(this.chatLine(from === this.mySessionId, name, text));
       log.scrollTop = log.scrollHeight;
     }
     if (from !== this.mySessionId && !this.chatIsVisible()) {
       this.unread++;
       this.refreshUnread();
+    }
+  }
+
+  private chatLine(mine: boolean, name: string, text: string) {
+    const div = document.createElement("div"); div.className = "msg";
+    const who = document.createElement("span");
+    who.className = "who" + (mine ? " me" : "");
+    who.textContent = (mine ? t("คุณ") : name) + ":";
+    const txt = document.createElement("span"); txt.className = "txt"; txt.textContent = " " + text;
+    div.append(who, txt);
+    return div;
+  }
+
+  /**
+   * What was said before we arrived.
+   *
+   * Written straight into the same panels the live messages go to, above
+   * whatever is already there — a message that lands while this request is in
+   * flight belongs after the history, not buried in it, and prepending gets that
+   * right without any ordering bookkeeping.
+   *
+   * A member is recognised by their session; a visitor by the pass code in their
+   * link. Anyone the API does not recognise simply gets no history, which is the
+   * same silence they had before there was any.
+   */
+  private async loadChatHistory() {
+    const guest = GUEST_CODE ? `&guest=${encodeURIComponent(GUEST_CODE)}` : "";
+    const token = localStorage.getItem("nexspace-token") ?? "";
+    try {
+      const r = await fetch(
+        `${AUTH_API}/workspaces/${encodeURIComponent(WORKSPACE)}/messages?limit=50${guest}`,
+        { headers: token ? { authorization: `Bearer ${token}` } : {} },
+      );
+      if (!r.ok) return;
+      const d = (await r.json()) as { messages?: { name: string; text: string; at: string; mine: boolean }[] };
+      const rows = d.messages ?? [];
+      if (!rows.length) return;
+
+      for (const id of ["chat-log", "meet-chat-log"]) {
+        const log = document.getElementById(id);
+        if (!log) continue;
+        log.querySelector(".chat-empty, .mc-empty")?.remove();
+        const frag = document.createDocumentFragment();
+        for (const m of rows) frag.appendChild(this.chatLine(m.mine, m.name, m.text));
+        // a line the reader can stop at, so old and new are not one blur
+        const mark = document.createElement("div");
+        mark.className = "chat-mark";
+        mark.textContent = t("ก่อนหน้านี้");
+        frag.appendChild(mark);
+        log.insertBefore(frag, log.firstChild);
+        log.scrollTop = log.scrollHeight;
+      }
+    } catch (e) {
+      // history is a convenience; the room works without it
+      console.warn("[chat] could not load history:", e);
     }
   }
 

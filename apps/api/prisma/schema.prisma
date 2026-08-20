@@ -12,28 +12,29 @@ datasource db {
 }
 
 model User {
-  id           String     @id @default(cuid())
-  email        String     @unique
-  name         String
-  passwordHash String? // null for accounts created via email code / Google
-  googleId     String?    @unique
-  photoUrl     String? // Google profile picture
-  role         String? // onboarding: Founder / Director / Manager / ...
-  companySize  String? // onboarding: "1-10", "11-50", ...
+  id            String       @id @default(cuid())
+  email         String       @unique
+  name          String
+  passwordHash  String? // null for accounts created via email code / Google
+  googleId      String?      @unique
+  photoUrl      String? // Google profile picture
+  role          String? // onboarding: Founder / Director / Manager / ...
+  companySize   String? // onboarding: "1-10", "11-50", ...
   // authenticator app (TOTP). The secret exists from the moment setup starts;
   // totpEnabledAt is what makes it required at sign-in.
   totpSecret    String?
   totpEnabledAt DateTime?
   totpLastStep  Int? // last spent 30s step, so a seen code can't be replayed
   recoveryCodes String? // JSON array of bcrypt hashes, one per unused code
-  avatar       String? // JSON string: { avatarId, skin, hair, top, ... }
-  desk         String? // JSON string: { workspaceSlug: deskId }
-  createdAt    DateTime   @default(now())
-  lastSeenAt   DateTime? // refreshed at most every few minutes — powers "Last Active"
-  sessions     Session[]
-  maps         SavedMap[]
-  owned        Workspace[]  @relation("OwnedWorkspaces")
-  memberships  Membership[]
+  avatar        String? // JSON string: { avatarId, skin, hair, top, ... }
+  desk          String? // JSON string: { workspaceSlug: deskId }
+  createdAt     DateTime     @default(now())
+  lastSeenAt    DateTime? // refreshed at most every few minutes — powers "Last Active"
+  sessions      Session[]
+  maps          SavedMap[]
+  owned         Workspace[]  @relation("OwnedWorkspaces")
+  memberships   Membership[]
+  Message       Message[]
 }
 
 // A company / community space. People join via its invite code; the owner
@@ -52,6 +53,7 @@ model Workspace {
   owner       User         @relation("OwnedWorkspaces", fields: [ownerId], references: [id], onDelete: Cascade)
   members     Membership[]
   guests      GuestPass[]
+  messages    Message[]
   createdAt   DateTime     @default(now())
 }
 
@@ -102,15 +104,15 @@ model LoginCode {
 }
 
 model Session {
-  token     String   @id
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  expiresAt DateTime
+  token        String   @id
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
   // issued after the first factor but before the authenticator code. Such a token
   // is accepted only by /auth/totp/verify — requireAuth rejects it.
-  pendingTotp  Boolean @default(false)
-  totpAttempts Int     @default(0) // brute-force guard on the 6-digit step
+  pendingTotp  Boolean  @default(false)
+  totpAttempts Int      @default(0) // brute-force guard on the 6-digit step
 }
 
 model SavedMap {
@@ -121,4 +123,24 @@ model SavedMap {
   data      String // Tiled/JSON map data as string
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// One line of room chat, kept so that a refresh does not erase what was said.
+//
+// The author's name is copied in rather than read from the account: guests have
+// no account at all, and a member who later changes their display name should
+// not silently rewrite what everyone remembers reading. userId is kept as well,
+// so a person's own messages can still be found after a rename.
+model Message {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  authorName  String
+  body        String
+  createdAt   DateTime  @default(now())
+
+  // every read is "the newest N in this space", which is exactly this index
+  @@index([workspaceId, createdAt])
 }

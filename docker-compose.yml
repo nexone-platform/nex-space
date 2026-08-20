@@ -80,6 +80,10 @@ services:
       #   TURN_LISTEN_IP    the machine's own address, when it has more than one
       #   TURN_EXTERNAL_IP  the public address, as public/private behind NAT
       - STUN_URL=${STUN_URL:-}
+      # How long room chat is kept. Chat at work is a record someone will scroll
+      # back through, but nobody signed up to run an archive — three months is
+      # the compromise. 0 keeps everything, which will grow without end.
+      - CHAT_KEEP_DAYS=${CHAT_KEEP_DAYS:-90}
     ports:
       - "3001:3001"
     volumes:

@@ -13,7 +13,8 @@
     "test:roles": "node scripts/roles-e2e.mjs",
     "test:desk": "node scripts/desk-guard-e2e.mjs",
     "test:guests": "node scripts/guest-pass-e2e.mjs",
-    "test:ice": "node scripts/ice-e2e.mjs"
+    "test:ice": "node scripts/ice-e2e.mjs",
+    "test:chat": "node scripts/chat-e2e.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

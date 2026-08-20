@@ -879,6 +879,102 @@ app.get("/ice", async (req, res) => {
   res.json(iceConfig(who));
 });
 
+// ---- room chat ----
+
+/**
+ * How long a message is kept. Chat in a workplace is a record — someone will
+ * scroll back for a decision or a link — but it is not an archive, and nobody
+ * decided to run one. Three months is long enough to be useful and short enough
+ * that the file does not grow without end.
+ */
+const CHAT_KEEP_DAYS = Number(process.env.CHAT_KEEP_DAYS || 90);
+const CHAT_PAGE = 50;
+
+/**
+ * Who is speaking, by the same rule the room itself uses: a member's session, or
+ * a live guest pass for this space. Returns null when neither holds.
+ *
+ * A guest has no account, so their name comes off the pass. That is also what
+ * makes the name worth storing on the message: there is nothing to look it up
+ * from later.
+ */
+async function speakerFor(req: express.Request, w: { id: string; allowGuests: boolean }) {
+  const token = req.header("authorization")?.replace(/^Bearer\s+/i, "") || String(req.query.token || "");
+  const user = await userFromToken(token || undefined);
+  if (user) {
+    const m = await prisma.membership.findUnique({
+      where: { userId_workspaceId: { userId: user.id, workspaceId: w.id } },
+    });
+    if (m || w.allowGuests) return { userId: user.id, name: user.name };
+    return null;
+  }
+  const code = String(req.query.guest || (req.body ?? {}).guest || "");
+  if (code) {
+    const pass = await prisma.guestPass.findUnique({ where: { code } });
+    if (pass && pass.workspaceId === w.id && passState(pass) === "active") {
+      return { userId: null as string | null, name: pass.name };
+    }
+  }
+  return null;
+}
+
+/** the newest messages, oldest first — the order they are read in */
+app.get("/workspaces/:slug/messages", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const who = await speakerFor(req, w);
+  if (!who) return res.status(401).json({ error: "unauthorized" });
+
+  const limit = Math.min(Math.max(Number(req.query.limit) || CHAT_PAGE, 1), 200);
+  // "before" walks backwards through older pages; without it, the newest page
+  const before = req.query.before ? new Date(String(req.query.before)) : null;
+  const rows = await prisma.message.findMany({
+    where: { workspaceId: w.id, ...(before && !isNaN(+before) ? { createdAt: { lt: before } } : {}) },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+  res.json({
+    messages: rows.reverse().map((m) => ({
+      id: m.id, name: m.authorName, text: m.body, at: m.createdAt, mine: !!who.userId && m.userId === who.userId,
+    })),
+    // there is more history behind this page if it came back full
+    more: rows.length === limit,
+  });
+});
+
+/**
+ * Store one line. Posted by the game server on the speaker's behalf — it holds
+ * their token from the moment they were let into the room — so the same
+ * credential that opens the door writes the message, and a client cannot put
+ * words in anyone else's mouth by talking to this endpoint directly.
+ */
+app.post("/workspaces/:slug/messages", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const who = await speakerFor(req, w);
+  if (!who) return res.status(401).json({ error: "unauthorized" });
+
+  const body = String((req.body ?? {}).text ?? "").slice(0, 300).trim();
+  if (!body) return res.status(400).json({ error: "empty" });
+
+  const m = await prisma.message.create({
+    data: { workspaceId: w.id, userId: who.userId, authorName: who.name, body },
+  });
+  res.json({ message: { id: m.id, name: m.authorName, text: m.body, at: m.createdAt } });
+});
+
+/**
+ * Drop what is past keeping. Runs at startup and once a day after that: a
+ * deployment that is restarted often would otherwise never reach the sweep, and
+ * one that runs for months would never repeat it.
+ */
+async function sweepOldMessages() {
+  if (!(CHAT_KEEP_DAYS > 0)) return;              // 0 or nonsense: keep everything
+  const cutoff = new Date(Date.now() - CHAT_KEEP_DAYS * DAY_MS);
+  const { count } = await prisma.message.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  if (count) console.log(`[chat] removed ${count} message(s) older than ${CHAT_KEEP_DAYS} days`);
+}
+
 // ---- saved maps ----
 app.get("/maps", requireAuth, async (req: AuthedRequest, res) => {
   const maps = await prisma.savedMap.findMany({
@@ -921,6 +1017,9 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   console.error("[api] request failed:", err);
   if (!res.headersSent) res.status(500).json({ error: "internal error" });
 });
+
+void sweepOldMessages().catch((e) => console.error("[chat] sweep failed:", e));
+setInterval(() => void sweepOldMessages().catch((e) => console.error("[chat] sweep failed:", e)), DAY_MS).unref();
 
 if (!turnEnabled) console.warn("[ice] no TURN relay configured — calls will fail for anyone behind a strict firewall (set TURN_SECRET and TURN_HOST)");
 app.listen(port, () => console.log(`[api] NexSpace API on http://localhost:${port}  (db: ${process.env.DATABASE_URL})`));

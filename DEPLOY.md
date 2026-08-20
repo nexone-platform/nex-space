@@ -325,6 +325,26 @@ moving the relay to 443 catches those too — that needs a second IP, because ng
 already holds 443 on this one. TLS (`turns:`) needs a certificate and is off
 unless `TURN_TLS_PORT` is set.
 
+### Chat history
+
+Room chat is kept for 90 days and then swept. The sweep runs when the API starts
+and once a day after that, so a deployment that restarts often still gets it and
+one that runs for months does not skip it.
+
+```dotenv
+CHAT_KEEP_DAYS=90      # 0 keeps everything, and the file grows without end
+```
+
+Two things follow from where it is stored. It lives in the same SQLite file as
+everything else, so it is included in whatever backs that file up — and it is the
+part of the database that grows on its own, which makes it the first reason this
+deployment will eventually want Postgres.
+
+Who may read a space's history is decided by the same door as the space itself: a
+member's session, or a live guest pass. A visitor's lines are recorded under the
+name on their pass, since there is no account to look one up from later, and a
+member who renames themselves does not rewrite what people remember reading.
+
 ### Map theme
 
 Chosen **once, in the create-space wizard**, and fixed after that. It belongs to

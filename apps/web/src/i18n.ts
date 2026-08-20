@@ -326,6 +326,7 @@ const EN: Record<string, string> = {
   "ยังไม่มีสมาชิก": "No members yet",
   "(คุณ)": "(you)",
   "คุณ": "you",
+  "ก่อนหน้านี้": "earlier",
   "เข้าร่วมเมื่อ {date}": "Joined {date}",
   "ตัวเลือก": "Options",
   "เข้าสู่ระบบเพื่อดูและจัดการสมาชิก": "Sign in to see and manage members",

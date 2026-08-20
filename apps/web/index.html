@@ -200,6 +200,12 @@
       .msg .who.me { color: var(--teal); }
       .msg .txt { color: var(--text); word-break: break-word; }
       .chat-empty { color: var(--faint); font-size: 13px; padding: 16px; text-align: center; }
+      /* where history stops and this visit begins */
+      .chat-mark { display: flex; align-items: center; gap: 8px; margin: 4px 0 2px;
+        font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; }
+      .chat-mark::before, .chat-mark::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+      #meet-chat-log .chat-mark { color: #6f757f; }
+      #meet-chat-log .chat-mark::before, #meet-chat-log .chat-mark::after { background: #ffffff1f; }
       .chat-compose { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--border); }
       #room-chat-input { flex: 1; padding: 8px 12px; border: 1px solid var(--border-2); border-radius: 20px; outline: none; font-size: 13px; }
       #room-chat-send { border: none; background: var(--accent); color: #fff; border-radius: 20px; padding: 0 14px; cursor: pointer; font-weight: 600; }

@@ -17,6 +17,7 @@ export class OfficeRoom extends Room<OfficeState> {
                        // (rooms auto-disposing while momentarily empty caused clients to split across instances)
 
   private workspace = "main";
+  private chatStoreWarned = false;
 
   /**
    * Gate the room on workspace membership. The API is the source of truth:
@@ -26,7 +27,11 @@ export class OfficeRoom extends Room<OfficeState> {
    */
   async onAuth(_client: Client, options: { workspace?: string; token?: string; guest?: string } = {}) {
     const slug = String(options.workspace || "main").slice(0, 32);
-    if (slug === DEFAULT_WORKSPACE) return { role: "member" }; // the shared public space
+    // Whatever comes back becomes client.auth, and the chat handler posts with
+    // it: the credential that opened the door is the one that signs what is
+    // said through it.
+    const creds = { token: options.token || "", guest: options.guest || "" };
+    if (slug === DEFAULT_WORKSPACE) return { role: "member", ...creds }; // the shared public space
     try {
       // `guest` is a guest-pass code from the visitor's ?g= link — the API
       // decides whether it is still live
@@ -36,7 +41,7 @@ export class OfficeRoom extends Room<OfficeState> {
       const r = await fetch(url);
       const d = (await r.json()) as { allowed?: boolean; reason?: string; role?: string };
       // the returned object becomes client.auth — the room reads the role from it
-      if (d.allowed) return { role: d.role || "member" };
+      if (d.allowed) return { role: d.role || "member", ...creds };
       throw new Error(d.reason === "members-only" ? "members-only" : "workspace-not-found");
     } catch (e) {
       // a thrown auth error must reach the client; only network faults land here
@@ -121,7 +126,11 @@ export class OfficeRoom extends Room<OfficeState> {
       const me = this.state.players.get(client.sessionId);
       const text = (msg?.text ?? "").toString().slice(0, 300).trim();
       if (!me || !text) return;
+      // Sent first, stored second. The people in the room are waiting for the
+      // message; the record can be a moment behind, and a database that is slow
+      // or down should cost history rather than conversation.
       this.broadcast("roomchat", { from: client.sessionId, name: me.name, text });
+      void this.remember(client, text);
     });
 
     // sit pose: relay to peers so they render the seated sprite
@@ -166,6 +175,44 @@ export class OfficeRoom extends Room<OfficeState> {
     p.avatar = options.avatar || "1";
     this.state.players.set(client.sessionId, p);
     console.log(`[office:${this.workspace}] join ${client.sessionId} (${this.state.players.size} online)`);
+  }
+
+  /**
+   * Write one line to the API, in the speaker's own name.
+   *
+   * Failure is deliberately quiet in the room and loud in the log: the person
+   * has already seen their message appear, and telling them it was not archived
+   * would be noise they can do nothing about. It is worth knowing on the server,
+   * though — a space whose history silently stops is worse than one that never
+   * had any.
+   */
+  private async remember(client: Client, text: string) {
+    const auth = client.auth as { token?: string; guest?: string } | undefined;
+    const qs = auth?.guest ? `?guest=${encodeURIComponent(auth.guest)}` : "";
+    try {
+      const r = await fetch(
+        `${API_URL}/workspaces/${encodeURIComponent(this.workspace)}/messages${qs}`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            ...(auth?.token ? { authorization: `Bearer ${auth.token}` } : {}),
+          },
+          body: JSON.stringify({ text }),
+        },
+      );
+      if (!r.ok && !this.chatStoreWarned) {
+        // once per room, not once per message: a misconfigured space would
+        // otherwise fill the log with the same line at conversation speed
+        this.chatStoreWarned = true;
+        console.warn(`[office:${this.workspace}] chat history is not being stored (API answered ${r.status})`);
+      }
+    } catch (e) {
+      if (!this.chatStoreWarned) {
+        this.chatStoreWarned = true;
+        console.warn(`[office:${this.workspace}] chat history is not being stored:`, e);
+      }
+    }
   }
 
   onLeave(client: Client) {
