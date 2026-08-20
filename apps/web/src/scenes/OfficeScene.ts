@@ -116,6 +116,7 @@ const STATUS_META: Record<string, { color: number; css: string; label: string }>
   afk:     { color: 0xf0b429, css: "#f0b429", label: "ไม่อยู่" },
   muted:   { color: 0xe5484d, css: "#e5484d", label: "ปิดไมค์" },
   meeting: { color: 0x8b949e, css: "#8b949e", label: "อยู่ในประชุม" },
+  busy:    { color: 0xb86bd1, css: "#b86bd1", label: "ห้ามรบกวน" },
 };
 const statusMeta = (s: string) => STATUS_META[s] ?? STATUS_META.online;
 const AFK_MS = 180_000;              // no input for 3 min -> away
@@ -143,6 +144,7 @@ export class OfficeScene extends Phaser.Scene {
   private notifs: { icon: string; title: string; body: string; at: number; seen: boolean; go?: () => void }[] = [];
   private cardFor = "";                         // sessionId the open person card belongs to
   private following = "";                       // sessionId the camera is trailing, "" for me
+  private dnd = false;                          // hearing nobody, on purpose                       // sessionId the camera is trailing, "" for me
   private panning = false;                      // a drag is moving the camera right now
   private cameraFree = false;                   // camera let go of the player to be dragged
   private deskClaimAt = 0;                      // scene time of my last claim (grace window for state reconcile)
@@ -739,6 +741,8 @@ export class OfficeScene extends Phaser.Scene {
       room.onMessage("roomchat", (msg: { from: string; name: string; text: string }) => this.appendChatLog(msg.from, msg.name, msg.text));
       room.onMessage("dm", (msg: { from: string; to: string; name: string; text: string }) => this.onDm(msg));
       room.onMessage("ping", (msg: { from: string; name: string; x: number; y: number }) => this.onPing(msg));
+      room.onMessage("pingRefused", (msg: { name: string }) =>
+        this.toast(t("{name} กำลังห้ามรบกวน — ลองส่งข้อความแทน").replace("{name}", msg.name), "warn"));
       room.onMessage("pingSent", (msg: { name: string }) =>
         this.toast(t("เรียก {name} มาแล้ว").replace("{name}", msg.name), "info"));
       room.onMessage("sit", (m: { from: string; on: boolean; dir: string }) => {
@@ -927,6 +931,7 @@ export class OfficeScene extends Phaser.Scene {
     });
     this.refreshSoundButton();
 
+    document.getElementById("btn-dnd")?.addEventListener("click", () => this.setDnd(!this.dnd));
     document.getElementById("pc-close")?.addEventListener("click", () => this.closePersonCard());
     document.getElementById("pc-cancel")?.addEventListener("click", () => this.closePersonCard());
     document.getElementById("pc-save")?.addEventListener("click", () => void this.saveMyProfile());
@@ -1500,6 +1505,29 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Stop hearing the room without leaving it.
+   *
+   * Three things at once, because they are one intention: the people around
+   * you go quiet, notifications stop making a sound, and anyone who tries to
+   * call you over is told you are busy rather than left wondering. What it
+   * deliberately does NOT do is touch your microphone — changing that behind
+   * somebody's back is how a person ends up talking to nobody.
+   */
+  private setDnd(on: boolean) {
+    this.dnd = on;
+    document.getElementById("btn-dnd")?.classList.toggle("dnd", on);
+    // silence what is already playing rather than waiting for the next frame
+    if (this.room) {
+      for (const [id] of this.room.state.players as any) {
+        if (id !== this.mySessionId && on) this.webrtc?.setPeerVolume(id, 0);
+      }
+    }
+    this.statusCheckAt = 0;            // re-evaluate now, not on the next tick
+    this.toast(on ? t("ห้ามรบกวน — ไม่ได้ยินเสียงรอบตัวและไม่มีเสียงแจ้งเตือน") : t("กลับมารับเสียงตามปกติแล้ว"),
+      on ? "warn" : "success");
+  }
+
   private closePersonCard() {
     this.cardFor = "";
     const card = document.getElementById("person-card") as HTMLElement | null;
@@ -1616,7 +1644,9 @@ export class OfficeScene extends Phaser.Scene {
    * keep track of; an oscillator is none of those and always arrives on time.
    */
   private blip() {
-    if (localStorage.getItem("nexspace-sound") === "off") return;
+    // A notification while on do-not-disturb still belongs in the list — it is
+    // the sound that was unwelcome, not the fact.
+    if (this.dnd || localStorage.getItem("nexspace-sound") === "off") return;
     try {
       const Ctor = window.AudioContext ?? (window as any).webkitAudioContext;
       if (!Ctor) return;
@@ -2252,7 +2282,10 @@ export class OfficeScene extends Phaser.Scene {
     if (mic !== this.myMicOn) { this.myMicOn = mic; this.room?.send("mic", mic); }
     // away wins: if nobody is at the keyboard, the other states don't say much
     const next =
-      this.time.now - this.lastActiveAt > AFK_MS ? "afk"
+      // do-not-disturb first: it is the only one the person chose, and a
+      // choice should not be overwritten by an observation about them
+      this.dnd ? "busy"
+      : this.time.now - this.lastActiveAt > AFK_MS ? "afk"
       : (this.myScreenId || this.inMeetingRoom()) ? "meeting"
       : this.micEverOn && this.webrtc && !this.webrtc.micOn ? "muted"
       : "online";
@@ -2752,7 +2785,10 @@ export class OfficeScene extends Phaser.Scene {
       // playing at whatever volume they had when they crossed the line.
       if (near || this.webrtc?.hasPeer(id)) {
         const dist = Math.sqrt(d2);
-        const vol = dist <= FULL ? 1 : 1 - (dist - FULL) / (this.NEAR - FULL);
+        // The connection stays up while silenced, so turning it off is instant
+        // and the other person is never told they were muted — which is a
+        // thing about them, not about us.
+        const vol = this.dnd ? 0 : dist <= FULL ? 1 : 1 - (dist - FULL) / (this.NEAR - FULL);
         this.webrtc?.setPeerVolume(id, Math.max(0, Math.min(1, vol)));
       }
     }

@@ -4,7 +4,10 @@ import { OfficeState, Player } from "../schema";
 const TILE = 32;
 const SPAWN = { x: 15 * TILE + TILE / 2, y: 18 * TILE + TILE / 2 };
 const NEAR_PX = 5 * TILE; // proximity radius (5 tiles)
-const STATUSES = ["online", "afk", "muted", "meeting"];
+// "busy" is the one a person chooses; the rest are observed. It is also the
+// only one this server acts on rather than merely relaying, because a request
+// to come over is exactly what somebody on do-not-disturb is asking not to get.
+const STATUSES = ["online", "afk", "muted", "meeting", "busy"];
 const DEFAULT_WORKSPACE = "main";
 const API_URL = process.env.API_URL || "http://localhost:3001";
 
@@ -188,6 +191,14 @@ export class OfficeRoom extends Room<OfficeState> {
       const to = String(msg?.to ?? "");
       const target = this.state.players.get(to);
       if (!me || !target || to === client.sessionId) return;
+
+      // Refused here rather than ignored on their machine: the person asking
+      // deserves to know it did not arrive, and the person working deserves
+      // not to be asked.
+      if (target.status === "busy") {
+        client.send("pingRefused", { to, name: target.name });
+        return;
+      }
 
       const key = `${client.sessionId}->${to}`;
       const now = Date.now();
