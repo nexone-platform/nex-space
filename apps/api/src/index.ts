@@ -54,8 +54,10 @@ const safeUser = (u: {
   id: string; email: string; name: string; avatar: string | null;
   desk?: string | null; photoUrl?: string | null; role?: string | null; companySize?: string | null;
   totpEnabledAt?: Date | null; recoveryCodes?: string | null;
+  bio?: string | null; team?: string | null; timezone?: string | null;
 }) => ({
   id: u.id, email: u.email, name: u.name,
+  bio: u.bio ?? null, team: u.team ?? null, timezone: u.timezone ?? null,
   avatar: u.avatar ? JSON.parse(u.avatar) : null,
   desks: parseDesks(u.desk),
   photoUrl: u.photoUrl ?? null,
@@ -420,6 +422,63 @@ app.put("/me/avatar", requireAuth, async (req: AuthedRequest, res) => {
   const avatar = JSON.stringify(req.body ?? {});
   const user = await prisma.user.update({ where: { id: req.user!.id }, data: { avatar } });
   res.json({ user: safeUser(user) });
+});
+
+/**
+ * What this person wants colleagues to know.
+ *
+ * Every field is optional and every field is trimmed to a length that fits a
+ * card — this is an introduction, not a document. The timezone is stored as an
+ * IANA name rather than an offset so it stays right across daylight saving,
+ * which is exactly the moment a wrong one starts costing somebody a meeting.
+ */
+app.put("/me/profile", requireAuth, async (req: AuthedRequest, res) => {
+  const { name, bio, team, timezone } = req.body ?? {};
+  const clean = (v: unknown, max: number) => {
+    const t = String(v ?? "").trim().slice(0, max);
+    return t || null;
+  };
+  const nextName = String(name ?? "").trim().slice(0, 24);
+  const user = await prisma.user.update({
+    where: { id: req.user!.id },
+    data: {
+      ...(nextName ? { name: nextName } : {}),
+      bio: clean(bio, 280),
+      team: clean(team, 60),
+      timezone: clean(timezone, 60),
+    },
+  });
+  res.json({ user: safeUser(user) });
+});
+
+/**
+ * Somebody else's card, readable by anyone who shares the space with them.
+ *
+ * Not by account id alone: that would make every profile on the server readable
+ * by anyone who guessed an id. The space is the reason you are allowed to look.
+ */
+app.get("/workspaces/:slug/members/:userId", requireAuth, async (req: AuthedRequest, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const [mine, theirs] = await Promise.all([
+    prisma.membership.findUnique({ where: { userId_workspaceId: { userId: req.user!.id, workspaceId: w.id } } }),
+    prisma.membership.findUnique({ where: { userId_workspaceId: { userId: req.params.userId, workspaceId: w.id } } }),
+  ]);
+  if (!mine) return res.status(401).json({ error: "unauthorized" });
+  if (!theirs) return res.status(404).json({ error: "not found" });
+
+  const u = await prisma.user.findUnique({ where: { id: req.params.userId } });
+  if (!u) return res.status(404).json({ error: "not found" });
+  res.json({
+    profile: {
+      id: u.id, name: u.name, photoUrl: u.photoUrl ?? null,
+      role: u.role ?? null, bio: u.bio ?? null, team: u.team ?? null, timezone: u.timezone ?? null,
+      // the workspace role, which is a different thing from the job title above
+      memberRole: theirs.role,
+      lastSeenAt: u.lastSeenAt,
+      isMe: u.id === req.user!.id,
+    },
+  });
 });
 
 app.put("/me/desk", requireAuth, async (req: AuthedRequest, res) => {

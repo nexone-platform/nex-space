@@ -19,6 +19,11 @@ model User {
   googleId      String?      @unique
   photoUrl      String? // Google profile picture
   role          String? // onboarding: Founder / Director / Manager / ...
+  // What a colleague would want to know before saying hello. A space like this
+  // is used to find out who someone is, and a name over an avatar does not say.
+  bio           String? // a sentence or two, written by them
+  team          String? // the department or squad they sit with
+  timezone      String? // IANA name, so "is it their morning" is answerable
   companySize   String? // onboarding: "1-10", "11-50", ...
   // authenticator app (TOTP). The secret exists from the moment setup starts;
   // totpEnabledAt is what makes it required at sign-in.

@@ -19,6 +19,8 @@ export class OfficeRoom extends Room<OfficeState> {
   private workspace = "main";
   private chatStoreWarned = false;
   private dmStoreWarned = false;
+  /** last "come here" per sender-to-target pair, so the button cannot be leaned on */
+  private pingedAt = new Map<string, number>();
 
   /**
    * Gate the room on workspace membership. The API is the source of truth:
@@ -72,6 +74,14 @@ export class OfficeRoom extends Room<OfficeState> {
     this.onMessage("avatar", (client, avatar: string) => {
       const p = this.state.players.get(client.sessionId);
       if (p && typeof avatar === "string" && avatar.length <= 2000) p.avatar = avatar;
+    });
+
+    // renamed themselves in their profile — the name tag over their head, the
+    // roster and every future message all read from this one field
+    this.onMessage("name", (client, name: string) => {
+      const p = this.state.players.get(client.sessionId);
+      const clean = String(name ?? "").trim().slice(0, 24);
+      if (p && clean) p.name = clean;
     });
 
     // presence status shown as the dot on each player's name tag
@@ -160,6 +170,34 @@ export class OfficeRoom extends Room<OfficeState> {
         }
       }
       void this.rememberDm(client, to, text);
+    });
+
+    /**
+     * "Come and find me."
+     *
+     * A request, not a command: it arrives as an invitation the other person
+     * can refuse, and only their own client ever moves them. Anything else
+     * would let one player drag another across the map, which is a griefing
+     * tool rather than a feature.
+     *
+     * Throttled per pair, because a button that moves someone else is exactly
+     * the button people press twelve times.
+     */
+    this.onMessage("ping", (client, msg: { to?: string }) => {
+      const me = this.state.players.get(client.sessionId);
+      const to = String(msg?.to ?? "");
+      const target = this.state.players.get(to);
+      if (!me || !target || to === client.sessionId) return;
+
+      const key = `${client.sessionId}->${to}`;
+      const now = Date.now();
+      if (now - (this.pingedAt.get(key) ?? 0) < 10_000) return;
+      this.pingedAt.set(key, now);
+
+      this.clients.find((c) => c.sessionId === to)?.send("ping", {
+        from: client.sessionId, name: me.name, x: me.x, y: me.y,
+      });
+      client.send("pingSent", { to, name: target.name });
     });
 
     // sit pose: relay to peers so they render the seated sprite
@@ -275,6 +313,10 @@ export class OfficeRoom extends Room<OfficeState> {
 
   onLeave(client: Client) {
     this.state.players.delete(client.sessionId);
+    // their throttle entries are dead weight the moment they are gone
+    for (const key of this.pingedAt.keys()) {
+      if (key.startsWith(`${client.sessionId}->`) || key.endsWith(`->${client.sessionId}`)) this.pingedAt.delete(key);
+    }
     console.log(`[office:${this.workspace}] leave ${client.sessionId} (${this.state.players.size} online)`);
   }
 }

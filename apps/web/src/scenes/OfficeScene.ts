@@ -9,7 +9,7 @@ import { openAvatarEditor } from "../avatar/avatarEditor";
 import { WORKSPACE, IS_DEFAULT_WORKSPACE, workspaceLabel, inviteLink, wsKey,
          rememberTheme, themeOverride, GUEST_CODE } from "../workspace";
 import { API as AUTH_API } from "../api";
-import { t, onLangChange } from "../i18n";
+import { t, onLangChange, locale } from "../i18n";
 import { setupPrefsModal } from "../prefsModal";
 import { pickTheme, propPath, THEMES, type Interactive } from "./mapThemes";
 
@@ -140,6 +140,9 @@ export class OfficeScene extends Phaser.Scene {
   private myUserId = "";                        // "" while a guest, or before the roster arrives
   private dmOpen = "";                          // the account whose thread is on screen
   private dmUnread = 0;
+  private notifs: { icon: string; title: string; body: string; at: number; seen: boolean; go?: () => void }[] = [];
+  private cardFor = "";                         // sessionId the open person card belongs to
+  private following = "";                       // sessionId the camera is trailing, "" for me
   private panning = false;                      // a drag is moving the camera right now
   private cameraFree = false;                   // camera let go of the player to be dragged
   private deskClaimAt = 0;                      // scene time of my last claim (grace window for state reconcile)
@@ -735,6 +738,9 @@ export class OfficeScene extends Phaser.Scene {
       room.onMessage("chat", (msg: { from: string; text: string }) => this.showBubble(msg.from, msg.text));
       room.onMessage("roomchat", (msg: { from: string; name: string; text: string }) => this.appendChatLog(msg.from, msg.name, msg.text));
       room.onMessage("dm", (msg: { from: string; to: string; name: string; text: string }) => this.onDm(msg));
+      room.onMessage("ping", (msg: { from: string; name: string; x: number; y: number }) => this.onPing(msg));
+      room.onMessage("pingSent", (msg: { name: string }) =>
+        this.toast(t("เรียก {name} มาแล้ว").replace("{name}", msg.name), "info"));
       room.onMessage("sit", (m: { from: string; on: boolean; dir: string }) => {
         const r = this.remotes.get(m.from);
         if (!r) return;
@@ -896,8 +902,8 @@ export class OfficeScene extends Phaser.Scene {
 
   private setupSidebar() {
     const sidebar = document.getElementById("sidebar");
-    const views: Record<string, string> = { people: "view-people", dm: "view-dm", chat: "view-chat" };
-    const titles: Record<string, string> = { people: "NexSpace", dm: t("ข้อความส่วนตัว"), chat: t("แชตห้องรวม") };
+    const views: Record<string, string> = { people: "view-people", dm: "view-dm", notif: "view-notif", chat: "view-chat" };
+    const titles: Record<string, string> = { people: "NexSpace", dm: t("ข้อความส่วนตัว"), notif: t("การแจ้งเตือน"), chat: t("แชตห้องรวม") };
     const showView = (v: string) => {
       sidebar?.classList.remove("closed");
       for (const [k, id] of Object.entries(views)) {
@@ -911,6 +917,19 @@ export class OfficeScene extends Phaser.Scene {
     document.getElementById("rail-people")?.addEventListener("click", () => showView("people"));
     document.getElementById("rail-chat")?.addEventListener("click", () => { showView("chat"); this.markChatSeen(); });
     document.getElementById("rail-dm")?.addEventListener("click", () => { showView("dm"); this.showDmList(); });
+    document.getElementById("rail-notif")?.addEventListener("click", () => { showView("notif"); this.renderNotifs(true); });
+    document.getElementById("nf-clear")?.addEventListener("click", () => { this.notifs = []; this.renderNotifs(true); });
+    document.getElementById("nf-sound")?.addEventListener("click", () => {
+      const on = localStorage.getItem("nexspace-sound") !== "off";
+      localStorage.setItem("nexspace-sound", on ? "off" : "on");
+      this.refreshSoundButton();
+      if (!on) this.blip();                       // let them hear what they just turned on
+    });
+    this.refreshSoundButton();
+
+    document.getElementById("pc-close")?.addEventListener("click", () => this.closePersonCard());
+    document.getElementById("pc-cancel")?.addEventListener("click", () => this.closePersonCard());
+    document.getElementById("pc-save")?.addEventListener("click", () => void this.saveMyProfile());
     this.showView = showView;
 
     document.getElementById("dm-back")?.addEventListener("click", () => this.showDmList());
@@ -1157,11 +1176,11 @@ export class OfficeScene extends Phaser.Scene {
     const list = document.getElementById("people");
     if (!list || !this.room) return;
     const q = (document.getElementById("sb-search") as HTMLInputElement | null)?.value.toLowerCase() ?? "";
-    const rows: { name: string; self: boolean; status: string; userId: string }[] = [];
+    const rows: { name: string; self: boolean; status: string; userId: string; sessionId: string }[] = [];
     this.room.state.players.forEach((p: any, id: string) => {
       const self = id === this.mySessionId;
       if (self) this.myUserId = p.userId || this.myUserId;
-      rows.push({ name: p.name || "Guest", self, status: self ? this.myStatus : (p.status || "online"), userId: p.userId || "" });
+      rows.push({ name: p.name || "Guest", self, status: self ? this.myStatus : (p.status || "online"), userId: p.userId || "", sessionId: id });
     });
     rows.sort((a, b) => Number(b.self) - Number(a.self) || a.name.localeCompare(b.name));
     list.innerHTML = "";
@@ -1178,6 +1197,12 @@ export class OfficeScene extends Phaser.Scene {
       const nm = document.createElement("b"); nm.textContent = r.name + (r.self ? " " + t("(คุณ)") : "");
       const st = document.createElement("small"); st.textContent = t(meta.label);
       info.append(nm, st); row.append(chip, info);
+      row.style.cursor = "pointer";
+      row.addEventListener("click", (e) => {
+        // the message button on this row has its own job
+        if ((e.target as HTMLElement).closest(".p-dm")) return;
+        this.openPersonCard(r.sessionId, row);
+      });
       // A private thread needs an account at both ends, so the button is only
       // there when there is somewhere for a reply to arrive.
       if (!r.self && r.userId && this.myUserId) {
@@ -1295,6 +1320,10 @@ export class OfficeScene extends Phaser.Scene {
     if (!mine) {
       this.dmUnread++;
       this.refreshDmBadge();
+      this.notify("✉", t("ข้อความจาก {name}").replace("{name}", msg.name), msg.text, () => {
+        this.showView?.("dm");
+        void this.openDmThread(msg.from, msg.name);
+      });
     }
     // the list, if it is the thing on screen, should reorder
     const list = document.getElementById("dm-list");
@@ -1325,6 +1354,289 @@ export class OfficeScene extends Phaser.Scene {
       console.warn("[dm] request failed:", e);
       return null;
     }
+  }
+
+  // ---- one person, and what you can do about them ---------------------------
+
+  /**
+   * The card for whoever was clicked, anchored beside their row.
+   *
+   * Their own card is the edit form: a profile is a thing you keep up to date
+   * about yourself, and putting it behind a settings dialog is how it stays
+   * empty. Everyone else gets the read-only side, plus the three things one
+   * actually wants from a colleague standing somewhere on the map.
+   */
+  private async openPersonCard(sessionId: string, anchor: HTMLElement) {
+    const card = document.getElementById("person-card") as HTMLElement | null;
+    const player: any = this.room?.state.players.get(sessionId);
+    if (!card || !player) return;
+    this.cardFor = sessionId;
+
+    const me = sessionId === this.mySessionId;
+    const name = player.name || "Guest";
+    const { initial, color } = this.chipParts(name);
+    const chip = document.getElementById("pc-chip") as HTMLElement | null;
+    if (chip) { chip.style.background = color; chip.textContent = initial; }
+    const nameEl = document.getElementById("pc-name");
+    if (nameEl) nameEl.textContent = name + (me ? " " + t("(คุณ)") : "");
+
+    const bio = document.getElementById("pc-bio");
+    const facts = document.getElementById("pc-facts");
+    const sub = document.getElementById("pc-sub");
+    const actions = document.getElementById("pc-actions") as HTMLElement | null;
+    const edit = document.getElementById("pc-edit") as HTMLElement | null;
+    if (bio) bio.textContent = "";
+    if (facts) facts.innerHTML = "";
+    if (sub) sub.textContent = t(statusMeta(me ? this.myStatus : (player.status || "online")).label);
+    if (actions) actions.hidden = me;
+    if (edit) edit.hidden = !me;
+
+    // Beside the row if it fits, on the other side of it if not, and never off
+    // the edge: on a narrow window there is no room to the right of the sidebar
+    // at all, and a card half past the edge is a card nobody can close.
+    const box = anchor.getBoundingClientRect();
+    card.hidden = false;
+    const size = card.getBoundingClientRect();
+    const right = box.right + 10;
+    const left = right + size.width <= window.innerWidth - 8
+      ? right
+      : Math.max(8, Math.min(box.left - size.width - 10, window.innerWidth - size.width - 8));
+    card.style.left = Math.round(left) + "px";
+    card.style.top = Math.round(Math.min(Math.max(8, box.top - 8), window.innerHeight - size.height - 8)) + "px";
+
+    if (!me) {
+      const dmBtn = document.getElementById("pc-dm") as HTMLElement | null;
+      const findBtn = document.getElementById("pc-find") as HTMLElement | null;
+      const pingBtn = document.getElementById("pc-ping") as HTMLElement | null;
+      // a guest has no account, so there is nowhere to send a message that lasts
+      if (dmBtn) dmBtn.hidden = !player.userId || !this.myUserId;
+      if (dmBtn) dmBtn.onclick = () => {
+        this.closePersonCard();
+        this.showView?.("dm");
+        void this.openDmThread(player.userId, name);
+      };
+      if (findBtn) findBtn.onclick = () => { this.closePersonCard(); this.followPerson(sessionId, name); };
+      if (pingBtn) pingBtn.onclick = () => { this.closePersonCard(); this.room?.send("ping", { to: sessionId }); };
+    }
+
+    // the parts that live in the database rather than in the room
+    if (player.userId) void this.fillProfile(player.userId, me);
+  }
+
+  private async fillProfile(userId: string, mine: boolean) {
+    const token = localStorage.getItem("nexspace-token") ?? "";
+    if (!token) return;
+    try {
+      const r = await fetch(
+        AUTH_API + "/workspaces/" + encodeURIComponent(WORKSPACE) + "/members/" + encodeURIComponent(userId),
+        { headers: { authorization: "Bearer " + token } },
+      );
+      if (!r.ok) return;
+      const { profile } = (await r.json()) as { profile: any };
+      if (this.cardFor && this.room?.state.players.get(this.cardFor)?.userId !== userId) return;  // they clicked elsewhere
+
+      if (mine) {
+        const set = (id: string, v: string) => {
+          const el = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null;
+          if (el) el.value = v;
+        };
+        set("pc-f-name", profile.name ?? "");
+        set("pc-f-team", profile.team ?? "");
+        set("pc-f-tz", profile.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "");
+        set("pc-f-bio", profile.bio ?? "");
+        return;
+      }
+
+      const bio = document.getElementById("pc-bio");
+      if (bio) bio.textContent = profile.bio ?? "";
+      const facts = document.getElementById("pc-facts");
+      if (!facts) return;
+      const line = (label: string, value: string) => {
+        const row = document.createElement("span");
+        const b = document.createElement("b"); b.textContent = label + " ";
+        row.append(b, document.createTextNode(value));
+        facts.appendChild(row);
+      };
+      if (profile.role) line(t("ตำแหน่ง"), profile.role);
+      if (profile.team) line(t("ทีม"), profile.team);
+      if (profile.timezone) {
+        // the time where they are, which is the only reason a timezone is useful
+        let clock = profile.timezone;
+        try {
+          clock = new Intl.DateTimeFormat(locale(), { hour: "2-digit", minute: "2-digit", timeZone: profile.timezone })
+            .format(new Date()) + " · " + profile.timezone;
+        } catch { /* an invalid zone: show the name they typed */ }
+        line(t("เวลาท้องถิ่น"), clock);
+      }
+    } catch (e) {
+      console.warn("[profile] could not load:", e);
+    }
+  }
+
+  private async saveMyProfile() {
+    const val = (id: string) => (document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null)?.value ?? "";
+    const token = localStorage.getItem("nexspace-token") ?? "";
+    if (!token) return;
+    try {
+      const r = await fetch(AUTH_API + "/me/profile", {
+        method: "PUT",
+        headers: { "content-type": "application/json", authorization: "Bearer " + token },
+        body: JSON.stringify({ name: val("pc-f-name"), team: val("pc-f-team"), timezone: val("pc-f-tz"), bio: val("pc-f-bio") }),
+      });
+      if (!r.ok) { this.toast(t("บันทึกไม่สำเร็จ"), "warn"); return; }
+      const { user } = (await r.json()) as { user: { name: string } };
+      // the name is on the map as well as in the database
+      if (user?.name && user.name !== this.myName) {
+        this.myName = user.name;
+        this.room?.send("name", user.name);
+        this.setAvatarChip(user.name);
+      }
+      this.closePersonCard();
+      this.toast(t("บันทึกโปรไฟล์แล้ว"));
+      this.refreshRoster();
+    } catch (e) {
+      console.warn("[profile] save failed:", e);
+      this.toast(t("บันทึกไม่สำเร็จ"), "warn");
+    }
+  }
+
+  private closePersonCard() {
+    this.cardFor = "";
+    const card = document.getElementById("person-card") as HTMLElement | null;
+    if (card) card.hidden = true;
+  }
+
+  // ---- finding people -------------------------------------------------------
+
+  /**
+   * Send the camera to somebody and let it trail them.
+   *
+   * The same state the map drag uses: the camera has let go of you, and the
+   * first step you take takes it back. Watching a colleague cross the office is
+   * a thing you do for a moment, not a mode to be exited.
+   */
+  private followPerson(sessionId: string, name: string) {
+    const sprite = this.remotes.get(sessionId)?.sprite;
+    if (!sprite) { this.toast(t("หาไม่เจอ — เขาอาจออกไปแล้ว"), "warn"); return; }
+    this.following = sessionId;
+    this.cameraFree = true;
+    this.cameras.main.startFollow(sprite, true, 0.12, 0.12);
+    this.toast(t("กำลังตามดู {name} — เดินเมื่อไหร่กล้องกลับมาเอง").replace("{name}", name), "info");
+  }
+
+  /** somebody would like us to come over */
+  private onPing(msg: { from: string; name: string; x: number; y: number }) {
+    this.notify("🖐", t("{name} เรียกให้ไปหา").replace("{name}", msg.name), t("กดเพื่อไปที่นั่น"),
+      () => this.goTo(msg.x, msg.y));
+    this.toast(t("{name} เรียกให้ไปหา — เปิดกระดิ่งเพื่อไป").replace("{name}", msg.name), "info");
+  }
+
+  /**
+   * Stand next to a point, not on it.
+   *
+   * Landing exactly where somebody is standing pushes them out of the way and
+   * looks like a bug, so the nearest walkable tile around them is used instead —
+   * and if every one of those is taken, the spot itself, which is still better
+   * than refusing to move.
+   */
+  private goTo(x: number, y: number) {
+    const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE);
+    const spots = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1], [0, 0]];
+    let dest = { x, y };
+    for (const [dx, dy] of spots) {
+      const gx = tx + dx, gy = ty + dy;
+      if (this.walkable[gy]?.[gx]) { dest = { x: gx * TILE + TILE / 2, y: gy * TILE + TILE / 2 }; break; }
+    }
+    const cam = this.cameras.main;
+    this.clearPath();
+    this.followMeAgain();
+    cam.fadeOut(140);
+    cam.once("camerafadeoutcomplete", () => {
+      this.player.setPosition(dest.x, dest.y);
+      this.player.body!.reset(dest.x, dest.y);
+      cam.fadeIn(160);
+    });
+  }
+
+  // ---- what was missed ------------------------------------------------------
+
+  /** add something worth coming back to, and say so quietly */
+  private notify(icon: string, title: string, body: string, go?: () => void) {
+    this.notifs.unshift({ icon, title, body, at: Date.now(), seen: false, go });
+    if (this.notifs.length > 50) this.notifs.length = 50;   // a list, not a log
+    this.renderNotifs(false);
+    this.blip();
+  }
+
+  private renderNotifs(markSeen: boolean) {
+    const list = document.getElementById("nf-list");
+    if (markSeen) for (const n of this.notifs) n.seen = true;
+
+    const badge = document.getElementById("notif-unread");
+    const unseen = this.notifs.filter((n) => !n.seen).length;
+    if (badge) {
+      badge.textContent = unseen > 9 ? "9+" : String(unseen);
+      badge.hidden = unseen === 0;
+    }
+    if (!list) return;
+
+    list.innerHTML = "";
+    if (!this.notifs.length) {
+      const empty = document.createElement("div");
+      empty.className = "chat-empty";
+      empty.textContent = t("ยังไม่มีอะไรพลาดไป");
+      list.appendChild(empty);
+      return;
+    }
+    for (const n of this.notifs) {
+      const row = document.createElement("button");
+      row.className = "nf-row" + (n.seen ? "" : " unseen");
+      const ico = document.createElement("span"); ico.className = "nf-ico"; ico.textContent = n.icon;
+      const body = document.createElement("span"); body.className = "nf-body";
+      const b = document.createElement("b"); b.textContent = n.title;
+      const sm = document.createElement("small"); sm.textContent = n.body;
+      body.append(b, sm);
+      const when = document.createElement("time");
+      when.textContent = new Intl.DateTimeFormat(locale(), { hour: "2-digit", minute: "2-digit" }).format(n.at);
+      row.append(ico, body, when);
+      if (n.go) row.addEventListener("click", () => { n.seen = true; n.go!(); this.renderNotifs(false); });
+      list.appendChild(row);
+    }
+  }
+
+  private refreshSoundButton() {
+    const btn = document.getElementById("nf-sound");
+    btn?.classList.toggle("off", localStorage.getItem("nexspace-sound") === "off");
+  }
+
+  /**
+   * Two short notes, made rather than loaded.
+   *
+   * A notification sound is four kilobytes of asset, a fetch, and a licence to
+   * keep track of; an oscillator is none of those and always arrives on time.
+   */
+  private blip() {
+    if (localStorage.getItem("nexspace-sound") === "off") return;
+    try {
+      const Ctor = window.AudioContext ?? (window as any).webkitAudioContext;
+      if (!Ctor) return;
+      const ac: AudioContext = ((this as any)._ac ??= new Ctor());
+      if (ac.state === "suspended") void ac.resume();
+      const now = ac.currentTime;
+      for (const [at, hz] of [[0, 880], [0.12, 1174]] as [number, number][]) {
+        const osc = ac.createOscillator();
+        const gain = ac.createGain();
+        osc.frequency.value = hz;
+        osc.type = "sine";
+        // a shaped envelope, because a square-edged tone clicks
+        gain.gain.setValueAtTime(0.0001, now + at);
+        gain.gain.exponentialRampToValueAtTime(0.07, now + at + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.11);
+        osc.connect(gain).connect(ac.destination);
+        osc.start(now + at);
+        osc.stop(now + at + 0.13);
+      }
+    } catch { /* audio is a nicety; never let it break the room */ }
   }
 
   private async openDeviceMenu(kind: "mic" | "cam", anchor: HTMLElement) {
@@ -1979,6 +2291,8 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private removeRemote(sessionId: string) {
+    // watching an empty spot is worse than not watching: come home instead
+    if (this.following === sessionId) { this.following = ""; this.cameraFree = true; this.followMeAgain(); }
     const r = this.remotes.get(sessionId);
     if (!r) return;
     r.sprite.destroy();
@@ -2302,6 +2616,7 @@ export class OfficeScene extends Phaser.Scene {
    */
   private followMeAgain() {
     if (!this.cameraFree || this.panning) return;
+    this.following = "";
     this.cameraFree = false;
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
   }

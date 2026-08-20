@@ -236,6 +236,60 @@
       .p-dm:hover { background: var(--surface); color: var(--accent); }
       .p-dm svg { width: 16px; height: 16px; }
 
+      /* ---- notifications ---- */
+      .nf-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px 8px; }
+      .nf-head span { flex: 1; font-size: 13px; font-weight: 600; color: var(--muted); }
+      .nf-head button { border: none; background: var(--surface-3); color: var(--text-3); cursor: pointer;
+        border-radius: 8px; padding: 4px 9px; font: 12px "Segoe UI", sans-serif; }
+      .nf-head button:hover { background: var(--border-2); }
+      .nf-head #nf-sound.off { opacity: .45; }
+      #nf-list { overflow-y: auto; flex: 1; padding: 0 8px 12px; }
+      .nf-row { display: flex; gap: 10px; padding: 9px 8px; border-radius: 10px; width: 100%;
+        border: none; background: none; text-align: left; font: inherit; cursor: pointer; align-items: flex-start; }
+      .nf-row:hover { background: var(--surface-3); }
+      .nf-row.unseen { background: var(--accent-soft); }
+      .nf-row .nf-ico { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 7px; display: grid;
+        place-items: center; background: var(--surface-3); font-size: 12px; }
+      .nf-row .nf-body { display: flex; flex-direction: column; line-height: 1.35; overflow: hidden; }
+      .nf-row b { font-size: 13.5px; color: var(--text); font-weight: 600; }
+      .nf-row small { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+      .nf-row time { font-size: 11px; color: var(--faint); margin-left: auto; flex: 0 0 auto; }
+
+      /* ---- one person, and what you can do about them ---- */
+      /* border-box: this stylesheet has no global reset, so a plain width plus
+         padding would make the card 34px wider than the number says — which is
+         the difference between fitting beside the sidebar and not. */
+      #person-card { position: fixed; z-index: 28; box-sizing: border-box; width: 288px; max-width: calc(100vw - 24px);
+        background: var(--surface); border: 1px solid var(--border-2); border-radius: 14px;
+        box-shadow: 0 14px 40px #0000002e; padding: 14px 16px 12px; font-family: "Segoe UI", sans-serif; }
+      #person-card[hidden] { display: none; }
+      .pc-top { display: flex; align-items: center; gap: 10px; }
+      .pc-who { display: flex; flex-direction: column; line-height: 1.3; overflow: hidden; flex: 1; }
+      .pc-who b { font-size: 15px; color: var(--text); }
+      .pc-who small { font-size: 12px; color: var(--muted); }
+      #pc-close { border: none; background: transparent; color: var(--faint); cursor: pointer; font-size: 14px;
+        width: 24px; height: 24px; border-radius: 7px; }
+      #pc-close:hover { background: var(--surface-3); color: var(--text); }
+      #pc-bio { margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--text-3); }
+      #pc-bio:empty { display: none; }
+      #pc-facts { display: grid; gap: 4px; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+      #pc-facts:empty { display: none; }
+      #pc-facts span b { color: var(--text-3); font-weight: 600; }
+      #pc-actions { display: flex; gap: 6px; margin-top: 14px; }
+      #pc-actions button { flex: 1; border: 1px solid var(--border-2); background: var(--surface-3);
+        color: var(--text-3); border-radius: 9px; padding: 7px 0; font: 600 12.5px "Segoe UI", sans-serif; cursor: pointer; }
+      #pc-actions button:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+      #pc-actions button[hidden] { display: none; }
+      #pc-edit { display: grid; gap: 9px; margin-top: 12px; }
+      #pc-edit[hidden] { display: none; }
+      #pc-edit label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+      #pc-edit input, #pc-edit textarea { padding: 7px 10px; font-size: 13px; resize: vertical; }
+      .pc-edit-actions { display: flex; gap: 6px; }
+      .pc-edit-actions button { flex: 1; border-radius: 9px; padding: 8px 0; font: 600 13px "Segoe UI", sans-serif; cursor: pointer; }
+      #pc-save { border: none; background: var(--accent); color: #fff; }
+      #pc-save:hover { background: var(--accent-hover); }
+      #pc-cancel { border: 1px solid var(--border-2); background: var(--surface-3); color: var(--text-3); }
+
       /* interactive-object prompt + embed modal */
       #interact-hint { position: fixed; left: calc(var(--dock) + (100vw - var(--dock)) / 2); bottom: 74px;
         transform: translateX(-50%); z-index: 22;
@@ -1300,6 +1354,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z"/></svg>
       </button>
       <span class="spacer"></span>
+      <button id="rail-notif" title="การแจ้งเตือน">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span id="notif-unread" class="rail-badge" hidden>0</span>
+      </button>
       <button id="rail-settings" title="ตั้งค่า">
         <!-- Six chunky teeth on an exact 60° pitch. The previous gear had twelve
              thin ones and collapsed into a blur at this icon's real 22px size. -->
@@ -1341,6 +1399,15 @@
         </div>
       </div>
 
+      <div id="view-notif" class="sb-view" hidden>
+        <div class="nf-head">
+          <span>ล่าสุด</span>
+          <button id="nf-sound" title="เสียงแจ้งเตือน">🔔</button>
+          <button id="nf-clear">ล้าง</button>
+        </div>
+        <div id="nf-list"><div class="chat-empty">ยังไม่มีอะไรพลาดไป</div></div>
+      </div>
+
       <div id="view-chat" class="sb-view" hidden>
         <div id="chat-log"><div class="chat-empty">ยังไม่มีข้อความ — ทักทายทั้งห้องได้เลย 👋</div></div>
         <div class="chat-compose">
@@ -1350,6 +1417,35 @@
       </div>
 
     </aside>
+    <!-- one person, and what you can do about them -->
+    <div id="person-card" hidden>
+      <div class="pc-top">
+        <span id="pc-chip" class="p-chip"></span>
+        <div class="pc-who">
+          <b id="pc-name"></b>
+          <small id="pc-sub"></small>
+        </div>
+        <button id="pc-close" title="ปิด">✕</button>
+      </div>
+      <p id="pc-bio"></p>
+      <div id="pc-facts"></div>
+      <div id="pc-actions">
+        <button id="pc-dm">ข้อความ</button>
+        <button id="pc-find">ตามตัว</button>
+        <button id="pc-ping">เรียกมาหา</button>
+      </div>
+      <div id="pc-edit" hidden>
+        <label>ชื่อที่แสดง<input id="pc-f-name" type="text" maxlength="24" /></label>
+        <label>ทีม / แผนก<input id="pc-f-team" type="text" maxlength="60" placeholder="เช่น ฝ่ายพัฒนา" /></label>
+        <label>เขตเวลา<input id="pc-f-tz" type="text" maxlength="60" placeholder="Asia/Bangkok" /></label>
+        <label>แนะนำตัว<textarea id="pc-f-bio" maxlength="280" rows="3" placeholder="ทำอะไรอยู่ ติดต่อเรื่องอะไรได้บ้าง"></textarea></label>
+        <div class="pc-edit-actions">
+          <button id="pc-save">บันทึก</button>
+          <button id="pc-cancel">ยกเลิก</button>
+        </div>
+      </div>
+    </div>
+
     <!-- who is in the meeting room; shown only while you are standing in it -->
     <div id="meet-panel">
       <div class="meet-head">
