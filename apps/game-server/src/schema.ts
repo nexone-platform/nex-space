@@ -15,6 +15,10 @@ export class Player extends Schema {
   // Raising a hand is a request to speak, so it has to outlive the moment it is
   // sent — a chat message would scroll away.
   @type("boolean") handUp = false;
+  // The account behind this player, empty for a guest. Clients need it to start
+  // a private thread with someone: a session id is gone the moment they reload,
+  // and a thread has to survive that.
+  @type("string") userId = "";
 }
 
 export class OfficeState extends Schema {

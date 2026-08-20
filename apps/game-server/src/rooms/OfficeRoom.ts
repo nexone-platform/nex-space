@@ -18,6 +18,7 @@ export class OfficeRoom extends Room<OfficeState> {
 
   private workspace = "main";
   private chatStoreWarned = false;
+  private dmStoreWarned = false;
 
   /**
    * Gate the room on workspace membership. The API is the source of truth:
@@ -39,9 +40,9 @@ export class OfficeRoom extends Room<OfficeState> {
         + `?token=${encodeURIComponent(options.token || "")}`
         + `&guest=${encodeURIComponent(options.guest || "")}`;
       const r = await fetch(url);
-      const d = (await r.json()) as { allowed?: boolean; reason?: string; role?: string };
+      const d = (await r.json()) as { allowed?: boolean; reason?: string; role?: string; userId?: string };
       // the returned object becomes client.auth — the room reads the role from it
-      if (d.allowed) return { role: d.role || "member", ...creds };
+      if (d.allowed) return { role: d.role || "member", userId: d.userId || "", ...creds };
       throw new Error(d.reason === "members-only" ? "members-only" : "workspace-not-found");
     } catch (e) {
       // a thrown auth error must reach the client; only network faults land here
@@ -133,6 +134,34 @@ export class OfficeRoom extends Room<OfficeState> {
       void this.remember(client, text);
     });
 
+    /**
+     * A message for one person.
+     *
+     * Delivered to whichever sockets that account has open right now, echoed to
+     * the sender so their own thread updates, and stored either way — the point
+     * of a private message is that it waits for someone who is not here.
+     *
+     * The recipient is named by account, not by session: they may be in the room
+     * twice, or not at all, and the message means the same thing in every case.
+     */
+    this.onMessage("dm", (client, msg: { to?: string; text?: string }) => {
+      const me = this.state.players.get(client.sessionId);
+      const to = String(msg?.to ?? "");
+      const text = (msg?.text ?? "").toString().slice(0, 300).trim();
+      const mine = (client.auth as { userId?: string } | undefined)?.userId || "";
+      // a guest has no account to be answered at, so they cannot start a thread
+      if (!me || !to || !text || !mine || to === mine) return;
+
+      const payload = { from: mine, to, name: me.name, text, at: new Date().toISOString() };
+      client.send("dm", payload);
+      for (const [sessionId, p] of this.state.players) {
+        if (p.userId === to && sessionId !== client.sessionId) {
+          this.clients.find((c) => c.sessionId === sessionId)?.send("dm", payload);
+        }
+      }
+      void this.rememberDm(client, to, text);
+    });
+
     // sit pose: relay to peers so they render the seated sprite
     this.onMessage("sit", (client, msg: { on: boolean; dir: string }) => {
       this.broadcast("sit", { from: client.sessionId, on: !!msg?.on, dir: String(msg?.dir ?? "down") }, { except: client });
@@ -173,6 +202,8 @@ export class OfficeRoom extends Room<OfficeState> {
     p.y = SPAWN.y;
     p.name = options.name?.slice(0, 24) || `Guest-${client.sessionId.slice(0, 4)}`;
     p.avatar = options.avatar || "1";
+    // guests keep "", which is what makes them un-addressable in a private thread
+    p.userId = (client.auth as { userId?: string } | undefined)?.userId || "";
     this.state.players.set(client.sessionId, p);
     console.log(`[office:${this.workspace}] join ${client.sessionId} (${this.state.players.size} online)`);
   }
@@ -211,6 +242,33 @@ export class OfficeRoom extends Room<OfficeState> {
       if (!this.chatStoreWarned) {
         this.chatStoreWarned = true;
         console.warn(`[office:${this.workspace}] chat history is not being stored:`, e);
+      }
+    }
+  }
+
+  /** the same write as a room line, addressed to one person */
+  private async rememberDm(client: Client, to: string, text: string) {
+    const auth = client.auth as { token?: string } | undefined;
+    try {
+      const r = await fetch(
+        `${API_URL}/workspaces/${encodeURIComponent(this.workspace)}/dm/${encodeURIComponent(to)}`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            ...(auth?.token ? { authorization: `Bearer ${auth.token}` } : {}),
+          },
+          body: JSON.stringify({ text }),
+        },
+      );
+      if (!r.ok && !this.dmStoreWarned) {
+        this.dmStoreWarned = true;
+        console.warn(`[office:${this.workspace}] private messages are not being stored (API answered ${r.status})`);
+      }
+    } catch (e) {
+      if (!this.dmStoreWarned) {
+        this.dmStoreWarned = true;
+        console.warn(`[office:${this.workspace}] private messages are not being stored:`, e);
       }
     }
   }

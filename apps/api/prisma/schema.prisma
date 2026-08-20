@@ -34,7 +34,9 @@ model User {
   maps          SavedMap[]
   owned         Workspace[]  @relation("OwnedWorkspaces")
   memberships   Membership[]
-  Message       Message[]
+  sent          Message[]    @relation("MessagesSent")
+  received      Message[]    @relation("MessagesReceived")
+  dmReads       DmRead[]
 }
 
 // A company / community space. People join via its invite code; the owner
@@ -136,11 +138,33 @@ model Message {
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   userId      String?
-  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user        User?     @relation("MessagesSent", fields: [userId], references: [id], onDelete: SetNull)
+  // Null means the room. Set means this line was meant for one person, and the
+  // room must never be shown it — every room query filters on this being null,
+  // and the one that forgets is the one that publishes a private conversation.
+  toUserId    String?
+  to          User?     @relation("MessagesReceived", fields: [toUserId], references: [id], onDelete: Cascade)
   authorName  String
   body        String
   createdAt   DateTime  @default(now())
 
-  // every read is "the newest N in this space", which is exactly this index
+  // the room reads "the newest N here", a thread reads "the newest N between
+  // these two" — different questions, so different indexes
   @@index([workspaceId, createdAt])
+  @@index([workspaceId, toUserId, createdAt])
+}
+
+// How far one person has read another's private messages.
+//
+// Kept on the server rather than in the browser so the count is the same on a
+// phone as on a desktop: an unread badge only one machine knows about is a badge
+// that is wrong everywhere else.
+model DmRead {
+  workspaceId String
+  userId      String
+  peerId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt      DateTime @default(now())
+
+  @@id([workspaceId, userId, peerId])
 }

@@ -137,6 +137,9 @@ export class OfficeScene extends Phaser.Scene {
   private walkable: boolean[][] = [];           // tiles with no wall and no solid prop
   private path: { x: number; y: number }[] = []; // remaining click-to-move waypoints
   private moveMarker?: Phaser.GameObjects.Arc;
+  private myUserId = "";                        // "" while a guest, or before the roster arrives
+  private dmOpen = "";                          // the account whose thread is on screen
+  private dmUnread = 0;
   private panning = false;                      // a drag is moving the camera right now
   private cameraFree = false;                   // camera let go of the player to be dragged
   private deskClaimAt = 0;                      // scene time of my last claim (grace window for state reconcile)
@@ -670,6 +673,7 @@ export class OfficeScene extends Phaser.Scene {
       this.room = room;
       this.mySessionId = room.sessionId;
       void this.loadChatHistory();
+      void this.refreshDmCount();
       console.log(`[nexspace] joined room ${room.roomId} as ${room.sessionId}`);
       setTimeout(() => console.log(`[nexspace] room ${room.roomId}: ${room.state.players.size} online`), 1200);
       const $ = getStateCallbacks(room);
@@ -730,6 +734,7 @@ export class OfficeScene extends Phaser.Scene {
       });
       room.onMessage("chat", (msg: { from: string; text: string }) => this.showBubble(msg.from, msg.text));
       room.onMessage("roomchat", (msg: { from: string; name: string; text: string }) => this.appendChatLog(msg.from, msg.name, msg.text));
+      room.onMessage("dm", (msg: { from: string; to: string; name: string; text: string }) => this.onDm(msg));
       room.onMessage("sit", (m: { from: string; on: boolean; dir: string }) => {
         const r = this.remotes.get(m.from);
         if (!r) return;
@@ -891,8 +896,8 @@ export class OfficeScene extends Phaser.Scene {
 
   private setupSidebar() {
     const sidebar = document.getElementById("sidebar");
-    const views: Record<string, string> = { people: "view-people", chat: "view-chat" };
-    const titles: Record<string, string> = { people: "NexSpace", chat: t("แชตห้องรวม") };
+    const views: Record<string, string> = { people: "view-people", dm: "view-dm", chat: "view-chat" };
+    const titles: Record<string, string> = { people: "NexSpace", dm: t("ข้อความส่วนตัว"), chat: t("แชตห้องรวม") };
     const showView = (v: string) => {
       sidebar?.classList.remove("closed");
       for (const [k, id] of Object.entries(views)) {
@@ -905,6 +910,19 @@ export class OfficeScene extends Phaser.Scene {
     document.getElementById("btn-edit-avatar")?.addEventListener("click", () => void this.editAvatarInRoom());
     document.getElementById("rail-people")?.addEventListener("click", () => showView("people"));
     document.getElementById("rail-chat")?.addEventListener("click", () => { showView("chat"); this.markChatSeen(); });
+    document.getElementById("rail-dm")?.addEventListener("click", () => { showView("dm"); this.showDmList(); });
+    this.showView = showView;
+
+    document.getElementById("dm-back")?.addEventListener("click", () => this.showDmList());
+    const dmInput = document.getElementById("dm-input") as HTMLInputElement | null;
+    const sendDm = () => {
+      const text = dmInput?.value.trim() ?? "";
+      if (!text || !this.dmOpen || !this.room) return;
+      this.room.send("dm", { to: this.dmOpen, text });
+      if (dmInput) dmInput.value = "";
+    };
+    document.getElementById("dm-send")?.addEventListener("click", sendDm);
+    dmInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") sendDm(); });
     // the gear opens the preferences dialog (members, space settings)
     const prefs = setupPrefsModal(WORKSPACE, IS_DEFAULT_WORKSPACE);
     document.getElementById("rail-settings")?.addEventListener("click", () => prefs.open("members"));
@@ -1139,10 +1157,11 @@ export class OfficeScene extends Phaser.Scene {
     const list = document.getElementById("people");
     if (!list || !this.room) return;
     const q = (document.getElementById("sb-search") as HTMLInputElement | null)?.value.toLowerCase() ?? "";
-    const rows: { name: string; self: boolean; status: string }[] = [];
+    const rows: { name: string; self: boolean; status: string; userId: string }[] = [];
     this.room.state.players.forEach((p: any, id: string) => {
       const self = id === this.mySessionId;
-      rows.push({ name: p.name || "Guest", self, status: self ? this.myStatus : (p.status || "online") });
+      if (self) this.myUserId = p.userId || this.myUserId;
+      rows.push({ name: p.name || "Guest", self, status: self ? this.myStatus : (p.status || "online"), userId: p.userId || "" });
     });
     rows.sort((a, b) => Number(b.self) - Number(a.self) || a.name.localeCompare(b.name));
     list.innerHTML = "";
@@ -1158,7 +1177,153 @@ export class OfficeScene extends Phaser.Scene {
       const info = document.createElement("span"); info.className = "p-info";
       const nm = document.createElement("b"); nm.textContent = r.name + (r.self ? " " + t("(คุณ)") : "");
       const st = document.createElement("small"); st.textContent = t(meta.label);
-      info.append(nm, st); row.append(chip, info); list.appendChild(row);
+      info.append(nm, st); row.append(chip, info);
+      // A private thread needs an account at both ends, so the button is only
+      // there when there is somewhere for a reply to arrive.
+      if (!r.self && r.userId && this.myUserId) {
+        const dm = document.createElement("button");
+        dm.className = "p-dm";
+        dm.title = t("ส่งข้อความส่วนตัว");
+        dm.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H7l-3 3z"/></svg>';
+        dm.addEventListener("click", () => { this.showView?.("dm"); void this.openDmThread(r.userId, r.name); });
+        row.appendChild(dm);
+      }
+      list.appendChild(row);
+    }
+  }
+
+  private showView?: (v: string) => void;
+
+  /** who is in this space right now, by account — for names in a thread list */
+  private nameOf(userId: string) {
+    if (!this.room) return "";
+    for (const [, p] of this.room.state.players as any) if (p.userId === userId) return p.name as string;
+    return "";
+  }
+
+  /**
+   * The list of conversations, and how much of each is new.
+   *
+   * Fetched rather than remembered: the unread count belongs to the account, not
+   * to this tab, so someone who read a thread on their phone should not come back
+   * to a badge here saying otherwise.
+   */
+  private async showDmList() {
+    this.dmOpen = "";
+    const list = document.getElementById("dm-list");
+    const thread = document.getElementById("dm-thread") as HTMLElement | null;
+    if (!list || !thread) return;
+    thread.hidden = true;
+    list.hidden = false;
+
+    const d = await this.dmFetch<{ threads?: { peerId: string; name: string; text: string; at: string; unread: number }[] }>("");
+    const threads = d?.threads ?? [];
+    this.dmUnread = threads.reduce((n, t2) => n + t2.unread, 0);
+    this.refreshDmBadge();
+
+    list.innerHTML = "";
+    if (!threads.length) {
+      const empty = document.createElement("div");
+      empty.className = "chat-empty";
+      empty.textContent = t("ยังไม่มีข้อความส่วนตัว — เริ่มได้จากรายชื่อคน");
+      list.appendChild(empty);
+      return;
+    }
+    for (const th of threads) {
+      const name = th.name || this.nameOf(th.peerId) || t("สมาชิก");
+      const { initial, color } = this.chipParts(name);
+      const row = document.createElement("button"); row.className = "dm-row";
+      const chip = document.createElement("span"); chip.className = "p-chip";
+      chip.style.background = color; chip.textContent = initial;
+      const meta = document.createElement("span"); meta.className = "dm-meta";
+      const b = document.createElement("b"); b.textContent = name;
+      const small = document.createElement("small"); small.textContent = th.text;
+      meta.append(b, small);
+      row.append(chip, meta);
+      if (th.unread) {
+        const n = document.createElement("span"); n.className = "dm-new";
+        n.textContent = th.unread > 9 ? "9+" : String(th.unread);
+        row.appendChild(n);
+      }
+      row.addEventListener("click", () => void this.openDmThread(th.peerId, name));
+      list.appendChild(row);
+    }
+  }
+
+  /** one conversation, and opening it is what clears its badge */
+  private async openDmThread(peerId: string, name: string) {
+    this.dmOpen = peerId;
+    const list = document.getElementById("dm-list");
+    const thread = document.getElementById("dm-thread") as HTMLElement | null;
+    const log = document.getElementById("dm-log");
+    const withWho = document.getElementById("dm-with");
+    if (!list || !thread || !log) return;
+    list.hidden = true;
+    thread.hidden = false;
+    if (withWho) withWho.textContent = name;
+    log.innerHTML = "";
+
+    const d = await this.dmFetch<{ messages?: { name: string; text: string; mine: boolean }[] }>(`/${encodeURIComponent(peerId)}`);
+    for (const m of d?.messages ?? []) log.appendChild(this.chatLine(m.mine, m.name, m.text));
+    if (!(d?.messages ?? []).length) {
+      const empty = document.createElement("div");
+      empty.className = "chat-empty";
+      empty.textContent = t("ยังไม่มีข้อความในนี้");
+      log.appendChild(empty);
+    }
+    log.scrollTop = log.scrollHeight;
+    (document.getElementById("dm-input") as HTMLInputElement | null)?.focus();
+    // the badge was cleared on the server by that read; reflect it here
+    void this.refreshDmCount();
+  }
+
+  /** a line arriving while we are looking somewhere else */
+  private onDm(msg: { from: string; to: string; name: string; text: string }) {
+    const mine = msg.from === this.myUserId;
+    const peer = mine ? msg.to : msg.from;
+    if (this.dmOpen === peer) {
+      const log = document.getElementById("dm-log");
+      if (log) {
+        log.querySelector(".chat-empty")?.remove();
+        log.appendChild(this.chatLine(mine, msg.name, msg.text));
+        log.scrollTop = log.scrollHeight;
+      }
+      // reading it as it lands still counts as reading it
+      if (!mine) void this.dmFetch(`/${encodeURIComponent(peer)}`);
+      return;
+    }
+    if (!mine) {
+      this.dmUnread++;
+      this.refreshDmBadge();
+    }
+    // the list, if it is the thing on screen, should reorder
+    const list = document.getElementById("dm-list");
+    if (list && !list.hidden && !document.getElementById("view-dm")?.hidden) void this.showDmList();
+  }
+
+  private async refreshDmCount() {
+    const d = await this.dmFetch<{ threads?: { unread: number }[] }>("");
+    this.dmUnread = (d?.threads ?? []).reduce((n, t2) => n + t2.unread, 0);
+    this.refreshDmBadge();
+  }
+
+  private refreshDmBadge() {
+    const badge = document.getElementById("dm-unread");
+    if (!badge) return;
+    badge.textContent = this.dmUnread > 9 ? "9+" : String(this.dmUnread);
+    badge.hidden = this.dmUnread === 0;
+  }
+
+  private async dmFetch<T>(path: string): Promise<T | null> {
+    const token = localStorage.getItem("nexspace-token") ?? "";
+    if (!token) return null;                       // a guest has no threads to read
+    try {
+      const r = await fetch(`${AUTH_API}/workspaces/${encodeURIComponent(WORKSPACE)}/dm${path}`,
+        { headers: { authorization: `Bearer ${token}` } });
+      return r.ok ? ((await r.json()) as T) : null;
+    } catch (e) {
+      console.warn("[dm] request failed:", e);
+      return null;
     }
   }
 

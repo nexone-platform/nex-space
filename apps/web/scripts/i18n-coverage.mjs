@@ -34,9 +34,18 @@ files.push(join(ROOT, "index.html"));
 
 const THAI = /[฀-๿]/;
 const dict = new Set();
+// A key written twice is not an error the language ever shows: the second entry
+// silently replaces the first, so a phrase quietly changes its translation the
+// moment somebody adds an entry that already exists. TypeScript catches it in
+// this file, but only because the dictionary happens to be a literal — so it is
+// worth naming here, where the message says which key.
+const duplicates = [];
 for (const m of readFileSync(join(ROOT, "src/i18n.ts"), "utf8").matchAll(/^\s*"((?:[^"\\]|\\.)+)":/gm)) {
-  dict.add(m[1].replace(/\\"/g, '"'));
+  const key = m[1].replace(/\\"/g, '"');
+  if (dict.has(key)) duplicates.push(key);
+  dict.add(key);
 }
+for (const d of duplicates) console.log(`duplicate ${d.slice(0, 70)}`);
 
 let missing = 0, unwrapped = 0;
 
@@ -75,6 +84,7 @@ for (const m of html.matchAll(/(?:placeholder|title|alt|aria-label)="([^"]+)"/g)
 }
 
 console.log(`\ndictionary entries: ${dict.size}`);
+console.log(`duplicate keys:     ${duplicates.length}`);
 console.log(`missing English:    ${missing}`);
 console.log(`unwrapped literals: ${unwrapped}  (data tables are expected here)`);
-process.exit(missing ? 1 : 0);
+process.exit(missing || duplicates.length ? 1 : 0);

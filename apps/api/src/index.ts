@@ -842,7 +842,9 @@ app.get("/workspaces/:slug/access", async (req, res) => {
   const m = await prisma.membership.findUnique({
     where: { userId_workspaceId: { userId: user.id, workspaceId: w.id } },
   });
-  if (m) return res.json({ allowed: true, reason: "member", role: m.role, name: w.name });
+  // userId travels with the answer so the room can address one person: private
+  // messages need a name that outlives the socket, and the session id does not.
+  if (m) return res.json({ allowed: true, reason: "member", role: m.role, name: w.name, userId: user.id });
   // logged in but not a member yet — treat like a guest visit
   res.json({ allowed: w.allowGuests, reason: w.allowGuests ? "guest" : "members-only", name: w.name });
 });
@@ -929,7 +931,9 @@ app.get("/workspaces/:slug/messages", async (req, res) => {
   // "before" walks backwards through older pages; without it, the newest page
   const before = req.query.before ? new Date(String(req.query.before)) : null;
   const rows = await prisma.message.findMany({
-    where: { workspaceId: w.id, ...(before && !isNaN(+before) ? { createdAt: { lt: before } } : {}) },
+    // toUserId: null is the line between the room and a private thread. Every
+    // room query carries it; the one that forgets publishes a conversation.
+    where: { workspaceId: w.id, toUserId: null, ...(before && !isNaN(+before) ? { createdAt: { lt: before } } : {}) },
     orderBy: { createdAt: "desc" },
     take: limit,
   });
@@ -958,9 +962,126 @@ app.post("/workspaces/:slug/messages", async (req, res) => {
   if (!body) return res.status(400).json({ error: "empty" });
 
   const m = await prisma.message.create({
-    data: { workspaceId: w.id, userId: who.userId, authorName: who.name, body },
+    data: { workspaceId: w.id, userId: who.userId, authorName: who.name, body, toUserId: null },
   });
   res.json({ message: { id: m.id, name: m.authorName, text: m.body, at: m.createdAt } });
+});
+
+// ---- private messages -------------------------------------------------------
+
+/**
+ * A private thread needs two accounts. A guest holds a pass, not an account —
+ * there is nothing to address a message to that would still exist tomorrow, and
+ * nothing to show them a thread on when they come back with a new pass. So this
+ * is between members, and the room is where everyone else talks.
+ *
+ * Both ends are checked, not just the caller: sending to someone who is not in
+ * this space would let anyone use a workspace they belong to as a way to reach
+ * an account they have no other connection with.
+ */
+async function dmPair(slug: string, req: express.Request, peerId: string) {
+  const w = await prisma.workspace.findUnique({ where: { slug } });
+  if (!w) return { error: 404 as const };
+  const token = req.header("authorization")?.replace(/^Bearer\s+/i, "") || String(req.query.token || "");
+  const me = await userFromToken(token || undefined);
+  if (!me) return { error: 401 as const };
+
+  const [mine, theirs] = await Promise.all([
+    prisma.membership.findUnique({ where: { userId_workspaceId: { userId: me.id, workspaceId: w.id } } }),
+    peerId ? prisma.membership.findUnique({ where: { userId_workspaceId: { userId: peerId, workspaceId: w.id } } }) : null,
+  ]);
+  if (!mine) return { error: 401 as const };
+  if (peerId && !theirs) return { error: 404 as const };
+  return { w, me, peer: theirs };
+}
+
+/** everyone this person has a thread with, newest first, with what is unread */
+app.get("/workspaces/:slug/dm", async (req, res) => {
+  const got = await dmPair(req.params.slug, req, "");
+  if (got.error) return res.status(got.error).json({ error: got.error === 404 ? "not found" : "unauthorized" });
+  const { w, me } = got;
+
+  const rows = await prisma.message.findMany({
+    where: { workspaceId: w.id, OR: [{ userId: me.id, toUserId: { not: null } }, { toUserId: me.id }] },
+    orderBy: { createdAt: "desc" },
+    take: 500,
+  });
+  const reads = await prisma.dmRead.findMany({ where: { workspaceId: w.id, userId: me.id } });
+  const readAt = new Map(reads.map((r) => [r.peerId, r.readAt.getTime()]));
+
+  // one entry per person, holding the newest line and how much of theirs is new
+  const threads = new Map<string, { peerId: string; name: string; text: string; at: Date; unread: number }>();
+  for (const m of rows) {
+    const peerId = m.userId === me.id ? m.toUserId! : m.userId!;
+    if (!peerId) continue;
+    const seen = threads.get(peerId);
+    if (!seen) threads.set(peerId, { peerId, name: m.userId === me.id ? "" : m.authorName, text: m.body, at: m.createdAt, unread: 0 });
+    const th = threads.get(peerId)!;
+    if (!th.name && m.userId === peerId) th.name = m.authorName;
+    if (m.toUserId === me.id && m.createdAt.getTime() > (readAt.get(peerId) ?? 0)) th.unread++;
+  }
+
+  // a name for people who have only ever been written TO
+  const missing = [...threads.values()].filter((t) => !t.name).map((t) => t.peerId);
+  if (missing.length) {
+    const users = await prisma.user.findMany({ where: { id: { in: missing } }, select: { id: true, name: true } });
+    for (const u of users) { const th = threads.get(u.id); if (th) th.name = u.name; }
+  }
+
+  res.json({ threads: [...threads.values()].sort((a, b) => +b.at - +a.at) });
+});
+
+/** one thread, oldest first — and opening it is what marks it read */
+app.get("/workspaces/:slug/dm/:peerId", async (req, res) => {
+  const got = await dmPair(req.params.slug, req, req.params.peerId);
+  if (got.error) return res.status(got.error).json({ error: got.error === 404 ? "not found" : "unauthorized" });
+  const { w, me } = got;
+  const peerId = req.params.peerId;
+
+  const limit = Math.min(Math.max(Number(req.query.limit) || CHAT_PAGE, 1), 200);
+  const before = req.query.before ? new Date(String(req.query.before)) : null;
+  const rows = await prisma.message.findMany({
+    where: {
+      workspaceId: w.id,
+      OR: [{ userId: me.id, toUserId: peerId }, { userId: peerId, toUserId: me.id }],
+      ...(before && !isNaN(+before) ? { createdAt: { lt: before } } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+
+  // Reading is what marks it read, and only when there was something to read:
+  // opening an empty thread should not move a marker that nothing has passed.
+  if (rows.length && !before) {
+    await prisma.dmRead.upsert({
+      where: { workspaceId_userId_peerId: { workspaceId: w.id, userId: me.id, peerId } },
+      update: { readAt: new Date() },
+      create: { workspaceId: w.id, userId: me.id, peerId, readAt: new Date() },
+    });
+  }
+
+  res.json({
+    messages: rows.reverse().map((m) => ({
+      id: m.id, name: m.authorName, text: m.body, at: m.createdAt, mine: m.userId === me.id,
+    })),
+    more: rows.length === limit,
+  });
+});
+
+/** say something to one person */
+app.post("/workspaces/:slug/dm/:peerId", async (req, res) => {
+  const got = await dmPair(req.params.slug, req, req.params.peerId);
+  if (got.error) return res.status(got.error).json({ error: got.error === 404 ? "not found" : "unauthorized" });
+  const { w, me } = got;
+  if (req.params.peerId === me.id) return res.status(400).json({ error: "that is you" });
+
+  const body = String((req.body ?? {}).text ?? "").slice(0, 300).trim();
+  if (!body) return res.status(400).json({ error: "empty" });
+
+  const m = await prisma.message.create({
+    data: { workspaceId: w.id, userId: me.id, toUserId: req.params.peerId, authorName: me.name, body },
+  });
+  res.json({ message: { id: m.id, name: m.authorName, text: m.body, at: m.createdAt, mine: true } });
 });
 
 /**

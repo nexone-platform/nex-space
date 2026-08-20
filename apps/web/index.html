@@ -209,6 +209,33 @@
       .chat-compose { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--border); }
       #room-chat-input { flex: 1; padding: 8px 12px; border: 1px solid var(--border-2); border-radius: 20px; outline: none; font-size: 13px; }
       #room-chat-send { border: none; background: var(--accent); color: #fff; border-radius: 20px; padding: 0 14px; cursor: pointer; font-weight: 600; }
+      /* ---- private messages ---- */
+      #view-dm { min-height: 0; }
+      #dm-list { overflow-y: auto; flex: 1; padding: 6px 8px 12px; }
+      #dm-thread { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+      #dm-thread[hidden] { display: none; }
+      .dm-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+      .dm-bar button { border: none; background: var(--surface-3); width: 26px; height: 26px; border-radius: 8px;
+        cursor: pointer; color: var(--text-3); font-size: 16px; line-height: 1; flex: 0 0 auto; }
+      .dm-bar span { font-weight: 600; font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      #dm-log { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+      /* a thread row: who, the last thing said, and how much of it is new */
+      .dm-row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px;
+        cursor: pointer; width: 100%; border: none; background: none; text-align: left; font: inherit; }
+      .dm-row:hover { background: var(--surface-3); }
+      .dm-row .p-chip { flex: 0 0 auto; }
+      .dm-row .dm-meta { display: flex; flex-direction: column; line-height: 1.3; overflow: hidden; flex: 1; }
+      .dm-row b { font-size: 14px; color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .dm-row small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .dm-row .dm-new { flex: 0 0 auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+        background: var(--danger); color: #fff; font: 700 11px "Segoe UI", sans-serif; line-height: 18px; text-align: center; }
+      /* the button that starts a thread, revealed on the person's row */
+      .p-dm { margin-left: auto; border: none; background: transparent; color: var(--muted); cursor: pointer;
+        width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; opacity: 0; transition: opacity .12s; }
+      .person:hover .p-dm, .p-dm:focus-visible { opacity: 1; }
+      .p-dm:hover { background: var(--surface); color: var(--accent); }
+      .p-dm svg { width: 16px; height: 16px; }
+
       /* interactive-object prompt + embed modal */
       #interact-hint { position: fixed; left: calc(var(--dock) + (100vw - var(--dock)) / 2); bottom: 74px;
         transform: translateX(-50%); z-index: 22;
@@ -1265,6 +1292,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6a3 3 0 0 1 0 6"/><path d="M18 20a6 6 0 0 0-3-5"/></svg>
         <span class="rail-badge" id="rail-count">0</span>
       </button>
+      <button id="rail-dm" title="ข้อความส่วนตัว">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H7l-3 3z"/></svg>
+        <span id="dm-unread" class="rail-badge" hidden>0</span>
+      </button>
       <button id="rail-chat" title="แชตห้อง">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z"/></svg>
       </button>
@@ -1291,6 +1322,23 @@
         <input id="sb-search" type="text" placeholder="ค้นหาคน…" autocomplete="off" />
         <div class="sb-online">ออนไลน์ (<span id="sb-count">0</span>)</div>
         <div id="people"></div>
+      </div>
+
+      <!-- private threads: the list, and one open conversation -->
+      <div id="view-dm" class="sb-view" hidden>
+        <div id="dm-list"><div class="chat-empty">ยังไม่มีข้อความส่วนตัว — เริ่มได้จากรายชื่อคน</div></div>
+
+        <div id="dm-thread" hidden>
+          <div class="dm-bar">
+            <button id="dm-back" title="กลับไปที่รายการ">‹</button>
+            <span id="dm-with"></span>
+          </div>
+          <div id="dm-log"></div>
+          <div class="chat-compose">
+            <input id="dm-input" type="text" maxlength="300" autocomplete="off" placeholder="ส่งข้อความส่วนตัว…" />
+            <button id="dm-send">ส่ง</button>
+          </div>
+        </div>
       </div>
 
       <div id="view-chat" class="sb-view" hidden>
