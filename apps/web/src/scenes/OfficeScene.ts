@@ -11,6 +11,7 @@ import { WORKSPACE, IS_DEFAULT_WORKSPACE, workspaceLabel, inviteLink, wsKey,
 import { API as AUTH_API } from "../api";
 import { t, onLangChange, locale } from "../i18n";
 import { setupPrefsModal } from "../prefsModal";
+import { roleLabel } from "../memberPanel";
 import { pickTheme, propPath, THEMES, type Interactive } from "./mapThemes";
 
 const LPC_COLS = 9; // LPC walk sheet: 9 frames per direction row
@@ -143,6 +144,7 @@ export class OfficeScene extends Phaser.Scene {
   private dmUnread = 0;
   private notifs: { icon: string; title: string; body: string; at: number; seen: boolean; go?: () => void }[] = [];
   private cardFor = "";                         // sessionId the open person card belongs to
+  private cardTimer?: number;                   // pending open (hover) or close (leave)
   private following = "";                       // sessionId the camera is trailing, "" for me
   private dnd = false;                          // hearing nobody, on purpose                       // sessionId the camera is trailing, "" for me
   private panning = false;                      // a drag is moving the camera right now
@@ -394,7 +396,10 @@ export class OfficeScene extends Phaser.Scene {
       else this.deselectChair();
       // any hit means a desk or chair owns this click and handles it itself
       const cam = this.cameras.main;
-      downAt = { x: p.x, y: p.y, onObject: hits.length > 0, scrollX: cam.scrollX, scrollY: cam.scrollY };
+      // A person is not furniture: their sprite listens for the mouse so the
+      // card can open, but a click through them should still walk there.
+      const solid = hits.filter((o) => !this.isRemoteSprite(o));
+      downAt = { x: p.x, y: p.y, onObject: solid.length > 0, scrollX: cam.scrollX, scrollY: cam.scrollY };
     });
 
     this.input.on("pointerup", (p: Phaser.Input.Pointer) => {
@@ -932,7 +937,10 @@ export class OfficeScene extends Phaser.Scene {
     this.refreshSoundButton();
 
     document.getElementById("btn-dnd")?.addEventListener("click", () => this.setDnd(!this.dnd));
-    document.getElementById("pc-close")?.addEventListener("click", () => this.closePersonCard());
+    const card = document.getElementById("person-card");
+    // moving from the person onto the card must not count as leaving
+    card?.addEventListener("mouseenter", () => window.clearTimeout(this.cardTimer));
+    card?.addEventListener("mouseleave", () => this.scheduleCardClose());
     document.getElementById("pc-cancel")?.addEventListener("click", () => this.closePersonCard());
     document.getElementById("pc-save")?.addEventListener("click", () => void this.saveMyProfile());
     this.showView = showView;
@@ -1371,7 +1379,35 @@ export class OfficeScene extends Phaser.Scene {
    * empty. Everyone else gets the read-only side, plus the three things one
    * actually wants from a colleague standing somewhere on the map.
    */
-  private async openPersonCard(sessionId: string, anchor: HTMLElement) {
+  private isRemoteSprite(o: unknown) {
+    for (const r of this.remotes.values()) if (r.sprite === o) return true;
+    return false;
+  }
+
+  /** leaving the sprite or the card closes it, unless the pointer went to the other */
+  private scheduleCardClose() {
+    window.clearTimeout(this.cardTimer);
+    this.cardTimer = window.setTimeout(() => this.closePersonCard(), 220);
+  }
+
+  /**
+   * Where on the page a player is standing.
+   *
+   * World to camera to game pixels to CSS pixels: the last step is the one
+   * that is easy to forget, and on a high-density display it is a factor of
+   * two — the card would sit half a screen away from the person it is about.
+   */
+  private screenPosOf(sprite: Phaser.GameObjects.Sprite) {
+    const cam = this.cameras.main;
+    const box = this.game.canvas.getBoundingClientRect();
+    const k = box.width / (this.scale.gameSize.width || box.width);
+    return {
+      x: box.left + (sprite.x - cam.worldView.x) * cam.zoom * k,
+      y: box.top + (sprite.y - cam.worldView.y) * cam.zoom * k,
+    };
+  }
+
+  private async openPersonCard(sessionId: string, anchor?: HTMLElement) {
     const card = document.getElementById("person-card") as HTMLElement | null;
     const player: any = this.room?.state.players.get(sessionId);
     if (!card || !player) return;
@@ -1407,37 +1443,43 @@ export class OfficeScene extends Phaser.Scene {
 
     const bio = document.getElementById("pc-bio");
     const facts = document.getElementById("pc-facts");
-    const sub = document.getElementById("pc-sub");
+    const sub = document.getElementById("pc-line");
     const actions = document.getElementById("pc-actions") as HTMLElement | null;
     const edit = document.getElementById("pc-edit") as HTMLElement | null;
     if (bio) bio.textContent = "";
     if (facts) facts.innerHTML = "";
     const st = statusMeta(me ? this.myStatus : (player.status || "online"));
-    if (sub) {
-      sub.textContent = t(st.label);
-      sub.style.setProperty("--pc-dot", st.css);
-      // your own status is on the bar you just clicked from; repeating it above
-      // an edit form is one more thing between you and the fields
-      sub.hidden = me;
-    }
-    // the clock only appears once the profile says where they are
-    const clock = document.getElementById("pc-clock") as HTMLElement | null;
-    if (clock) { clock.hidden = true; clock.textContent = ""; }
+    document.getElementById("pc-dot")?.style.setProperty("--pc-dot", st.css);
+    // one caption line: what they are doing, and their clock once we know it
+    if (sub) sub.textContent = t(st.label);
+    const role = document.getElementById("pc-role") as HTMLElement | null;
+    if (role) role.hidden = true;
     if (actions) actions.hidden = me;
     if (edit) edit.hidden = !me;
 
-    // Beside the row if it fits, on the other side of it if not, and never off
-    // the edge: on a narrow window there is no room to the right of the sidebar
-    // at all, and a card half past the edge is a card nobody can close.
-    const box = anchor.getBoundingClientRect();
     card.hidden = false;
     const size = card.getBoundingClientRect();
-    const right = box.right + 10;
-    const left = right + size.width <= window.innerWidth - 8
-      ? right
-      : Math.max(8, Math.min(box.left - size.width - 10, window.innerWidth - size.width - 8));
+    let left: number, top: number;
+
+    if (anchor) {
+      // opened from the list: beside the row, or the other side when there is
+      // no room, and never past the edge
+      const box = anchor.getBoundingClientRect();
+      const right = box.right + 10;
+      left = right + size.width <= window.innerWidth - 8
+        ? right
+        : Math.max(8, Math.min(box.left - size.width - 10, window.innerWidth - size.width - 8));
+      top = Math.min(Math.max(8, box.top - 8), window.innerHeight - size.height - 8);
+    } else {
+      // opened by pointing at them: centred under their feet, flipped above
+      // when they are standing near the bottom of the window
+      const at = this.screenPosOf(this.remotes.get(sessionId)?.sprite ?? this.player);
+      left = Math.max(8, Math.min(at.x - size.width / 2, window.innerWidth - size.width - 8));
+      const below = at.y + 26;
+      top = below + size.height <= window.innerHeight - 8 ? below : Math.max(8, at.y - size.height - 30);
+    }
     card.style.left = Math.round(left) + "px";
-    card.style.top = Math.round(Math.min(Math.max(8, box.top - 8), window.innerHeight - size.height - 8)) + "px";
+    card.style.top = Math.round(top) + "px";
 
     if (!me) {
       const dmBtn = document.getElementById("pc-dm") as HTMLElement | null;
@@ -1452,6 +1494,13 @@ export class OfficeScene extends Phaser.Scene {
       };
       if (findBtn) findBtn.onclick = () => { this.closePersonCard(); this.followPerson(sessionId, name); };
       if (pingBtn) pingBtn.onclick = () => { this.closePersonCard(); this.room?.send("ping", { to: sessionId }); };
+      // the other half of "come over": go to them instead of asking them to move
+      const gotoBtn = document.getElementById("pc-goto") as HTMLElement | null;
+      if (gotoBtn) gotoBtn.onclick = () => {
+        const them = this.remotes.get(sessionId)?.sprite;
+        this.closePersonCard();
+        if (them) this.goTo(them.x, them.y);
+      };
     }
 
     // the parts that live in the database rather than in the room
@@ -1500,19 +1549,35 @@ export class OfficeScene extends Phaser.Scene {
         row.appendChild(span);
         facts.appendChild(row);
       };
+      // the workspace role, in the corner, in its own colour
+      const roleEl = document.getElementById("pc-role") as HTMLElement | null;
+      if (roleEl && profile.memberRole) {
+        const TONE: Record<string, [string, string]> = {
+          owner: ["#f0b42926", "#f4c65f"],
+          admin: ["#8b7bf026", "#b3a7ff"],
+          member: ["#ffffff14", "#cfd4dc"],
+          guest: ["#2bb3a326", "#68d6c6"],
+        };
+        const [bg, fg] = TONE[profile.memberRole] ?? TONE.member;
+        roleEl.textContent = roleLabel(profile.memberRole);
+        roleEl.style.setProperty("--pc-role-bg", bg);
+        roleEl.style.setProperty("--pc-role-fg", fg);
+        roleEl.hidden = false;
+      }
       if (profile.role) line("role", profile.role);
       if (profile.team) line("team", profile.team);
       if (profile.timezone) {
         // The clock goes in the band rather than the list: "half past four for
         // them" is the thing you actually wanted, and the zone name is the
         // footnote under it.
-        const clockEl = document.getElementById("pc-clock") as HTMLElement | null;
+        const subEl = document.getElementById("pc-line");
         try {
-          const now = new Intl.DateTimeFormat(locale(), {
-            hour: "2-digit", minute: "2-digit", timeZone: profile.timezone,
+          const parts = new Intl.DateTimeFormat(locale(), {
+            hour: "2-digit", minute: "2-digit", timeZoneName: "shortOffset", timeZone: profile.timezone,
           }).format(new Date());
-          if (clockEl) { clockEl.textContent = t("เวลาของเขา") + " " + now; clockEl.hidden = false; }
-        } catch { /* an invalid zone: no clock, just the name below */ }
+          // "กำลังใช้งาน · 09:35 GMT+7" — the state, then the clock, one line
+          if (subEl) subEl.textContent = subEl.textContent + " · " + parts;
+        } catch { /* an invalid zone: the caption keeps just the status */ }
         line("zone", profile.timezone);
       }
     } catch (e) {
@@ -2396,6 +2461,21 @@ export class OfficeScene extends Phaser.Scene {
     const status: string = player.status || "online";
     this.setTagStatus(label, status);
     this.remotes.set(sessionId, { sprite, label, name, status, tx: player.x, ty: player.y, dir: player.dir, moving: player.moving, avatar: av });
+
+    // Point at somebody and their card comes up, which is the gesture people
+    // already try. A short delay first, or sweeping the mouse across a busy
+    // room flashes a card per person on the way past.
+    sprite.setInteractive({ pixelPerfect: false });
+    sprite.on("pointerover", () => {
+      window.clearTimeout(this.cardTimer);
+      this.cardTimer = window.setTimeout(() => void this.openPersonCard(sessionId), 140);
+    });
+    sprite.on("pointerout", () => this.scheduleCardClose());
+    // and clicking is the impatient version of hovering
+    sprite.on("pointerdown", () => {
+      window.clearTimeout(this.cardTimer);
+      void this.openPersonCard(sessionId);
+    });
     if (isLpc(av)) void this.ensureLpc(av).then((key) => {
       const r = this.remotes.get(sessionId);
       if (key && r) r.sprite.setTexture(key, this.idleFrameFor(av, r.dir));

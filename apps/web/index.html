@@ -262,140 +262,107 @@
       .nf-row time { font-size: 11px; color: var(--faint); margin-left: auto; flex: 0 0 auto; }
 
       /* ---- one person, and what you can do about them ----
-         The card is tinted with that person's own colour — the same one their
-         initial has always used — so every card feels like theirs rather than
-         like a form about them. Everything else stays quiet so the tint and the
-         character are the only things doing any talking. */
+         Dark in both themes, like every other thing that floats over the map —
+         the control bar and the meeting header are already this colour, and a
+         panel that sits on a bright pastel floor reads better as a lit object
+         than as a hole cut in the page. So no light palette here on purpose. */
       #person-card {
         position: fixed; z-index: 28; box-sizing: border-box;
-        width: 300px; max-width: calc(100vw - 24px);
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 18px;
-        box-shadow: 0 2px 6px #0000000f, 0 18px 44px #00000024;
-        font-family: "Segoe UI", sans-serif;
-        overflow: hidden;
-        animation: pc-in .16s cubic-bezier(.2, .8, .3, 1);
+        width: 336px; max-width: calc(100vw - 20px);
+        background: #23252de8; backdrop-filter: blur(10px);
+        border: 1px solid #ffffff1f; border-radius: 16px;
+        box-shadow: 0 18px 44px #00000059;
+        padding: 14px 14px 12px;
+        font-family: "Segoe UI", sans-serif; color: #eef0f4;
+        animation: pc-in .13s cubic-bezier(.2, .8, .3, 1);
       }
       #person-card[hidden] { display: none; }
-      @keyframes pc-in { from { opacity: 0; transform: translateY(6px) scale(.985); } }
+      @keyframes pc-in { from { opacity: 0; transform: translateY(5px) scale(.99); } }
       @media (prefers-reduced-motion: reduce) { #person-card { animation: none; } }
 
-      /* the tinted band the character stands on */
-      .pc-band {
-        height: 62px; position: relative;
-        background:
-          radial-gradient(120% 150% at 18% 120%, var(--pc-tint, #2bb3a3) 0%, transparent 62%),
-          linear-gradient(180deg, var(--surface-3), var(--surface-2));
-      }
-      #pc-close {
-        position: absolute; top: 8px; right: 8px;
-        border: none; background: var(--glass); backdrop-filter: blur(4px);
-        color: var(--text-3); cursor: pointer; font-size: 12px;
-        width: 24px; height: 24px; border-radius: 8px; line-height: 1;
-      }
-      #pc-close:hover { background: var(--surface); color: var(--text); }
-      /* their local time, which is the only reason to know somebody's timezone */
-      #pc-clock {
-        position: absolute; top: 10px; left: 12px;
-        font: 600 11.5px/1 "Segoe UI", sans-serif; letter-spacing: .02em;
-        color: var(--text-3); background: var(--glass); backdrop-filter: blur(4px);
-        padding: 5px 9px; border-radius: 20px;
-      }
-      #pc-clock[hidden] { display: none; }
-
-      /* The character overlaps the band; the name sits underneath with the whole
-         card to itself. Sharing that row was how a normal Thai full name ended
-         up truncated after two words — a card about a person should never be the
-         thing that cannot fit their name. */
-      .pc-top { display: flex; padding: 0 18px; margin-top: -30px; }
-      /* the character, at their own size, sharp — this is a pixel-art office and
-         a letter in a circle says nothing about who you are about to talk to */
+      .pc-head { display: flex; align-items: center; gap: 11px; }
+      /* round, ringed, with the status where a status belongs on a portrait */
       .pc-portrait {
-        width: 68px; height: 68px; flex: 0 0 auto; border-radius: 16px;
-        background: var(--surface); border: 2px solid var(--surface);
-        box-shadow: 0 4px 14px #00000018;
+        position: relative; width: 46px; height: 46px; flex: 0 0 auto;
+        border-radius: 50%; background: #ffffff14; border: 1px solid #ffffff1f;
         display: flex; align-items: center; justify-content: center; overflow: hidden;
       }
-      /* max-* rather than width/height 100%: the holder is a grid row of automatic
-         height, so a percentage height there has nothing to resolve against and
-         a tall sprite grows straight out of the frame. This way a narrow avatar
-         fits by its height and a square one by its width. */
-      /* Fixed pixel limits, not percentages: the holder centres its child, and a
-         percentage there resolves against a track whose height comes from the
-         child — which lets a tall sprite grow straight out of the frame. */
-      .pc-portrait img { max-width: 58px; max-height: 58px; width: auto; height: auto;
-        image-rendering: pixelated; display: block; }
-      .pc-portrait .p-chip { width: 100%; height: 100%; border-radius: 0; font-size: 26px; }
-      .pc-who { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; padding: 10px 18px 0; }
+      .pc-portrait img {
+        max-width: 40px; max-height: 40px; width: auto; height: auto;
+        image-rendering: pixelated; display: block;
+        /* the sprite stands on the ground; nudge it up so the face is centred */
+        margin-bottom: -4px;
+      }
+      .pc-portrait .p-chip { width: 100%; height: 100%; border-radius: 0; font-size: 18px; }
+      .pc-dot {
+        position: absolute; right: -1px; bottom: -1px; width: 13px; height: 13px;
+        border-radius: 50%; background: var(--pc-dot, #39d353);
+        border: 2.5px solid #23252d; box-sizing: border-box;
+      }
+
+      .pc-who { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
       .pc-who b {
-        font-size: 16.5px; line-height: 1.3; color: var(--text); letter-spacing: -.01em;
-        /* two lines is enough for any name; a third means something else is wrong */
+        font-size: 15.5px; font-weight: 600; line-height: 1.25; letter-spacing: -.01em;
         display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
         overflow: hidden; overflow-wrap: anywhere;
       }
-      .pc-pill {
-        display: inline-flex; align-items: center; gap: 6px; width: max-content;
-        font-size: 11.5px; color: var(--text-2);
-        background: var(--surface-3); border-radius: 20px; padding: 3px 10px 3px 8px;
-      }
-      .pc-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--pc-dot, #39d353); }
-      /* an explicit display beats the hidden attribute, so it has to be said */
-      .pc-pill[hidden] { display: none; }
+      /* status and their local clock on one quiet line, the way a caption reads */
+      .pc-who small { font-size: 12.5px; color: #9aa3ad; line-height: 1.3; }
 
-      #pc-bio { margin: 12px 18px 0; font-size: 13px; line-height: 1.6; color: var(--text-3); }
+      .pc-role {
+        flex: 0 0 auto; align-self: flex-start;
+        font: 600 11px "Segoe UI", sans-serif; letter-spacing: .01em;
+        padding: 4px 10px; border-radius: 20px;
+        background: var(--pc-role-bg, #ffffff14); color: var(--pc-role-fg, #cfd4dc);
+      }
+      .pc-role[hidden] { display: none; }
+
+      #pc-bio { margin: 12px 2px 0; font-size: 13px; line-height: 1.55; color: #c3c9d2; }
       #pc-bio:empty { display: none; }
 
-      #pc-facts { display: grid; gap: 8px; margin: 14px 18px 0; font-size: 12.5px; }
+      #pc-facts { display: grid; gap: 7px; margin: 11px 2px 0; font-size: 12.5px; }
       #pc-facts:empty { display: none; }
-      #pc-facts .pc-fact { display: flex; align-items: center; gap: 9px; color: var(--text-3); }
-      #pc-facts .pc-fact svg { width: 14px; height: 14px; flex: 0 0 auto; color: var(--faint); }
+      #pc-facts .pc-fact { display: flex; align-items: center; gap: 9px; color: #9aa3ad; }
+      #pc-facts .pc-fact svg { width: 14px; height: 14px; flex: 0 0 auto; color: #767f8a; }
       #pc-facts .pc-fact span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-      /* icon over label: three of these read as a row of choices, where three
-         text pills read as a paragraph that happens to be clickable */
-      #pc-actions { display: flex; gap: 8px; padding: 16px 18px 18px; }
+      /* two things worth naming, two worth only an icon — the row stays one line */
+      #pc-actions { display: flex; align-items: stretch; gap: 7px; margin-top: 14px; }
       #pc-actions button {
-        flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px;
-        border: 1px solid var(--border-2); background: var(--surface-3); color: var(--text-2);
-        border-radius: 12px; padding: 9px 0 8px;
-        font: 600 11.5px "Segoe UI", sans-serif; cursor: pointer;
-        transition: background .14s, color .14s, border-color .14s, transform .14s;
+        display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+        border: 1px solid #ffffff24; background: #ffffff0f; color: #e6e9ee;
+        border-radius: 11px; padding: 9px 12px;
+        font: 600 12.5px "Segoe UI", sans-serif; cursor: pointer;
+        transition: background .13s, border-color .13s, color .13s;
       }
-      #pc-actions button svg { width: 17px; height: 17px; }
-      #pc-actions button:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); transform: translateY(-1px); }
-      #pc-actions button:active { transform: none; }
-      #pc-actions button:first-child { background: var(--accent); border-color: var(--accent); color: #fff; }
-      #pc-actions button:first-child:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
-      #pc-actions button[hidden] { display: none; }
-      #pc-actions[hidden] { display: none; }
+      #pc-actions button svg { width: 16px; height: 16px; flex: 0 0 auto; }
+      #pc-actions button:not(.icon) { flex: 1; }
+      #pc-actions button.icon { padding: 9px 11px; flex: 0 0 auto; }
+      #pc-actions button:hover { background: var(--teal); border-color: var(--teal); color: #fff; }
+      #pc-actions button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+      #pc-actions button[hidden], #pc-actions[hidden] { display: none; }
 
-      #pc-edit { display: grid; gap: 10px; padding: 16px 18px 18px; }
+      /* the form on your own card, on the same dark surface */
+      #pc-edit { display: grid; gap: 10px; margin-top: 14px; }
       #pc-edit[hidden] { display: none; }
-      /* a field label is not decoration; --muted put it at 3.25:1 in daylight */
-      #pc-edit label { display: grid; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--text-2); letter-spacing: .01em; }
-      /* The shared input styling is scoped to the overlays and the sidebar, and
-         this card is neither — without these the fields fall back to the
-         browser's own chrome, which is a hard grey box that belongs to no theme. */
+      #pc-edit label { display: grid; gap: 4px; font: 600 11.5px "Segoe UI", sans-serif; color: #b6bcc6; }
       #pc-edit input, #pc-edit textarea {
         box-sizing: border-box; width: 100%;
         padding: 8px 11px; font: 13px/1.5 "Segoe UI", sans-serif;
-        color: var(--text); background: var(--surface-2);
-        border: 1px solid var(--border-2); border-radius: 10px;
-        resize: vertical;
+        color: #eef0f4; background: #ffffff0f;
+        border: 1px solid #ffffff24; border-radius: 10px; resize: vertical;
       }
-      #pc-edit textarea { min-height: 62px; }
-      #pc-edit input::placeholder, #pc-edit textarea::placeholder { color: var(--faint); }
+      #pc-edit textarea { min-height: 60px; }
+      #pc-edit input::placeholder, #pc-edit textarea::placeholder { color: #7f8792; }
       #pc-edit input:focus, #pc-edit textarea:focus {
-        outline: none; border-color: var(--accent);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+        outline: none; border-color: var(--teal); background: #ffffff17;
       }
       .pc-edit-actions { display: flex; gap: 8px; margin-top: 2px; }
       .pc-edit-actions button { flex: 1; border-radius: 11px; padding: 9px 0; font: 600 13px "Segoe UI", sans-serif; cursor: pointer; }
-      #pc-save { border: none; background: var(--accent); color: #fff; }
-      #pc-save:hover { background: var(--accent-hover); }
-      #pc-cancel { border: 1px solid var(--border-2); background: var(--surface-3); color: var(--text-3); }
-      #pc-cancel:hover { background: var(--surface-2); }
+      #pc-save { border: none; background: var(--teal); color: #fff; }
+      #pc-save:hover { filter: brightness(1.08); }
+      #pc-cancel { border: 1px solid #ffffff24; background: #ffffff0f; color: #cfd4dc; }
+      #pc-cancel:hover { background: #ffffff1a; }
 
       /* interactive-object prompt + embed modal */
       #interact-hint { position: fixed; left: calc(var(--dock) + (100vw - var(--dock)) / 2); bottom: 74px;
@@ -1529,33 +1496,38 @@
     </aside>
     <!-- one person, and what you can do about them -->
     <div id="person-card" hidden>
-      <div class="pc-band">
-        <button id="pc-close" title="ปิด">✕</button>
-        <span id="pc-clock" hidden></span>
+      <div class="pc-head">
+        <span id="pc-portrait" class="pc-portrait">
+          <span id="pc-chip" class="p-chip"></span>
+          <i id="pc-dot" class="pc-dot"></i>
+        </span>
+        <span class="pc-who">
+          <b id="pc-name"></b>
+          <small id="pc-line"></small>
+        </span>
+        <span id="pc-role" class="pc-role" hidden></span>
       </div>
-      <div class="pc-top">
-        <span id="pc-portrait" class="pc-portrait"><span id="pc-chip" class="p-chip"></span></span>
-      </div>
-      <div class="pc-who">
-        <b id="pc-name"></b>
-        <span id="pc-sub" class="pc-pill"></span>
-      </div>
+
       <p id="pc-bio"></p>
       <div id="pc-facts"></div>
+
       <div id="pc-actions">
+        <button id="pc-goto">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h13"/><path d="M13 7l5 5-5 5"/></svg>
+          <span>ไปหา</span>
+        </button>
         <button id="pc-dm">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H7l-3 3z"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 3z"/></svg>
           <span>ข้อความ</span>
         </button>
-        <button id="pc-find">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>
-          <span>ตามตัว</span>
+        <button id="pc-find" class="icon" title="ตามตัว">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.6-4.6"/></svg>
         </button>
-        <button id="pc-ping">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M5.6 5.6l2.1 2.1M3 12h3M18 12h3M18.4 5.6l-2.1 2.1"/><circle cx="12" cy="14" r="4"/></svg>
-          <span>เรียกมาหา</span>
+        <button id="pc-ping" class="icon" title="เรียกมาหา">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
         </button>
       </div>
+
       <div id="pc-edit" hidden>
         <label>ชื่อที่แสดง<input id="pc-f-name" type="text" maxlength="24" /></label>
         <label>ทีม / แผนก<input id="pc-f-team" type="text" maxlength="60" placeholder="เช่น ฝ่ายพัฒนา" /></label>
