@@ -1401,7 +1401,9 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
     const nameEl = document.getElementById("pc-name");
-    if (nameEl) nameEl.textContent = name + (me ? " " + t("(คุณ)") : "");
+    // "(you)" is worth saying on somebody else's card for contrast; on your own,
+    // where the very next thing is a field holding that name, it is clutter.
+    if (nameEl) nameEl.textContent = name;
 
     const bio = document.getElementById("pc-bio");
     const facts = document.getElementById("pc-facts");
@@ -1414,6 +1416,9 @@ export class OfficeScene extends Phaser.Scene {
     if (sub) {
       sub.textContent = t(st.label);
       sub.style.setProperty("--pc-dot", st.css);
+      // your own status is on the bar you just clicked from; repeating it above
+      // an edit form is one more thing between you and the fields
+      sub.hidden = me;
     }
     // the clock only appears once the profile says where they are
     const clock = document.getElementById("pc-clock") as HTMLElement | null;
