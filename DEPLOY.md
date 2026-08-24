@@ -340,6 +340,27 @@ everything else, so it is included in whatever backs that file up — and it is 
 part of the database that grows on its own, which makes it the first reason this
 deployment will eventually want Postgres.
 
+## Stored maps
+
+A space loads one of the three layouts compiled into the client, named by its
+`theme`. It can also store a map of its own, which then wins — that is what the
+map editor writes, and what `PUT /workspaces/:slug/map` accepts from an owner or
+an admin. `DELETE` on the same path puts the space back on its stock layout, so
+a broken map is one request away from being undone.
+
+The row is validated before it is stored and again before it is drawn, because a
+map reaches every browser in the space at once: a bad one is not a bad record,
+it is a room nobody can walk into. A stored map that stops parsing is not fatal
+either — the API logs it and serves the stock layout, so the space still opens.
+
+```dotenv
+MAP_MAX_BYTES=2000000  # a stored map is part of everyone's page load
+```
+
+The three built-in layouts bake down to about 6 KB each, so the default leaves a
+great deal of room. Lower it if you would rather a large map were refused than
+served slowly to everybody.
+
 Who may read a space's history is decided by the same door as the space itself: a
 member's session, or a live guest pass. A visitor's lines are recorded under the
 name on their pass, since there is no account to look one up from later, and a
