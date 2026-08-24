@@ -449,6 +449,19 @@ const EN: Record<string, string> = {
   "แชตห้อง": "Room chat",
   "แชตห้องรวม": "Room chat",
   "ห้องประชุม": "Meeting room",
+  // ---- locked rooms and knocking (P2-5) ----
+  "ล็อกอยู่ — ต้องมีคนข้างในเปิดให้": "Locked — somebody inside has to let you in",
+  "เปิดให้ทุกคนเดินเข้าได้": "Open — anybody may walk in",
+  "{area} ล็อกอยู่": "{area} is locked",
+  "เคาะประตูเพื่อขอเข้า": "Knock to ask to come in",
+  "เคาะประตู": "Knock",
+  "{name} เคาะประตู {area}": "{name} is knocking at {area}",
+  "เปิดให้เข้า": "Let them in",
+  "ยังไม่สะดวก": "Not right now",
+  "เปิดให้เข้าได้จากการ์ดนี้": "You can let them in from this card",
+  "{name} ยังไม่สะดวก": "{name} is not free right now",
+  "{name} เปิดให้เข้า {area}": "{name} let you into {area}",
+  "เคาะแล้ว — รออีก {n} คนในห้องรับ": "Knocked — waiting for {n} inside to answer",
   "กำลังไป {name}": "Heading to {name}",
 
   // ---- the map editor (editor.html) ----

@@ -183,6 +183,12 @@ export class OfficeScene extends Phaser.Scene {
   private remotes = new Map<string, Remote>();
   /** the area I am standing in, remembered so entering one can be announced once */
   private myArea?: PrivateArea;
+  /** locked rooms this visit has been let into, by area id */
+  private admitted = new Set<string>();
+  /** the last place I stood that I was allowed to stand in */
+  private lastAllowed?: { x: number; y: number };
+  /** the locked room I am being turned away from, if any */
+  private atDoor?: PrivateArea;
   private lastSent = 0;
   private lastState = { x: 0, y: 0, dir: "", moving: false };
   private readonly NEAR = 5 * TILE; // proximity radius (must match server)
@@ -263,11 +269,14 @@ export class OfficeScene extends Phaser.Scene {
     for (const a of PRIVATE_AREAS) {
       const px = a.x0 * TILE, py = a.y0 * TILE;
       const w = (a.x1 - a.x0 + 1) * TILE, h = (a.y1 - a.y0 + 1) * TILE;
+      // A locked room is drawn warmer and outlined harder than an open one, so
+      // "you cannot walk in there" is visible before you try to.
+      const tint = a.locked ? 0xd3564f : 0x2bb3a3;
       const g = this.add.graphics().setDepth(-950);
-      g.fillStyle(0x2bb3a3, 0.07).fillRect(px, py, w, h);
-      g.lineStyle(1, 0x2bb3a3, 0.35).strokeRect(px + 0.5, py + 0.5, w - 1, h - 1);
-      this.add.text(px + 5, py + 3, "🔒 " + t(a.label), {
-        fontFamily: "monospace", fontSize: "9px", color: "#2bb3a3",
+      g.fillStyle(tint, a.locked ? 0.1 : 0.07).fillRect(px, py, w, h);
+      g.lineStyle(a.locked ? 1.5 : 1, tint, a.locked ? 0.6 : 0.35).strokeRect(px + 0.5, py + 0.5, w - 1, h - 1);
+      this.add.text(px + 5, py + 3, (a.locked ? "🔐 " : "🔒 ") + t(a.label), {
+        fontFamily: "monospace", fontSize: "9px", color: a.locked ? "#a83c36" : "#2bb3a3",
       }).setAlpha(0.85).setDepth(-949).setResolution(3);
     }
 
@@ -792,6 +801,27 @@ export class OfficeScene extends Phaser.Scene {
       room.onMessage("dm", (msg: { from: string; to: string; name: string; text: string }) => this.onDm(msg));
       room.onMessage("ping", (msg: { from: string; name: string; x: number; y: number }) => this.onPing(msg));
       room.onMessage("wave", (msg: { from: string; name: string }) => this.onWave(msg));
+
+      // somebody is at the door of the locked room I am in
+      room.onMessage("knock", (msg: { from: string; name: string; area: string; label: string }) =>
+        this.onKnock(msg));
+
+      // the door was answered, one way or the other
+      room.onMessage("admitted", (msg: { area: string; label: string; ok: boolean; by: string }) => {
+        if (!msg.ok) {
+          this.toast(t("{name} ยังไม่สะดวก").replace("{name}", msg.by || "?"), "warn");
+          return;
+        }
+        this.admitted.add(msg.area);
+        this.atDoor = undefined;
+        this.closeNudge();
+        // silent when nobody let us in, because nobody did: an empty room opens
+        // on its own and saying so every time would be noise
+        if (msg.by) this.toast(t("{name} เปิดให้เข้า {area}").replace("{name}", msg.by).replace("{area}", t(msg.label)), "success");
+      });
+
+      room.onMessage("knocked", (msg: { label: string; waiting: number }) =>
+        this.toast(t("เคาะแล้ว — รออีก {n} คนในห้องรับ").replace("{n}", String(msg.waiting)), "info"));
       room.onMessage("waveSent", (msg: { name: string }) =>
         this.toast(t("โบกมือให้ {name} แล้ว").replace("{name}", msg.name), "info"));
       room.onMessage("pingRefused", (msg: { name: string }) =>
@@ -1857,6 +1887,30 @@ export class OfficeScene extends Phaser.Scene {
       () => { this.showView?.("people"); this.followPerson(msg.from, msg.name); });
   }
 
+  /**
+   * Somebody is at the door.
+   *
+   * Answered from the same panel a wave arrives in, because it is the same kind
+   * of thing: a person asking for a moment of yours. "Not now" is offered as
+   * plainly as "come in" — a door you can only open is not a door.
+   */
+  private onKnock(msg: { from: string; name: string; area: string; label: string }) {
+    const IN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M4 12h10"/><path d="M10.5 8.5 14 12l-3.5 3.5"/></svg>';
+    const NO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M9 15l6-6"/></svg>';
+
+    this.showNudge({
+      from: msg.from,
+      title: t("{name} เคาะประตู {area}").replace("{name}", msg.name).replace("{area}", t(msg.label)),
+      sub: t("ตอนนี้"),
+      actions: [
+        { label: t("ยังไม่สะดวก"), icon: NO, go: () => this.room?.send("admit", { to: msg.from, ok: false }) },
+        { label: t("เปิดให้เข้า"), icon: IN, primary: true, go: () => this.room?.send("admit", { to: msg.from, ok: true }) },
+      ],
+    });
+    this.notify("🚪", t("{name} เคาะประตู {area}").replace("{name}", msg.name).replace("{area}", t(msg.label)),
+      t("เปิดให้เข้าได้จากการ์ดนี้"), () => this.onKnock(msg));
+  }
+
   /** somebody would like us to come over */
   private onPing(msg: { from: string; name: string; x: number; y: number }) {
     const GO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8 12h7"/><path d="M12 8.5l3.5 3.5L12 15.5"/></svg>';
@@ -2559,6 +2613,47 @@ export class OfficeScene extends Phaser.Scene {
       if (tx >= a.x0 && tx <= a.x1 && ty >= a.y0 && ty <= a.y1) return a;
     }
     return undefined;
+  }
+
+  /**
+   * A locked room you have not been let into.
+   *
+   * A soft wall rather than a solid one: the tiles stay walkable, and stepping
+   * onto them puts you back where you were. Building real collision around a
+   * rectangle with a doorway in it would fight the pathfinder and would leave
+   * somebody who was admitted mid-walk stuck outside their own room.
+   *
+   * The knock prompt is what makes this legible — being nudged backwards with
+   * no explanation is indistinguishable from a bug.
+   */
+  private holdTheDoor() {
+    const here = this.areaOf(this.player.x, this.player.y);
+    const barred = here?.locked && !this.admitted.has(here.id) ? here : undefined;
+
+    if (!barred) {
+      this.lastAllowed = { x: this.player.x, y: this.player.y };
+      if (this.atDoor) { this.atDoor = undefined; this.closeNudge(); }
+      return;
+    }
+
+    // put them back on the last tile they were entitled to
+    if (this.lastAllowed) {
+      this.player.setPosition(this.lastAllowed.x, this.lastAllowed.y);
+      this.player.body?.reset(this.lastAllowed.x, this.lastAllowed.y);
+      this.path.length = 0; // a walk that ends inside a locked room is over
+    }
+    if (this.atDoor?.id === barred.id) return;
+    this.atDoor = barred;
+
+    const KNOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>';
+    this.showNudge({
+      from: this.mySessionId,
+      title: t("{area} ล็อกอยู่").replace("{area}", t(barred.label)),
+      sub: t("เคาะประตูเพื่อขอเข้า"),
+      actions: [
+        { label: t("เคาะประตู"), icon: KNOCK, primary: true, go: () => this.room?.send("knock", {}) },
+      ],
+    });
   }
 
   /**
@@ -3266,6 +3361,7 @@ export class OfficeScene extends Phaser.Scene {
     // a connection already open is kept until they are clearly out of range
     const keep2 = (this.NEAR * 1.4) * (this.NEAR * 1.4);
     const FULL = 2 * TILE; // distance for full audio volume
+    this.holdTheDoor();
     this.updateArea();
     const mine = this.myArea;
     let anyNear = false;

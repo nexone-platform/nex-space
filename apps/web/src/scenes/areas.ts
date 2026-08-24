@@ -20,6 +20,15 @@ export interface PrivateArea {
   /** shown on the map and in the "you are in …" chip */
   label: string;
   x0: number; y0: number; x1: number; y1: number;
+  /**
+   * A room you have to be let into. Somebody already inside admits you; an
+   * empty one lets the first person walk in, because a locked door with nobody
+   * behind it is a room nobody could ever enter.
+   *
+   * None of the built-in layouts below lock anything: a stock office where a
+   * room refuses you is a surprise, and locking is something a space decides.
+   */
+  locked?: boolean;
 }
 
 export const AREAS: Record<string, PrivateArea[]> = {

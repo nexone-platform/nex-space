@@ -26,6 +26,14 @@ export class OfficeRoom extends Room<OfficeState> {
   private areasAt = 0;
   /** the map new arrivals land on, so a client that names none still matches them */
   private landing = "";
+  /**
+   * Who has been let into each locked room, keyed "map/areaId".
+   *
+   * Held here rather than trusted from the browser, because this is what earshot
+   * turns on: a client that put itself inside a locked room without being
+   * admitted still hears nothing and is heard by nobody.
+   */
+  private admits = new Map<string, Set<string>>();
   private chatStoreWarned = false;
   private dmStoreWarned = false;
   /** last gesture per sender-to-target pair, keyed by kind, so no button can be leaned on */
@@ -78,6 +86,7 @@ export class OfficeRoom extends Room<OfficeState> {
       if (typeof data.y === "number") p.y = data.y;
       if (typeof data.dir === "string") p.dir = data.dir;
       p.moving = !!data.moving;
+      this.maybeAdmit(client.sessionId, p);
     });
 
     // player changed their avatar mid-session -> update state so peers re-render
@@ -101,6 +110,56 @@ export class OfficeRoom extends Room<OfficeState> {
       const p = this.state.players.get(client.sessionId);
       const clean = String(slug ?? "").slice(0, 32);
       if (p && /^[a-z0-9-]*$/.test(clean)) p.map = clean;
+    });
+
+    /**
+     * Ask to be let into the locked room you are standing at.
+     *
+     * Throttled per person, not per pair: a knock goes to everybody inside, so
+     * leaning on the button is a way to interrupt a whole room at once.
+     */
+    this.onMessage("knock", (client) => {
+      const me = this.state.players.get(client.sessionId);
+      if (!me) return;
+      const a = this.standingIn(me);
+      if (!a?.locked) return;
+      const key = this.key(me, a);
+      if (this.admits.get(key)?.has(client.sessionId)) return; // already inside
+
+      const gate = `knock:${client.sessionId}`;
+      const last = this.pingedAt.get(gate) ?? 0;
+      if (Date.now() - last < 8000) return;
+      this.pingedAt.set(gate, Date.now());
+
+      const inside = this.occupantsOf(key);
+      if (!inside.length) {
+        // nobody to answer: the door was never really shut
+        this.admit(key, client.sessionId);
+        return;
+      }
+      for (const sid of inside) {
+        this.clients.find((c) => c.sessionId === sid)
+          ?.send("knock", { from: client.sessionId, name: me.name, area: a.id, label: a.label });
+      }
+      client.send("knocked", { area: a.id, label: a.label, waiting: inside.length });
+    });
+
+    /** somebody inside opens the door, or does not */
+    this.onMessage("admit", (client, msg: { to?: string; ok?: boolean }) => {
+      const me = this.state.players.get(client.sessionId);
+      const them = msg?.to ? this.state.players.get(msg.to) : undefined;
+      if (!me || !them) return;
+      const a = this.standingIn(me);
+      // Only somebody who is in the room, and allowed to be, may open its door.
+      if (!a?.locked || !this.isAdmitted(client.sessionId, me, a)) return;
+
+      const target = this.clients.find((c) => c.sessionId === msg.to);
+      if (!target) return;
+      if (msg.ok === false) {
+        target.send("admitted", { area: a.id, label: a.label, ok: false, by: me.name });
+        return;
+      }
+      this.admit(this.key(me, a), msg.to!, me.name, a);
     });
 
     // presence status shown as the dot on each player's name tag
@@ -277,8 +336,8 @@ export class OfficeRoom extends Room<OfficeState> {
     });
   }
 
-  /** the private area a player is standing in, on the map they are standing on */
-  private areaOf(p: Player): PrivateArea | undefined {
+  /** the area a player is standing in, whether or not they may be there */
+  private standingIn(p: Player): PrivateArea | undefined {
     const here = this.areas.get(p.map || this.landing);
     if (!here) return undefined;
     const tx = Math.floor(p.x / TILE), ty = Math.floor(p.y / TILE);
@@ -288,9 +347,67 @@ export class OfficeRoom extends Room<OfficeState> {
     return undefined;
   }
 
+  private key(p: Player, a: PrivateArea) { return `${p.map || this.landing}/${a.id}`; }
+
+  /** may this session be in that locked room? */
+  private isAdmitted(sessionId: string, p: Player, a: PrivateArea) {
+    return !a.locked || !!this.admits.get(this.key(p, a))?.has(sessionId);
+  }
+
+  /** everyone currently standing in a locked room who is allowed to be */
+  private occupantsOf(key: string): string[] {
+    const allowed = this.admits.get(key);
+    if (!allowed) return [];
+    const out: string[] = [];
+    for (const [sid, p] of this.state.players) {
+      if (!allowed.has(sid)) continue;
+      const a = this.standingIn(p);
+      if (a && this.key(p, a) === key) out.push(sid);
+    }
+    return out;
+  }
+
+  /**
+   * The area that counts for earshot.
+   *
+   * A locked room you have not been let into is not a room you are in — you
+   * hear nothing from it and it hears nothing from you, which is what makes
+   * the lock mean anything rather than merely draw a different outline.
+   */
+  private areaOf(p: Player, sessionId: string): PrivateArea | undefined {
+    const a = this.standingIn(p);
+    if (!a) return undefined;
+    return this.isAdmitted(sessionId, p, a) ? a : undefined;
+  }
+
   /** two players are within earshot only if they are on the same map at all */
   private sameMap(a: Player, b: Player) {
     return (a.map || this.landing) === (b.map || this.landing);
+  }
+
+  /** let somebody into a locked room, and tell them so */
+  private admit(key: string, sessionId: string, by = "", area?: PrivateArea) {
+    let set = this.admits.get(key);
+    if (!set) this.admits.set(key, (set = new Set()));
+    set.add(sessionId);
+    this.clients.find((c) => c.sessionId === sessionId)
+      ?.send("admitted", { area: area?.id ?? key.split("/")[1], label: area?.label ?? "", ok: true, by });
+  }
+
+  /**
+   * Walking into a locked room that nobody is in.
+   *
+   * The alternative is a room that can never be entered: with nobody inside
+   * there is nobody to knock to, and the first person through the door is the
+   * one who will answer everybody else.
+   */
+  private maybeAdmit(sessionId: string, p: Player) {
+    const a = this.standingIn(p);
+    if (!a?.locked) return;
+    const key = this.key(p, a);
+    if (this.admits.get(key)?.has(sessionId)) return;
+    if (this.occupantsOf(key).length) return;
+    this.admit(key, sessionId);
   }
 
   /**
@@ -329,8 +446,10 @@ export class OfficeRoom extends Room<OfficeState> {
         // The API validated this before storing it; take only the shape this
         // room actually uses rather than trusting the rest of the document.
         const from = Array.isArray(one?.map?.areas) ? one.map.areas : [];
-        next.set(m.slug, from.filter((a: any) => a && typeof a.id === "string"
-          && [a.x0, a.x1, a.y0, a.y1].every((n: any) => typeof n === "number")));
+        next.set(m.slug, from
+          .filter((a: any) => a && typeof a.id === "string"
+            && [a.x0, a.x1, a.y0, a.y1].every((n: any) => typeof n === "number"))
+          .map((a: any) => ({ ...a, locked: a.locked === true })));
       }
       this.areas = next;
       this.landing = String(list.landing || list.maps[0].slug);
@@ -351,7 +470,7 @@ export class OfficeRoom extends Room<OfficeState> {
   private nearbyClients(sessionId: string): Client[] {
     const me = this.state.players.get(sessionId);
     if (!me) return [];
-    const mine = this.areaOf(me);
+    const mine = this.areaOf(me, sessionId);
     const out: Client[] = [];
     for (const c of this.clients) {
       if (c.sessionId === sessionId) continue;
@@ -361,7 +480,7 @@ export class OfficeRoom extends Room<OfficeState> {
       // shared area can reach across one.
       if (!this.sameMap(me, p)) continue;
       const dx = p.x - me.x, dy = p.y - me.y;
-      if (canHear(mine, this.areaOf(p), dx * dx + dy * dy <= NEAR_PX * NEAR_PX)) out.push(c);
+      if (canHear(mine, this.areaOf(p, c.sessionId), dx * dx + dy * dy <= NEAR_PX * NEAR_PX)) out.push(c);
     }
     return out;
   }
@@ -451,7 +570,14 @@ export class OfficeRoom extends Room<OfficeState> {
     this.state.players.delete(client.sessionId);
     // their throttle entries are dead weight the moment they are gone
     for (const key of this.pingedAt.keys()) {
-      if (key.includes(`${client.sessionId}->`) || key.endsWith(`->${client.sessionId}`)) this.pingedAt.delete(key);
+      if (key.includes(`${client.sessionId}->`) || key.endsWith(`->${client.sessionId}`)
+        || key === `knock:${client.sessionId}`) this.pingedAt.delete(key);
+    }
+    // Being let into a locked room lasts as long as the visit. A session id is
+    // reused by nobody, but leaving these behind would let a reconnecting
+    // browser walk back into a room it was admitted to an hour ago.
+    for (const [key, set] of this.admits) {
+      if (set.delete(client.sessionId) && !set.size) this.admits.delete(key);
     }
     console.log(`[office:${this.workspace}] leave ${client.sessionId} (${this.state.players.size} online)`);
   }

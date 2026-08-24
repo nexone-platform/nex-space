@@ -190,6 +190,21 @@ export class EditorState {
     this.edit((d) => { const a = d.areas.find((z) => z.id === id); if (a) a.label = label; });
   }
 
+  /**
+   * A room people have to be let into.
+   *
+   * The lock is on the area rather than on a door tile, because the rule it
+   * turns on is the area's: who can hear whom. A door with no room behind it
+   * would have nothing to enforce.
+   */
+  toggleLock(id: string) {
+    this.edit((d) => {
+      const a = d.areas.find((z) => z.id === id);
+      if (!a) return;
+      if (a.locked) delete a.locked; else a.locked = true;
+    });
+  }
+
   removeArea(id: string) {
     this.edit((d) => { d.areas = d.areas.filter((a) => a.id !== id); });
   }

@@ -77,7 +77,11 @@ const aMap = (over = {}) => ({
   decor: [],
   desks: [{ id: "hand-1", x: 3, y: 2, sx: 3, sy: 3 }],
   interactives: [{ type: "whiteboard", x: 2, y: 2, label: "กระดาน", icon: "W" }],
-  areas: [{ id: "boardroom", label: "ห้องบอร์ด", x0: 2, y0: 2, x1: 14, y1: 9 }],
+  areas: [
+    { id: "boardroom", label: "ห้องบอร์ด", x0: 2, y0: 2, x1: 14, y1: 9 },
+    // a room you have to be let into, well clear of the boardroom
+    { id: "vault", label: "ห้องเก็บของ", x0: 16, y0: 2, x1: 19, y1: 6, locked: true },
+  ],
   ...over,
 });
 
@@ -184,6 +188,7 @@ await refused("  · a wall key that is not a coordinate", aMap({ walls: ["over t
 await refused("  · a spawn inside a wall", aMap({ spawn: { x: 1, y: 1 } }), "spawn is inside a wall");
 await refused("  · two desks with the same id", aMap({ desks: [{ id: "d", x: 1, y: 1, sx: 1, sy: 2 }, { id: "d", x: 2, y: 1, sx: 2, sy: 2 }] }), "share the id");
 await refused("  · two areas with the same id", aMap({ areas: [{ id: "a", label: "x", x0: 1, y0: 1, x1: 2, y1: 2 }, { id: "a", label: "y", x0: 3, y0: 3, x1: 4, y1: 4 }] }), "share the id");
+await refused("  · a lock that is not yes or no", aMap({ areas: [{ id: "a", label: "x", x0: 1, y0: 1, x1: 2, y1: 2, locked: "yes" }] }), "areas has a bad entry");
 await refused("  · a map with no name", aMap({ label: "  " }), "label must be");
 await refused("  · a world too big for one browser", aMap({ cols: 500 }), "between 4 and 200");
 // the one that is a security hole rather than a broken room
@@ -263,11 +268,16 @@ const room = { open: [] };
 const join = async (name, map) => {
   const r = await new Client(GAME).joinOrCreate("office", { workspace: ws.slug, token: owner.token, name });
   const heard = [];
+  const knocks = [];
+  const answers = [];
   r.onMessage("chat", (m) => heard.push(m));
   r.onMessage("roomchat", () => {});
+  r.onMessage("knock", (m) => knocks.push(m));
+  r.onMessage("admitted", (m) => answers.push(m));
+  r.onMessage("knocked", () => {});
   r.send("map", map);
   room.open.push(r);
-  return { name, room: r, heard };
+  return { name, room: r, heard, knocks, answers, sid: r.sessionId };
 };
 
 /**
@@ -290,11 +300,12 @@ const second = () => aMap({
 await put(`/workspaces/${ws.slug}/map/handmade`, { map: aMap() }, { token: owner.token });
 await put(`/workspaces/${ws.slug}/map/second`, { map: second() }, { token: owner.token });
 
-let gameUp = true, a, b, upstairs;
+let gameUp = true, a, b, upstairs, c;
 try {
   a = await join("a", "handmade");
   b = await join("b", "handmade");
   upstairs = await join("upstairs", "second");
+  c = await join("c", "handmade");
 } catch (e) {
   gameUp = false;
   console.log(`  skip  the game server is not running on 2567 — start it with npm run dev  (${e.message})`);
@@ -353,6 +364,80 @@ if (gameUp) {
     await settle(500);
     const got = await speak([[a, [17, 13]], [upstairs, [17, 12]]], a, `ลงมาแล้ว-${stamp}`);
     ok("coming downstairs puts you back in earshot", got.includes("upstairs"), `heard by ${got}`);
+  }
+
+  // ---- a room you have to be let into -------------------------------------
+  //
+  // "vault" is tiles 16-19 x 2-6 on the ground map and is locked. Everything
+  // below is about earshot, which is the only thing a lock can actually
+  // enforce: the browser stops you walking in, but a browser can be told to
+  // stop doing that.
+
+  const stand = async (who, tx, ty) => {
+    who.room.send("move", at(tx, ty));
+    await settle(350);
+  };
+
+  {
+    // c walks in first with nobody inside: an empty locked room has no one to
+    // knock to, so the door opens
+    await stand(c, 17, 3);
+    await settle(400);
+    ok("the first person into an empty locked room is let in",
+      c.answers.some((m) => m.area === "vault" && m.ok), JSON.stringify(c.answers));
+  }
+  {
+    // a stands inside it too, without being admitted. The client would not let
+    // them, but the server cannot assume the client behaved.
+    const got = await speak([[c, [17, 3]], [a, [18, 3]]], c, `ในห้องนิรภัย-${stamp}`);
+    ok("standing in a locked room you were not let into hears nothing",
+      !got.includes("a"), `heard by ${got}`);
+  }
+  {
+    const got = await speak([[a, [18, 3]], [c, [17, 3]]], a, `แอบพูด-${stamp}`);
+    ok("  · and is not overheard from inside either", !got.includes("c"), `heard by ${got}`);
+  }
+  {
+    // knocking reaches the people inside, and only them
+    a.knocks.length = 0; b.knocks.length = 0; c.knocks.length = 0;
+    await stand(a, 18, 3);
+    a.room.send("knock", {});
+    await settle(600);
+    ok("a knock reaches whoever is inside", c.knocks.some((m) => m.name === "a" && m.area === "vault"),
+      JSON.stringify(c.knocks));
+    ok("  · and nobody else", !b.knocks.length, JSON.stringify(b.knocks));
+  }
+  {
+    // b stands inside the vault without having been let in, and tries to open
+    // the door for a. Standing in a room is not being in it.
+    await stand(b, 17, 5);
+    b.room.send("admit", { to: a.room.sessionId, ok: true });
+    await settle(500);
+    const got = await speak([[c, [17, 3]], [a, [18, 3]]], c, `แอบเปิด-${stamp}`);
+    ok("somebody who was never let in cannot let anybody else in", !got.includes("a"), `heard by ${got}`);
+  }
+  {
+    a.answers.length = 0;
+    c.room.send("admit", { to: a.room.sessionId, ok: true });
+    await settle(500);
+    ok("the person inside can", a.answers.some((m) => m.area === "vault" && m.ok && m.by === "c"),
+      JSON.stringify(a.answers));
+    const got = await speak([[c, [17, 3]], [a, [19, 6]]], c, `เข้ามาแล้ว-${stamp}`);
+    ok("  · and then the room carries, corner to corner", got.includes("a"), `heard by ${got}`);
+  }
+  {
+    // being let in is being let into that room, not into the space's locks
+    const got = await speak([[a, [18, 3]], [b, [17, 5]]], a, `ยังไม่ได้รับ-${stamp}`);
+    ok("being let in is one person, not the door", !got.includes("b"), `heard by ${got}`);
+  }
+  {
+    b.answers.length = 0;
+    c.room.send("admit", { to: b.room.sessionId, ok: false });
+    await settle(500);
+    ok("a refusal reaches the person who knocked",
+      b.answers.some((m) => m.area === "vault" && m.ok === false && m.by === "c"), JSON.stringify(b.answers));
+    const got = await speak([[c, [17, 3]], [b, [17, 5]]], c, `ถูกปฏิเสธ-${stamp}`);
+    ok("  · and leaves them outside", !got.includes("b"), `heard by ${got}`);
   }
 
   for (const r of room.open) { try { await r.leave(); } catch { /* going anyway */ } }

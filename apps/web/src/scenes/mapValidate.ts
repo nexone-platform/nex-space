@@ -28,7 +28,16 @@ export interface Interactive {
   map?: string;
 }
 
-export interface PrivateArea { id: string; label: string; x0: number; y0: number; x1: number; y1: number }
+export interface PrivateArea {
+  id: string; label: string;
+  x0: number; y0: number; x1: number; y1: number;
+  /**
+   * A room you have to be let into. Somebody already inside admits you; an
+   * empty one lets the first person walk in, because a locked door with nobody
+   * behind it is a room nobody could ever enter.
+   */
+  locked?: boolean;
+}
 
 /** the stored shape — everything the scene needs to draw a world */
 export interface MapDoc {
@@ -89,7 +98,8 @@ const isInteractive = (v: any) =>
 
 const isArea = (v: any) =>
   !!v && typeof v.id === "string" && v.id.length <= 64
-  && typeof v.label === "string" && v.label.length <= 60 && isRect(v);
+  && typeof v.label === "string" && v.label.length <= 60 && isRect(v)
+  && (v.locked === undefined || typeof v.locked === "boolean");
 
 const every = (v: unknown, check: (x: any) => boolean, max: number) =>
   Array.isArray(v) && v.length <= max && v.every(check);

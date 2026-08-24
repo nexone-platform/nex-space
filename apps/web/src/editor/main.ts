@@ -406,6 +406,13 @@ function paintLists() {
     b.title = `${a.x0},${a.y0} → ${a.x1},${a.y1}`;
     row.appendChild(b);
 
+    const lock = document.createElement("button");
+    lock.textContent = a.locked ? "🔐" : "🔓";
+    lock.title = a.locked ? t("ล็อกอยู่ — ต้องมีคนข้างในเปิดให้") : t("เปิดให้ทุกคนเดินเข้าได้");
+    lock.setAttribute("aria-label", lock.title);
+    lock.addEventListener("click", () => state.toggleLock(a.id));
+    row.appendChild(lock);
+
     const rename = document.createElement("button");
     rename.textContent = t("เปลี่ยนชื่อ");
     rename.addEventListener("click", () => {
