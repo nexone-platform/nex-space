@@ -349,7 +349,10 @@ an admin. `DELETE` on the same path puts the space back on its stock layout, so
 a broken map is one request away from being undone.
 
 Owners and admins draw one at `/editor.html?w=<slug>`, reachable from the space
-settings. It is a second page rather than a route inside the app, so nginx's
+settings. A space may hold several maps — floors, or separate offices — and the
+editor's tabs move between them. People reach the others through a portal that
+names one, the floor switcher in the sidebar, or a `?m=<map>` in the URL; the
+first map in the order is where new arrivals land. It is a second page rather than a route inside the app, so nginx's
 `try_files $uri` serves the file directly and no config change is needed.
 
 The row is validated before it is stored and again before it is drawn, because a
@@ -359,6 +362,7 @@ either — the API logs it and serves the stock layout, so the space still opens
 
 ```dotenv
 MAP_MAX_BYTES=2000000  # a stored map is part of everyone's page load
+MAPS_PER_SPACE=12      # floors of a building, or separate offices
 ```
 
 The three built-in layouts bake down to about 6 KB each, so the default leaves a
