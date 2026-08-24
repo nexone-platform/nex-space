@@ -348,6 +348,10 @@ map editor writes, and what `PUT /workspaces/:slug/map` accepts from an owner or
 an admin. `DELETE` on the same path puts the space back on its stock layout, so
 a broken map is one request away from being undone.
 
+Owners and admins draw one at `/editor.html?w=<slug>`, reachable from the space
+settings. It is a second page rather than a route inside the app, so nginx's
+`try_files $uri` serves the file directly and no config change is needed.
+
 The row is validated before it is stored and again before it is drawn, because a
 map reaches every browser in the space at once: a bad one is not a bad record,
 it is a room nobody can walk into. A stored map that stops parsing is not fatal
