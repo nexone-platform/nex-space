@@ -30,7 +30,8 @@ const walk = (d) => {
   }
 };
 walk(join(ROOT, "src"));
-files.push(join(ROOT, "index.html"));
+/** the pages with Thai sitting directly in the markup */
+const PAGES = ["index.html", "editor.html"];
 
 const THAI = /[฀-๿]/;
 const dict = new Set();
@@ -71,16 +72,21 @@ for (const f of files.filter((f) => f.endsWith(".ts"))) {
   });
 }
 
-const html = readFileSync(join(ROOT, "index.html"), "utf8")
-  .replace(/<style[\s\S]*?<\/style>/g, "").replace(/<script[\s\S]*?<\/script>/g, "");
 const norm = (s) => s.replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
-for (const m of html.matchAll(/>([^<>]+)</g)) {
-  const s = norm(m[1]);
-  if (s && THAI.test(s) && !dict.has(s)) { missing++; console.log(`no EN     index.html text: ${s.slice(0, 70)}`); }
-}
-for (const m of html.matchAll(/(?:placeholder|title|alt|aria-label)="([^"]+)"/g)) {
-  const s = norm(m[1]);
-  if (THAI.test(s) && !dict.has(s)) { missing++; console.log(`no EN     index.html attr: ${s.slice(0, 70)}`); }
+for (const page of PAGES) {
+  const html = readFileSync(join(ROOT, page), "utf8")
+    // <title> is chrome the translator never walks, and the two <style> and
+    // <script> blocks are not text anybody reads
+    .replace(/<style[\s\S]*?<\/style>/g, "").replace(/<script[\s\S]*?<\/script>/g, "")
+    .replace(/<title[\s\S]*?<\/title>/g, "");
+  for (const m of html.matchAll(/>([^<>]+)</g)) {
+    const s = norm(m[1]);
+    if (s && THAI.test(s) && !dict.has(s)) { missing++; console.log(`no EN     ${page} text: ${s.slice(0, 70)}`); }
+  }
+  for (const m of html.matchAll(/(?:placeholder|title|alt|aria-label)="([^"]+)"/g)) {
+    const s = norm(m[1]);
+    if (THAI.test(s) && !dict.has(s)) { missing++; console.log(`no EN     ${page} attr: ${s.slice(0, 70)}`); }
+  }
 }
 
 console.log(`\ndictionary entries: ${dict.size}`);

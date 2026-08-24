@@ -189,6 +189,10 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
     }
     $("pf-save")!.style.display = manager ? "" : "none";
     $("pf-reset")!.style.display = manager ? "" : "none";
+    // Only owners and admins may store a map, so only they are shown the door.
+    // The public space has no workspace record to hang one on.
+    const mapRow = $("pf-map-row");
+    if (mapRow) mapRow.style.display = manager && !isPublic ? "" : "none";
     // a guest must not be able to pull more people in
     const hideInvite = myRole === "guest" || !inviteCode;
     $("pf-invite-row")!.style.display = hideInvite ? "none" : "flex";
@@ -254,6 +258,8 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
       $<HTMLInputElement>("pf-guests")!.checked = !!w.allowGuests;
       // the theme's label is Thai data, like the map's own labels
       $("pf-theme-name")!.textContent = THEMES[theme] ? t(THEMES[theme].label) : theme;
+      const edit = $<HTMLAnchorElement>("pf-edit-map");
+      if (edit) edit.href = `/editor.html?w=${encodeURIComponent(slug)}`;
       $<HTMLInputElement>("pf-invite")!.value = inviteCode ? inviteLink() : "—";
       applyRole();
       if (themeOverride()) say(t('กำลังดูตัวอย่างธีม "{theme}" จาก URL — ไม่ใช่ธีมที่ Space นี้ใช้จริง', { theme: themeOverride() }));

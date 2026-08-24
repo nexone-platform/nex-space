@@ -110,6 +110,16 @@ else
   echo "$out" | sed 's/^/        /' >&2
 fi
 
+# The editor offers whatever this list says exists. A prop it offers that is not
+# on disk 404s in the palette and again in every browser the saved map reaches.
+say "Asset catalogue"
+if out=$(node scripts/asset-catalogue.mjs --check 2>&1); then
+  ok "$out"
+else
+  bad "the editor's prop catalogue is out of date"
+  echo "$out" | sed 's/^/        /' >&2
+fi
+
 say "Relay checker"
 if out=$(node scripts/turn-check.test.mjs 2>&1); then
   ok "turn-check — $(echo "$out" | grep -oE '[0-9]+ passed, [0-9]+ failed' | tail -1)"
