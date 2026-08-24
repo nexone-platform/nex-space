@@ -18,7 +18,10 @@ export type Flat = [key: string, x: number, y: number];
 export interface Interactive {
   type: "whiteboard" | "screen" | "portal" | "embed";
   x: number; y: number; label: string; icon: string;
-  url?: string; target?: { x: number; y: number };
+  url?: string;
+  target?: { x: number; y: number };
+  /** a portal naming another map in the same space; absent means this one */
+  map?: string;
 }
 
 /** a desk players can claim: the desk tile plus the seat to sit on */

@@ -11,7 +11,7 @@
 
 import { THEMES, classicTheme, type MapTheme } from "./mapThemes";
 import { themeFromDoc, mapDocProblem } from "./mapFormat";
-import { WORKSPACE, themeOverride, cachedTheme, rememberTheme } from "../workspace";
+import { WORKSPACE, MAP_SLUG, themeOverride, cachedTheme, rememberTheme } from "../workspace";
 import { API } from "../api";
 
 /**
@@ -23,6 +23,8 @@ import { API } from "../api";
 const PATIENCE_MS = 4000;
 
 let resolved: MapTheme | null = null;
+/** which map of the space this turned out to be, "" for a built-in layout */
+let mapSlug = "";
 /** how we got here, for the boot log — a silent fallback is the confusing kind */
 let origin = "";
 
@@ -48,10 +50,23 @@ export async function loadMap(): Promise<MapTheme> {
     return (resolved = THEMES[preview]);
   }
 
+  // ?m= names a map of this space; without one the space picks where people land
+  const path = MAP_SLUG
+    ? `/map/${encodeURIComponent(MAP_SLUG)}`
+    : "/map";
   try {
-    const r = await fetch(`${API}/workspaces/${encodeURIComponent(WORKSPACE)}/map`, {
+    let r = await fetch(`${API}/workspaces/${encodeURIComponent(WORKSPACE)}${path}`, {
       signal: AbortSignal.timeout(PATIENCE_MS),
     });
+    // A ?m= pointing at a map that has been deleted is a stale link, not a
+    // broken space: fall back to the landing map rather than to a built-in one
+    // nobody else in the room is on.
+    if (r.status === 404 && MAP_SLUG) {
+      console.warn(`[map] "${WORKSPACE}" has no map called "${MAP_SLUG}" — falling back to the landing map`);
+      r = await fetch(`${API}/workspaces/${encodeURIComponent(WORKSPACE)}/map`, {
+        signal: AbortSignal.timeout(PATIENCE_MS),
+      });
+    }
     if (r.ok) {
       const d = await r.json();
       if (d?.map) {
@@ -64,7 +79,8 @@ export async function loadMap(): Promise<MapTheme> {
         if (problem) {
           console.warn(`[map] the stored map for "${WORKSPACE}" is not readable (${problem}) — using the built-in`);
         } else {
-          origin = `stored map "${d.map.id}"`;
+          mapSlug = String(d.slug || d.map.id);
+          origin = `stored map "${mapSlug}"`;
           return (resolved = themeFromDoc(d.map));
         }
       }
@@ -97,3 +113,48 @@ export function currentTheme(): MapTheme {
 
 /** how the map was chosen, for the boot log */
 export const mapOrigin = () => origin;
+
+/** one map of a space, as the switcher and the roster need to name it */
+export interface MapEntry { slug: string; label: string }
+
+let maps: MapEntry[] = [];
+
+/**
+ * Every map in this space, in the order people meet them.
+ *
+ * Fetched alongside the map itself rather than on demand, because two things
+ * need it the moment the room opens: the switcher, and the roster line that
+ * says which floor somebody is on. It is a list of names — a few hundred bytes
+ * — not the maps themselves.
+ */
+export async function loadMapList(): Promise<MapEntry[]> {
+  if (maps.length) return maps;
+  try {
+    const r = await fetch(`${API}/workspaces/${encodeURIComponent(WORKSPACE)}/maps`, {
+      signal: AbortSignal.timeout(PATIENCE_MS),
+    });
+    if (!r.ok) return maps;
+    const d = await r.json();
+    if (Array.isArray(d?.maps)) {
+      maps = d.maps
+        .filter((m: any) => typeof m?.slug === "string")
+        .map((m: any) => ({ slug: m.slug, label: String(m.label || m.slug) }));
+    }
+  } catch (e) {
+    // A space with one map needs no switcher, and that is what an empty list
+    // renders as — so failing to fetch it costs a convenience, not the room.
+    console.warn(`[map] could not list the maps of "${WORKSPACE}":`, e);
+  }
+  return maps;
+}
+
+export const mapList = () => maps;
+
+/**
+ * Which map of the space this tab is on, "" on a built-in layout.
+ *
+ * Resolved rather than read off the URL: a ?m= that named a deleted map lands
+ * on the landing map instead, and the room has to be told where this browser
+ * actually is, not where it asked to be.
+ */
+export const currentMapSlug = () => mapSlug;

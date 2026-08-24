@@ -7,13 +7,13 @@ import type { MediaManager } from "../net/media";
 import { buildWalkCanvas, buildSitCanvas, SIT_COLS, SIT_SEATED_COL, decodeAvatar, encodeAvatar, isLpc, avatarKey, defaultDressedConfig, LPC_ROW } from "../avatar/avatarCompose";
 import { openAvatarEditor } from "../avatar/avatarEditor";
 import { WORKSPACE, IS_DEFAULT_WORKSPACE, workspaceLabel, inviteLink, wsKey,
-         GUEST_CODE } from "../workspace";
+         GUEST_CODE, ARRIVE_AT, gotoMap } from "../workspace";
 import { API as AUTH_API } from "../api";
 import { t, onLangChange, locale } from "../i18n";
 import { setupPrefsModal } from "../prefsModal";
 import { roleLabel } from "../memberPanel";
 import { propPath, type Interactive } from "./mapThemes";
-import { currentTheme } from "./mapSource";
+import { currentTheme, currentMapSlug, loadMapList, mapList } from "./mapSource";
 import { canHear, type PrivateArea } from "./areas";
 
 const LPC_COLS = 9; // LPC walk sheet: 9 frames per direction row
@@ -75,7 +75,10 @@ const TILE = 32;
 const THEME = currentTheme();
 const COLS = THEME.cols;
 const ROWS = THEME.rows;
-const SPAWN = THEME.spawn;
+// Where you appear. A portal from another map names the tile it puts you down
+// on, which is what makes a doorway on one floor line up with the doorway on
+// the other; without one you land on the map's own spawn.
+const SPAWN = ARRIVE_AT && ARRIVE_AT.x < THEME.cols && ARRIVE_AT.y < THEME.rows ? ARRIVE_AT : THEME.spawn;
 // The zoom ladder, as levels rather than camera zoom values — see setZoom. A
 // step is what the +/- buttons and the wheel move. 2 is the readable default; 0.5
 // is half size, which fits a whole floor plan on screen; 6 is close enough to
@@ -128,6 +131,8 @@ const AFK_MS = 180_000;              // no input for 3 min -> away
 const MEETING_ROOM = THEME.meetingRoom;
 /** the private areas drawn on this map — empty for a map that has none */
 const PRIVATE_AREAS = THEME.areas;
+/** which map of the space this tab is on; "" on one of the built-in layouts */
+const MAP = currentMapSlug();
 
 interface MeetingPerson { id: string; name: string; self: boolean; status: string; mic: boolean; hand: boolean }
 
@@ -712,6 +717,11 @@ export class OfficeScene extends Phaser.Scene {
       setTimeout(() => console.log(`[nexspace] room ${room.roomId}: ${room.state.players.size} online`), 1200);
       const $ = getStateCallbacks(room);
 
+      // Said before anything else is read from the state: until the room knows,
+      // this player counts as being on the landing map, and two people on
+      // different floors would briefly hear each other.
+      room.send("map", MAP);
+
       $(room.state).players.onAdd((player: any, sessionId: string) => {
         if (sessionId === this.mySessionId) {
           this.setAvatarChip(player.name);
@@ -726,8 +736,19 @@ export class OfficeScene extends Phaser.Scene {
             this.refreshDeskPlates();
           });
         } else {
-          this.addRemote(sessionId, player);
+          // Somebody on another floor stays in the roster — they are in this
+          // space, and messages and "come over" still reach them — but they get
+          // no sprite, because they are not in this room to be walked up to.
+          if (this.onMyMap(player)) this.addRemote(sessionId, player);
           $(player).onChange(() => {
+            // They walked through a portal, in one direction or the other
+            const here = this.onMyMap(player);
+            if (here !== this.remotes.has(sessionId)) {
+              if (here) this.addRemote(sessionId, player);
+              else this.removeRemote(sessionId);
+              this.refreshRoster();
+              this.refreshDeskPlates();
+            }
             const r = this.remotes.get(sessionId);
             if (!r) return;
             r.tx = player.x; r.ty = player.y; r.dir = player.dir; r.moving = player.moving;
@@ -988,6 +1009,7 @@ export class OfficeScene extends Phaser.Scene {
     document.getElementById("dm-send")?.addEventListener("click", sendDm);
     dmInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") sendDm(); });
     // the gear opens the preferences dialog (members, space settings)
+    void this.buildMapSwitcher();
     const prefs = setupPrefsModal(WORKSPACE, IS_DEFAULT_WORKSPACE);
     document.getElementById("rail-settings")?.addEventListener("click", () => prefs.open("members"));
     document.getElementById("sb-close")?.addEventListener("click", () => sidebar?.classList.add("closed"));
@@ -1235,13 +1257,22 @@ export class OfficeScene extends Phaser.Scene {
     const list = document.getElementById("people");
     if (!list || !this.room) return;
     const q = (document.getElementById("sb-search") as HTMLInputElement | null)?.value.toLowerCase() ?? "";
-    const rows: { name: string; self: boolean; status: string; userId: string; sessionId: string }[] = [];
+    const rows: { name: string; self: boolean; status: string; userId: string; sessionId: string; map: string; here: boolean }[] = [];
     this.room.state.players.forEach((p: any, id: string) => {
       const self = id === this.mySessionId;
       if (self) this.myUserId = p.userId || this.myUserId;
-      rows.push({ name: p.name || "Guest", self, status: self ? this.myStatus : (p.status || "online"), userId: p.userId || "", sessionId: id });
+      rows.push({
+        name: p.name || "Guest", self, status: self ? this.myStatus : (p.status || "online"),
+        userId: p.userId || "", sessionId: id,
+        map: p.map || "", here: self || this.onMyMap(p),
+      });
     });
-    rows.sort((a, b) => Number(b.self) - Number(a.self) || a.name.localeCompare(b.name));
+    // People on this map first, then the other floors. Somebody two rooms away
+    // is still in the space and still worth messaging, but they are not who you
+    // are looking at when you glance at the list.
+    rows.sort((a, b) => Number(b.self) - Number(a.self)
+      || Number(b.here) - Number(a.here)
+      || a.name.localeCompare(b.name));
     list.innerHTML = "";
     for (const r of rows) {
       if (q && !r.name.toLowerCase().includes(q)) continue;
@@ -1254,7 +1285,11 @@ export class OfficeScene extends Phaser.Scene {
       dot.style.background = meta.css; chip.appendChild(dot);
       const info = document.createElement("span"); info.className = "p-info";
       const nm = document.createElement("b"); nm.textContent = r.name + (r.self ? " " + t("(คุณ)") : "");
-      const st = document.createElement("small"); st.textContent = t(meta.label);
+      const st = document.createElement("small");
+      // Where somebody is beats how they are when they are somewhere else: you
+      // cannot walk over to an "online" that is on another floor.
+      st.textContent = r.here ? t(meta.label) : `${t(meta.label)} · ${this.mapLabel(r.map)}`;
+      if (!r.here) row.classList.add("elsewhere");
       info.append(nm, st); row.append(chip, info);
       row.style.cursor = "pointer";
       row.addEventListener("click", (e) => {
@@ -1286,6 +1321,13 @@ export class OfficeScene extends Phaser.Scene {
         act(t("ไปที่"),
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8 12h7"/><path d="M12 8.5l3.5 3.5L12 15.5"/></svg>',
           () => {
+            // On another floor there is nothing here to walk to: change floors,
+            // landing where they are standing.
+            if (!r.here) {
+              const p: any = this.room?.state.players.get(r.sessionId);
+              if (p) gotoMap(r.map, { x: Math.floor(p.x / TILE), y: Math.floor(p.y / TILE) });
+              return;
+            }
             const them = this.remotes.get(r.sessionId)?.sprite;
             if (them) this.goTo(them.x, them.y);
             else this.toast(t("หาไม่เจอ — เขาอาจออกไปแล้ว"), "warn");
@@ -2157,6 +2199,14 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private async activateInteractive(it: Interactive) {
+    // A portal naming another map is a different journey from one that moves
+    // you across this one: the world itself changes, so the page does.
+    if (it.type === "portal" && it.map && it.map !== MAP) {
+      this.cameras.main.fadeOut(160);
+      this.toast(t("กำลังไป {name}").replace("{name}", t(it.label)), "info");
+      this.time.delayedCall(180, () => gotoMap(it.map!, it.target));
+      return;
+    }
     if (it.type === "portal" && it.target) {
       const tx = it.target.x * TILE + TILE / 2, ty = it.target.y * TILE + TILE / 2;
       const cam = this.cameras.main;
@@ -2454,6 +2504,52 @@ export class OfficeScene extends Phaser.Scene {
     for (const ev of ["keydown", "pointerdown", "wheel"]) {
       document.addEventListener(ev, seen, { passive: true });
     }
+  }
+
+  /** the name a map goes by, falling back to its own id */
+  private mapLabel(slug: string) {
+    const m = mapList().find((x) => x.slug === slug);
+    return t(m?.label ?? (slug || THEME.label));
+  }
+
+  /**
+   * The floors of this space, as a row of pills above the people.
+   *
+   * Hidden entirely when there is one map, which is most spaces: a switcher
+   * with a single option is a control that does nothing, and it would sit
+   * there on every screen suggesting otherwise.
+   */
+  private async buildMapSwitcher() {
+    const box = document.getElementById("sb-maps");
+    if (!box) return;
+    const maps = await loadMapList();
+    box.hidden = maps.length < 2;
+    if (box.hidden) return;
+    box.innerHTML = "";
+    for (const m of maps) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = t(m.label);
+      b.title = t(m.label);
+      const here = m.slug === MAP;
+      if (here) b.setAttribute("aria-current", "true");
+      else b.addEventListener("click", () => gotoMap(m.slug));
+      box.appendChild(b);
+    }
+    // the roster's "on another floor" lines can only be written once this is in
+    this.refreshRoster();
+  }
+
+  /**
+   * Is this player on the same map as me?
+   *
+   * The room keeps everybody in one place so the roster, private messages and
+   * "come over" still cross floors. What does not cross is the world: a person
+   * on another map has no sprite here, and the server will not carry a word
+   * between us either.
+   */
+  private onMyMap(player: { map?: string }) {
+    return (player?.map ?? "") === MAP;
   }
 
   /** the private area a point falls in, if any */

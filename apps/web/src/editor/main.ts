@@ -10,7 +10,7 @@
 
 import { API, authToken } from "../api";
 import { t, applyLang } from "../i18n";
-import { WORKSPACE } from "../workspace";
+import { WORKSPACE, MAP_SLUG } from "../workspace";
 import { THEMES, classicTheme } from "../scenes/mapThemes";
 import { bakeTheme } from "../scenes/mapFormat";
 import type { MapDoc } from "../scenes/mapValidate";
@@ -43,6 +43,13 @@ let propDir = "furniture";
 let propSolid = true;
 let propScale = 1;
 let objType: "whiteboard" | "screen" | "portal" = "whiteboard";
+/** for a portal: which map it leads to, "" meaning this one */
+let portalMap = "";
+/** for a portal: where it puts you down, null meaning that map's own spawn */
+let portalTo: { x: number; y: number } | null = null;
+/** every map in this space, and which one is open */
+let maps: { slug: string; label: string }[] = [];
+let openMap = "";
 let zoom = 2;
 let drag: { rect: Rect } | null = null;
 let hover: { x: number; y: number } | null = null;
@@ -105,6 +112,66 @@ const folderFor = (key: string, dir: string) =>
   key.includes("/") ? key.slice(0, key.indexOf("/")) : dir === "furniture" || dir === "office" ? "furniture" : dir;
 
 // ---- the panels ---------------------------------------------------------------
+
+/**
+ * The maps of this space, along the top.
+ *
+ * Switching is a reload rather than a swap, for the same reason it is in the
+ * app: everything here is built around one document, and one document is what
+ * an editor should hold. Unsaved work is guarded by the browser's own prompt.
+ */
+function paintTabs() {
+  const box = $("map-tabs");
+  box.innerHTML = "";
+  for (const m of maps) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = t(m.label);
+    b.title = m.slug;
+    if (m.slug === openMap) b.setAttribute("aria-current", "true");
+    else b.addEventListener("click", () => { location.search = `?w=${encodeURIComponent(WORKSPACE)}&m=${encodeURIComponent(m.slug)}`; });
+    box.appendChild(b);
+  }
+  const add = document.createElement("button");
+  add.type = "button";
+  add.className = "add";
+  add.textContent = "＋";
+  add.title = t("แผนที่ใหม่");
+  add.addEventListener("click", () => void addMap());
+  box.appendChild(add);
+}
+
+/**
+ * A new, empty floor.
+ *
+ * Empty rather than a copy of the current one: a duplicate carries its desks
+ * and its areas, and two floors sharing a desk id is a claim that lands on
+ * whichever the server saw last.
+ */
+async function addMap() {
+  const label = prompt(t("ชื่อแผนที่ใหม่"), t("ชั้นใหม่"));
+  if (!label || !label.trim()) return;
+  let n = maps.length + 1;
+  while (maps.some((m) => m.slug === `map-${n}`)) n++;
+  const slug = `map-${n}`;
+
+  const cols = 24, rows = 18;
+  const blank: MapDoc = {
+    v: 1, id: slug, label: label.trim().slice(0, 60), cols, rows,
+    spawn: { x: 2, y: 2 }, meetingRoom: { x0: 0, x1: 0, y0: 0, y1: 0 },
+    floors: Array.from({ length: rows }, () => Array.from({ length: cols }, () => 0)),
+    walls: [], furniture: [], outdoor: [], decals: [], decor: [],
+    desks: [], interactives: [], areas: [],
+  };
+  const r = await fetch(`${API}/workspaces/${encodeURIComponent(WORKSPACE)}/map/${slug}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", authorization: `Bearer ${authToken()}` },
+    body: JSON.stringify({ map: blank }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { alert(`${t("บันทึกไม่สำเร็จ")} (${r.status})\n${d.problem || d.error || ""}`); return; }
+  location.search = `?w=${encodeURIComponent(WORKSPACE)}&m=${slug}`;
+}
 
 function paintTools() {
   const box = $("tools");
@@ -272,8 +339,48 @@ function paintOptions() {
       if (objType === v) o.selected = true;
       sel.appendChild(o);
     }
-    sel.addEventListener("change", () => { objType = sel.value as typeof objType; });
+    sel.addEventListener("change", () => { objType = sel.value as typeof objType; paintOptions(); });
     box.appendChild(sel);
+
+    if (objType === "portal") {
+      head("ไปที่แผนที่");
+      const dest = document.createElement("select");
+      for (const m of [{ slug: "", label: "แผนที่นี้" }, ...maps.filter((m) => m.slug !== openMap)]) {
+        const o = document.createElement("option");
+        o.value = m.slug;
+        o.textContent = t(m.label);
+        if (m.slug === portalMap) o.selected = true;
+        dest.appendChild(o);
+      }
+      dest.addEventListener("change", () => { portalMap = dest.value; paintOptions(); });
+      box.appendChild(dest);
+
+      const row = document.createElement("div");
+      row.className = "row";
+      const mk = (which: "x" | "y") => {
+        const l = document.createElement("label");
+        l.append(which.toUpperCase() + " ");
+        const i = document.createElement("input");
+        i.type = "number"; i.min = "0"; i.max = "199";
+        i.value = portalTo ? String(portalTo[which]) : "";
+        i.addEventListener("change", () => {
+          const x = Number((row.querySelector("input") as HTMLInputElement).value);
+          const y = Number((row.querySelectorAll("input")[1] as HTMLInputElement).value);
+          portalTo = Number.isFinite(x) && Number.isFinite(y)
+            && (row.querySelector("input") as HTMLInputElement).value !== ""
+            && (row.querySelectorAll("input")[1] as HTMLInputElement).value !== ""
+            ? { x, y } : null;
+        });
+        l.appendChild(i);
+        return l;
+      };
+      row.append(mk("x"), mk("y"));
+      box.appendChild(row);
+      hint(portalMap
+        ? "เว้นช่องว่างไว้เพื่อไปโผล่ที่จุดเกิดของแผนที่ปลายทาง"
+        : "ประตูมิติในแผนที่เดียวกันต้องระบุช่องปลายทาง");
+    }
+
     hint("ยืนข้างวัตถุแล้วกด E เพื่อใช้งาน");
     return;
   }
@@ -334,7 +441,10 @@ function paintLists() {
   for (const i of d.interactives) {
     const row = document.createElement("div");
     row.className = "item";
-    row.innerHTML = `<b>${i.icon} ${t(i.label)}</b><span>${i.x},${i.y}</span>`;
+    const where = i.type === "portal"
+      ? (i.map ? `→ ${t(maps.find((m) => m.slug === i.map)?.label ?? i.map)}` : "→ " + t("แผนที่นี้"))
+      : `${i.x},${i.y}`;
+    row.innerHTML = `<b>${i.icon} ${t(i.label)}</b><span>${where}</span>`;
     objs.appendChild(row);
   }
 }
@@ -377,12 +487,14 @@ function apply(x: number, y: number, alt: boolean) {
       if (propKey) state.addDesk(propKey, propDir, x, y, propScale);
       break;
     case "spawn": state.setSpawn(x, y); break;
-    case "interactive":
+    case "interactive": {
       // stored in Thai, like every other label on a map, and translated where
       // it is displayed — a map made here has to read the same in both languages
-      state.addInteractive(objType, x, y,
-        objType === "whiteboard" ? "ไวท์บอร์ด" : objType === "screen" ? "จอนำเสนอ" : "ประตูมิติ");
+      const label = objType === "whiteboard" ? "ไวท์บอร์ด" : objType === "screen" ? "จอนำเสนอ" : "ประตูมิติ";
+      const to = objType === "portal" ? { map: portalMap, target: portalTo ?? undefined } : undefined;
+      state.addInteractive(objType, x, y, label, to);
       break;
+    }
     case "erase": state.eraseAt(x, y); break;
   }
 }
@@ -456,7 +568,9 @@ async function save() {
   saving = true;
   paintStatus();
   try {
-    const r = await fetch(`${API}/workspaces/${encodeURIComponent(WORKSPACE)}/map`, {
+    // By name, always. Saving to the unnamed path would write whichever map
+    // happens to be first, which is how you lose a floor.
+    const r = await fetch(`${API}/workspaces/${encodeURIComponent(WORKSPACE)}/map/${encodeURIComponent(state.doc.id)}`, {
       method: "PUT",
       headers: { "content-type": "application/json", authorization: `Bearer ${authToken()}` },
       body: JSON.stringify({ map: state.doc }),
@@ -503,9 +617,21 @@ async function boot() {
     return;
   }
 
+  // Which maps exist, and which one this URL is for
+  try {
+    const lr = await fetch(`${API}/workspaces/${encodeURIComponent(WORKSPACE)}/maps`);
+    const ld = await lr.json().catch(() => ({}));
+    if (Array.isArray(ld?.maps)) maps = ld.maps.map((m: any) => ({ slug: m.slug, label: String(m.label || m.slug) }));
+  } catch { /* a space with no maps yet is the normal first visit */ }
+
   let doc: MapDoc;
   try {
-    const r = await fetch(`${API}/workspaces/${encodeURIComponent(WORKSPACE)}/map`);
+    const path = MAP_SLUG ? `/map/${encodeURIComponent(MAP_SLUG)}` : "/map";
+    const r = await fetch(`${API}/workspaces/${encodeURIComponent(WORKSPACE)}${path}`);
+    if (r.status === 404 && MAP_SLUG) {
+      block(t("ไม่พบแผนที่นี้"), t('พื้นที่นี้ไม่มีแผนที่ชื่อ "{slug}" — อาจถูกลบไปแล้ว', { slug: MAP_SLUG }));
+      return;
+    }
     if (r.status === 404) {
       block(t("ไม่พบพื้นที่นี้"), t('ไม่มีพื้นที่ชื่อ "{slug}" — เปิดเครื่องมือนี้จากลิงก์ที่มี ?w=<slug> ของพื้นที่ที่ต้องการแก้', { slug: WORKSPACE }));
       return;
@@ -514,6 +640,7 @@ async function boot() {
     // Starting from the stock layout is the normal first move: nobody draws an
     // office from an empty grid, they move the desks in the one they have.
     doc = d?.map ?? bakeTheme(THEMES[d?.builtin] ?? classicTheme);
+    openMap = String(d?.slug || doc.id);
   } catch (e) {
     block(t("ติดต่อเซิร์ฟเวอร์ไม่ได้"), String(e));
     return;
@@ -524,6 +651,7 @@ async function boot() {
 
   state.onChange(() => { paintLists(); paintStatus(); void refreshArt(); });
 
+  paintTabs();
   paintTools();
   paintOptions();
   paintLists();

@@ -194,10 +194,26 @@ export class EditorState {
     this.edit((d) => { d.areas = d.areas.filter((a) => a.id !== id); });
   }
 
-  addInteractive(type: "whiteboard" | "screen" | "portal", x: number, y: number, label: string) {
+  /**
+   * @param to for a portal: the map it leads to and where it puts you down.
+   *   An empty map name means this one, which is the in-map teleport that
+   *   already existed; leaving the tile out lands people on that map's spawn.
+   */
+  addInteractive(
+    type: "whiteboard" | "screen" | "portal",
+    x: number, y: number, label: string,
+    to?: { map?: string; target?: { x: number; y: number } },
+  ) {
     if (!this.inside(x, y)) return;
     const icon = type === "whiteboard" ? "🖊" : type === "screen" ? "🖥" : "🚪";
-    this.edit((d) => { d.interactives.push({ type, x, y, label, icon }); });
+    this.edit((d) => {
+      const it: any = { type, x, y, label, icon };
+      if (type === "portal") {
+        if (to?.map) it.map = to.map;
+        if (to?.target) it.target = { x: to.target.x, y: to.target.y };
+      }
+      d.interactives.push(it);
+    });
   }
 
   /**

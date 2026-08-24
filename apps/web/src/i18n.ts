@@ -449,8 +449,18 @@ const EN: Record<string, string> = {
   "แชตห้อง": "Room chat",
   "แชตห้องรวม": "Room chat",
   "ห้องประชุม": "Meeting room",
+  "กำลังไป {name}": "Heading to {name}",
 
   // ---- the map editor (editor.html) ----
+  "แผนที่ใหม่": "New map",
+  "ชื่อแผนที่ใหม่": "Name of the new map",
+  "ชั้นใหม่": "New floor",
+  "แผนที่นี้": "This map",
+  "ไม่พบแผนที่นี้": "No such map",
+  "พื้นที่นี้ไม่มีแผนที่ชื่อ \"{slug}\" — อาจถูกลบไปแล้ว": "This space has no map called \"{slug}\" — it may have been deleted",
+  "ไปที่แผนที่": "Leads to map",
+  "เว้นช่องว่างไว้เพื่อไปโผล่ที่จุดเกิดของแผนที่ปลายทาง": "Leave these blank to arrive at that map's own spawn",
+  "ประตูมิติในแผนที่เดียวกันต้องระบุช่องปลายทาง": "A portal inside one map needs a destination tile",
   "โต๊ะ": "Desks",
   "โซนส่วนตัว": "Private areas",
   "วัตถุโต้ตอบ": "Interactive objects",

@@ -21,9 +21,11 @@ export class OfficeRoom extends Room<OfficeState> {
                        // (rooms auto-disposing while momentarily empty caused clients to split across instances)
 
   private workspace = "main";
-  /** the private areas on this space's map — empty until the API answers */
-  private areas: PrivateArea[] = [];
+  /** the private areas of each map in this space — empty until the API answers */
+  private areas = new Map<string, PrivateArea[]>();
   private areasAt = 0;
+  /** the map new arrivals land on, so a client that names none still matches them */
+  private landing = "";
   private chatStoreWarned = false;
   private dmStoreWarned = false;
   /** last gesture per sender-to-target pair, keyed by kind, so no button can be leaned on */
@@ -90,6 +92,15 @@ export class OfficeRoom extends Room<OfficeState> {
       const p = this.state.players.get(client.sessionId);
       const clean = String(name ?? "").trim().slice(0, 24);
       if (p && clean) p.name = clean;
+    });
+
+    // Which map of the space this player is on. Client-authoritative like the
+    // position it goes with — a browser that lies about its floor can already
+    // lie about standing next to you.
+    this.onMessage("map", (client, slug: string) => {
+      const p = this.state.players.get(client.sessionId);
+      const clean = String(slug ?? "").slice(0, 32);
+      if (p && /^[a-z0-9-]*$/.test(clean)) p.map = clean;
     });
 
     // presence status shown as the dot on each player's name tag
@@ -266,13 +277,20 @@ export class OfficeRoom extends Room<OfficeState> {
     });
   }
 
-  /** the private area a player is standing in, if any */
+  /** the private area a player is standing in, on the map they are standing on */
   private areaOf(p: Player): PrivateArea | undefined {
+    const here = this.areas.get(p.map || this.landing);
+    if (!here) return undefined;
     const tx = Math.floor(p.x / TILE), ty = Math.floor(p.y / TILE);
-    for (const a of this.areas) {
+    for (const a of here) {
       if (tx >= a.x0 && tx <= a.x1 && ty >= a.y0 && ty <= a.y1) return a;
     }
     return undefined;
+  }
+
+  /** two players are within earshot only if they are on the same map at all */
+  private sameMap(a: Player, b: Player) {
+    return (a.map || this.landing) === (b.map || this.landing);
   }
 
   /**
@@ -290,27 +308,36 @@ export class OfficeRoom extends Room<OfficeState> {
    */
   private async loadAreas() {
     this.areasAt = Date.now();
+    const base = `${API_URL}/workspaces/${encodeURIComponent(this.workspace)}`;
     try {
-      const r = await fetch(`${API_URL}/workspaces/${encodeURIComponent(this.workspace)}/map`);
-      if (!r.ok) return;
-      const d: any = await r.json();
+      const list: any = await (await fetch(`${base}/maps`)).json();
 
-      if (d?.map) {
-        // The API validated this before storing it; take only the shape this
-        // room actually uses rather than trusting the rest of the document.
-        const from = Array.isArray(d.map.areas) ? d.map.areas : [];
-        this.areas = from.filter((a: any) => a && typeof a.id === "string"
-          && [a.x0, a.x1, a.y0, a.y1].every((n) => typeof n === "number"));
-        console.log(`[office:${this.workspace}] stored map "${d.map.id}", ${this.areas.length} private areas`);
+      // No stored maps: the space is on one of the layouts compiled into the
+      // client, and the copied table has its areas.
+      if (!list?.maps?.length) {
+        const id = String(list?.builtin || "");
+        if (!AREAS[id]) return;
+        this.landing = id;
+        this.areas = new Map([[id, AREAS[id]]]);
+        console.log(`[office:${this.workspace}] built-in map "${id}", ${AREAS[id].length} private areas`);
         return;
       }
 
-      const id = String(d?.builtin || "");
-      if (!AREAS[id]) return;
-      this.areas = AREAS[id];
-      console.log(`[office:${this.workspace}] built-in map "${id}", ${this.areas.length} private areas`);
+      const next = new Map<string, PrivateArea[]>();
+      for (const m of list.maps) {
+        const one: any = await (await fetch(`${base}/map/${encodeURIComponent(m.slug)}`)).json();
+        // The API validated this before storing it; take only the shape this
+        // room actually uses rather than trusting the rest of the document.
+        const from = Array.isArray(one?.map?.areas) ? one.map.areas : [];
+        next.set(m.slug, from.filter((a: any) => a && typeof a.id === "string"
+          && [a.x0, a.x1, a.y0, a.y1].every((n: any) => typeof n === "number")));
+      }
+      this.areas = next;
+      this.landing = String(list.landing || list.maps[0].slug);
+      const total = [...next.values()].reduce((n, v) => n + v.length, 0);
+      console.log(`[office:${this.workspace}] ${next.size} stored map(s), landing "${this.landing}", ${total} private areas`);
     } catch (e) {
-      console.warn(`[office:${this.workspace}] could not read the map — proximity only for now:`, e);
+      console.warn(`[office:${this.workspace}] could not read the maps — proximity only for now:`, e);
     }
   }
 
@@ -330,6 +357,9 @@ export class OfficeRoom extends Room<OfficeState> {
       if (c.sessionId === sessionId) continue;
       const p = this.state.players.get(c.sessionId);
       if (!p) continue;
+      // Another floor is not "far away", it is somewhere else — no radius and no
+      // shared area can reach across one.
+      if (!this.sameMap(me, p)) continue;
       const dx = p.x - me.x, dy = p.y - me.y;
       if (canHear(mine, this.areaOf(p), dx * dx + dy * dy <= NEAR_PX * NEAR_PX)) out.push(c);
     }
@@ -339,7 +369,7 @@ export class OfficeRoom extends Room<OfficeState> {
   onJoin(client: Client, options: { name?: string; avatar?: string } = {}) {
     // the room is persistent, so one failed fetch at boot must not cost this
     // space its private areas for the rest of the day
-    if (!this.areas.length && Date.now() - this.areasAt > 30_000) void this.loadAreas();
+    if (!this.areas.size && Date.now() - this.areasAt > 30_000) void this.loadAreas();
 
     const p = new Player();
     p.x = SPAWN.x;

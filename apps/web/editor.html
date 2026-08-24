@@ -49,7 +49,19 @@
       border: 1px solid transparent; border-radius: 9px; padding: 7px 10px; outline: none;
     }
     input:focus, select:focus { background: var(--surface); border-color: var(--accent); }
-    #map-name { width: 200px; }
+    #map-name { width: 170px; }
+
+    /* the maps of this space, along the top bar where a document's tabs go */
+    .maps { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+    .maps button {
+      border-radius: 20px; padding: 6px 12px; font-size: 12.5px;
+      background: var(--surface-3); border-color: transparent; color: var(--text-3);
+      max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .maps button[aria-current="true"] {
+      background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
+    }
+    .maps button.add { color: var(--accent); background: transparent; border-style: dashed; border-color: var(--border-2); }
     button {
       font: 600 13px var(--sans); cursor: pointer; border-radius: 9px;
       border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2);
@@ -163,6 +175,7 @@
 <body>
   <header class="top">
     <div class="brand">NexSpace<small id="which">แก้ไขแผนที่</small></div>
+    <div class="maps" id="map-tabs"></div>
     <input id="map-name" type="text" placeholder="ชื่อแผนที่" maxlength="60" />
     <button id="btn-undo" class="icon-btn" title="เลิกทำ (Ctrl+Z)">↶</button>
     <button id="btn-redo" class="icon-btn" title="ทำซ้ำ (Ctrl+Shift+Z)">↷</button>

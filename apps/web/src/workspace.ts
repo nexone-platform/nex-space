@@ -45,6 +45,37 @@ export const guestLinkFor = (slug: string, code: string) =>
   `${location.origin}${location.pathname}?w=${encodeURIComponent(normalizeSlug(slug))}`
   + `&g=${encodeURIComponent(code)}`;
 
+// ---- which map ----
+// A space may hold several. The URL names one so a link can point at a floor,
+// and so a portal has somewhere to send you; absent means the landing map.
+
+/** the map this tab is on, "" for whichever the space lands people on */
+export const MAP_SLUG = (new URLSearchParams(location.search).get("m") ?? "")
+  .toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 32);
+
+/** where a portal put you down, as tiles — read once and never remembered */
+export const ARRIVE_AT = (() => {
+  const raw = new URLSearchParams(location.search).get("at") ?? "";
+  const m = /^([0-9]{1,3}),([0-9]{1,3})$/.exec(raw);
+  return m ? { x: Number(m[1]), y: Number(m[2]) } : null;
+})();
+
+/**
+ * Walk to another map of this space.
+ *
+ * A reload rather than a swap: the scene reads its world once, at import time,
+ * and rebuilding a live Phaser scene around a different map is a far larger
+ * change than changing floors is worth. Gather shows a transition here too.
+ */
+export const gotoMap = (slug: string, at?: { x: number; y: number }) => {
+  const q = new URLSearchParams();
+  if (!IS_DEFAULT_WORKSPACE || HAS_WORKSPACE_PARAM) q.set("w", WORKSPACE);
+  if (slug) q.set("m", slug);
+  if (at) q.set("at", `${Math.floor(at.x)},${Math.floor(at.y)}`);
+  if (GUEST_CODE) q.set("g", GUEST_CODE);
+  location.href = `${location.origin}${location.pathname}?${q}`;
+};
+
 /** per-workspace localStorage key, so a guest's desk in one space doesn't leak to another */
 export const wsKey = (key: string) => `${key}:${WORKSPACE}`;
 

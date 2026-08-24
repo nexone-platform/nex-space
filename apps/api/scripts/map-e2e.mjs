@@ -260,29 +260,48 @@ await refused("  · and so is a plain http one", aMap({
 // area work exists to prevent.
 
 const room = { open: [] };
-const join = async (name) => {
+const join = async (name, map) => {
   const r = await new Client(GAME).joinOrCreate("office", { workspace: ws.slug, token: owner.token, name });
   const heard = [];
   r.onMessage("chat", (m) => heard.push(m));
   r.onMessage("roomchat", () => {});
+  r.send("map", map);
   room.open.push(r);
   return { name, room: r, heard };
 };
 
-// put the handmade map back, then let the room see it for the first time
-await put(`/workspaces/${ws.slug}/map`, { map: aMap() }, { token: owner.token });
+/**
+ * A second floor, deliberately carrying an area with the SAME id as the first.
+ *
+ * Two rooms called "boardroom" on different floors are two rooms. If the only
+ * thing keeping them apart were the area ids, the cases below would pass on a
+ * server that had never heard of maps — which is exactly what the first
+ * version of them did.
+ */
+const second = () => aMap({
+  id: "second", label: "ชั้นสอง", cols: 14, rows: 12,
+  floors: Array.from({ length: 12 }, () => Array.from({ length: 14 }, () => 2)),
+  walls: [], spawn: { x: 12, y: 10 }, meetingRoom: { x0: 2, x1: 10, y0: 2, y1: 8 },
+  furniture: [], desks: [], interactives: [],
+  areas: [{ id: "boardroom", label: "ห้องบอร์ดชั้นสอง", x0: 2, y0: 2, x1: 10, y1: 8 }],
+});
 
-let gameUp = true, a, b;
+// put both floors in place, then let the room see them for the first time
+await put(`/workspaces/${ws.slug}/map/handmade`, { map: aMap() }, { token: owner.token });
+await put(`/workspaces/${ws.slug}/map/second`, { map: second() }, { token: owner.token });
+
+let gameUp = true, a, b, upstairs;
 try {
-  a = await join("a");
-  b = await join("b");
+  a = await join("a", "handmade");
+  b = await join("b", "handmade");
+  upstairs = await join("upstairs", "second");
 } catch (e) {
   gameUp = false;
   console.log(`  skip  the game server is not running on 2567 — start it with npm run dev  (${e.message})`);
 }
 
 if (gameUp) {
-  await settle(800);
+  await settle(900);
   const at = (tx, ty) => ({ x: tx * TILE + TILE / 2, y: ty * TILE + TILE / 2, dir: "down", moving: false });
   const speak = async (place, from, text) => {
     for (const [who, t] of place) who.room.send("move", at(t[0], t[1]));
@@ -305,7 +324,113 @@ if (gameUp) {
     const got = await speak([[a, [8, 9]], [b, [8, 10]]], a, `นอกบอร์ด-${stamp}`);
     ok("  · and stops at its edge, one tile away", !got.includes("b"), `heard by ${got}`);
   }
+
+  // ---- and the thing a second floor has to be -----------------------------
+  //
+  // Standing on the same tile as somebody is the strongest case there is for
+  // hearing them. On another map it has to count for nothing, or a floor is
+  // decoration rather than a place.
+  {
+    // The SAME tile, outside every area on both floors. Nothing but the floor
+    // rule can be keeping these two apart — not distance, not an area.
+    const got = await speak([[a, [12, 10]], [upstairs, [12, 10]]], a, `คนละชั้น-${stamp}`);
+    ok("the same tile on another map is not the same room", !got.includes("upstairs"), `heard by ${got}`);
+  }
+  {
+    const got = await speak([[upstairs, [12, 10]], [a, [12, 10]]], upstairs, `ขึ้นมาบ้าง-${stamp}`);
+    ok("  · in the other direction either", !got.includes("a"), `heard by ${got}`);
+  }
+  {
+    // Both floors have an area called "boardroom". Standing in each of them is
+    // the case that would merge if a map were only a picture.
+    const got = await speak([[a, [2, 2]], [b, [14, 9]], [upstairs, [5, 5]]], a, `บอร์ดชั้นล่าง-${stamp}`);
+    ok("  · two areas with the same id on two floors are two rooms",
+      got.includes("b") && !got.includes("upstairs"), `heard by ${got}`);
+  }
+  {
+    // moving between floors is a live change, not something fixed at join
+    upstairs.room.send("map", "handmade");
+    await settle(500);
+    const got = await speak([[a, [17, 13]], [upstairs, [17, 12]]], a, `ลงมาแล้ว-${stamp}`);
+    ok("coming downstairs puts you back in earshot", got.includes("upstairs"), `heard by ${got}`);
+  }
+
   for (const r of room.open) { try { await r.leave(); } catch { /* going anyway */ } }
+}
+
+// ---- a space with more than one map ------------------------------------------
+
+{
+  const r = await put(`/workspaces/${ws.slug}/map/second`, { map: second() }, { token: owner.token });
+  ok("a second map can be stored beside the first", r.status === 200, `status ${r.status} ${r.problem ?? ""}`);
+}
+{
+  const r = await get(`/workspaces/${ws.slug}/maps`);
+  ok("both are listed", r.maps?.length === 2, JSON.stringify(r.maps?.map((m) => m.slug)));
+  ok("  · in the order they were made, and the first is where people land",
+    r.maps?.[0]?.slug === "handmade" && r.landing === "handmade", `landing ${r.landing}`);
+  ok("  · each carrying its own name", r.maps?.[1]?.label === "ชั้นสอง", r.maps?.[1]?.label);
+}
+{
+  const r = await get(`/workspaces/${ws.slug}/map/second`);
+  ok("a map can be fetched by name", r.map?.id === "second" && r.map?.cols === 14, `${r.map?.id} ${r.map?.cols}`);
+  const landing = await get(`/workspaces/${ws.slug}/map`);
+  ok("  · and the unnamed path is still the landing one", landing.map?.id === "handmade", landing.map?.id);
+}
+{
+  const r = await put(`/workspaces/${ws.slug}/map/second`, { map: aMap({ id: "third" }) }, { token: owner.token });
+  ok("a map whose id disagrees with its name is refused", r.status === 400, `status ${r.status} ${r.error ?? ""}`);
+}
+{
+  const r = await put(`/workspaces/${ws.slug}/map/second`, { map: second() }, { token: member.token });
+  ok("a plain member still cannot write one", r.status === 403, `status ${r.status}`);
+}
+{
+  const r = await get(`/workspaces/${ws.slug}/map/nowhere`);
+  ok("asking for a map that is not there is a 404", r.status === 404, `status ${r.status}`);
+}
+
+// ---- a portal that names another map -----------------------------------------
+
+{
+  const withPortal = aMap({ interactives: [
+    { type: "portal", x: 4, y: 4, label: "ขึ้นชั้นสอง", icon: "🚪", map: "second", target: { x: 3, y: 3 } },
+  ] });
+  const r = await put(`/workspaces/${ws.slug}/map/handmade`, { map: withPortal }, { token: owner.token });
+  ok("a portal may name another map", r.status === 200, `status ${r.status} ${r.problem ?? ""}`);
+  const back = await get(`/workspaces/${ws.slug}/map/handmade`);
+  ok("  · and it survives the round trip", back.map?.interactives?.[0]?.map === "second");
+}
+await refused("  · but not a map name that could not be a map name", aMap({ interactives: [
+  { type: "portal", x: 4, y: 4, label: "x", icon: "🚪", map: "../other space" },
+] }), "interactives has a bad entry");
+
+// ---- the order people meet them in --------------------------------------------
+
+{
+  const r = await call("PUT", `/workspaces/${ws.slug}/maps/order`, { body: { order: ["second", "handmade"] }, token: owner.token });
+  ok("the maps can be reordered", r.status === 200 && r.landing === "second", `status ${r.status}, landing ${r.landing}`);
+  const landing = await get(`/workspaces/${ws.slug}/map`);
+  ok("  · which moves where people land", landing.map?.id === "second", landing.map?.id);
+  await call("PUT", `/workspaces/${ws.slug}/maps/order`, { body: { order: ["handmade", "second"] }, token: owner.token });
+}
+{
+  const r = await call("PUT", `/workspaces/${ws.slug}/maps/order`, { body: { order: ["handmade"] }, token: owner.token });
+  ok("an order that leaves a map out is refused", r.status === 400, `status ${r.status}`);
+}
+{
+  const r = await call("PUT", `/workspaces/${ws.slug}/maps/order`, { body: { order: ["handmade", "handmade"] }, token: owner.token });
+  ok("  · and so is one that names a map twice", r.status === 400, `status ${r.status}`);
+}
+
+// ---- deleting one, and deleting all -------------------------------------------
+
+{
+  const r = await del(`/workspaces/${ws.slug}/map/second`, { token: owner.token });
+  ok("one map can be deleted without taking the space with it",
+    r.status === 200 && r.landing === "handmade", `status ${r.status}, landing ${r.landing}`);
+  const list = await get(`/workspaces/${ws.slug}/maps`);
+  ok("  · leaving the other", list.maps?.length === 1 && list.maps[0].slug === "handmade");
 }
 
 // ---- back to the built-in -----------------------------------------------------

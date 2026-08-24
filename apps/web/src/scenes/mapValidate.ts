@@ -22,7 +22,10 @@ export interface Desk { id: string; x: number; y: number; sx: number; sy: number
 export interface Interactive {
   type: "whiteboard" | "screen" | "portal" | "embed";
   x: number; y: number; label: string; icon: string;
-  url?: string; target?: { x: number; y: number };
+  url?: string;
+  target?: { x: number; y: number };
+  /** a portal naming another map in the same space; absent means this one */
+  map?: string;
 }
 
 export interface PrivateArea { id: string; label: string; x0: number; y0: number; x1: number; y1: number }
@@ -79,7 +82,10 @@ const isInteractive = (v: any) =>
   // embed becomes an iframe, and "javascript:" in one is a script running on
   // our own origin with the signed-in user's session behind it.
   && (v.url === undefined || (typeof v.url === "string" && v.url.length <= 500 && /^https:\/\//i.test(v.url)))
-  && (v.target === undefined || (num(v.target?.x) && num(v.target?.y)));
+  && (v.target === undefined || (num(v.target?.x) && num(v.target?.y)))
+  // The name of another map in this space, which becomes a ?m= in a URL — so
+  // it is held to the same shape a map's own id is.
+  && (v.map === undefined || (typeof v.map === "string" && /^[a-z0-9-]{1,32}$/.test(v.map)));
 
 const isArea = (v: any) =>
   !!v && typeof v.id === "string" && v.id.length <= 64

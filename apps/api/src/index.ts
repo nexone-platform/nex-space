@@ -539,6 +539,11 @@ const THEMES = ["classic", "departments", "office"];
 // something that would make the space slow to enter for everybody.
 const MAP_MAX_BYTES = Number(process.env.MAP_MAX_BYTES || 2_000_000);
 
+// Floors of a building, or separate offices. The ceiling is about the person
+// rather than the database: a switcher nobody can find their way around is not
+// more capability, and every map is another thing to keep consistent.
+const MAPS_PER_SPACE = Number(process.env.MAPS_PER_SPACE || 12);
+
 const wsView = (w: any, role?: string) => ({
   slug: w.slug, name: w.name, allowGuests: w.allowGuests,
   theme: w.theme ?? "classic",
@@ -1184,28 +1189,67 @@ async function mapEditor(req: AuthedRequest, res: express.Response) {
   return w;
 }
 
-app.get("/workspaces/:slug/map", async (req, res) => {
+/** the parsed map behind a row, or the reason it cannot be used */
+function readMap(row: { data: string }): { doc?: any; problem?: string } {
+  let doc: unknown;
+  try { doc = JSON.parse(row.data); } catch { return { problem: "stored map is not JSON" }; }
+  const problem = mapDocProblem(doc);
+  return problem ? { problem } : { doc };
+}
+
+/**
+ * Every map in a space, in the order people meet them.
+ *
+ * The first is where new arrivals land; the rest are reached through a portal
+ * or by a ?m= in the URL. A space with none is on one of the layouts compiled
+ * into the client, named here so the browser knows which.
+ */
+app.get("/workspaces/:slug/maps", async (req, res) => {
   const w = await prisma.workspace.findUnique({
     where: { slug: req.params.slug },
-    include: { map: true },
+    include: { maps: { orderBy: [{ order: "asc" }, { slug: "asc" }] } },
   });
   if (!w) return res.status(404).json({ error: "not found" });
-  if (!w.map) return res.json({ builtin: w.theme || "classic" });
+  if (!w.maps.length) return res.json({ builtin: w.theme || "classic", maps: [] });
+
+  const maps = w.maps.map((m) => {
+    const { doc, problem } = readMap(m);
+    return { slug: m.slug, label: doc?.label ?? m.slug, order: m.order, updatedAt: m.updatedAt, problem };
+  });
+  res.json({ maps, landing: maps[0].slug });
+});
+
+/** one map by name, or the landing one when no name is given */
+async function serveMap(req: express.Request, res: express.Response, want: string | null) {
+  const w = await prisma.workspace.findUnique({
+    where: { slug: req.params.slug },
+    include: { maps: { orderBy: [{ order: "asc" }, { slug: "asc" }] } },
+  });
+  if (!w) return res.status(404).json({ error: "not found" });
+
+  const row = want ? w.maps.find((m) => m.slug === want) : w.maps[0];
+  if (!row) {
+    // A ?m= naming a map that has been deleted is a stale link, not a broken
+    // space: say so, and let the caller fall back to the landing map.
+    if (want) return res.status(404).json({ error: "no such map", builtin: w.theme || "classic" });
+    return res.json({ builtin: w.theme || "classic" });
+  }
 
   // A row that no longer parses, or that predates a format change, must not
   // take the space down with it: name the stock map instead and say why, so
   // the space still opens while somebody looks at it.
-  let doc: unknown;
-  try { doc = JSON.parse(w.map.data); } catch { doc = null; }
-  const problem = mapDocProblem(doc);
+  const { doc, problem } = readMap(row);
   if (problem) {
-    console.warn(`[map] ${w.slug} has an unreadable stored map (${problem}) — serving the built-in`);
+    console.warn(`[map] ${w.slug}/${row.slug} is unreadable (${problem}) — serving the built-in`);
     return res.json({ builtin: w.theme || "classic", problem });
   }
-  res.json({ map: doc, updatedAt: w.map.updatedAt });
-});
+  res.json({ map: doc, slug: row.slug, updatedAt: row.updatedAt });
+}
 
-app.put("/workspaces/:slug/map", requireAuth, async (req: AuthedRequest, res) => {
+app.get("/workspaces/:slug/map", (req, res) => void serveMap(req, res, null));
+app.get("/workspaces/:slug/map/:mapSlug", (req, res) => void serveMap(req, res, req.params.mapSlug));
+
+async function storeMap(req: AuthedRequest, res: express.Response, want: string | null) {
   const w = await mapEditor(req, res);
   if (!w) return;
 
@@ -1216,16 +1260,62 @@ app.put("/workspaces/:slug/map", requireAuth, async (req: AuthedRequest, res) =>
   // nobody can walk into.
   if (problem) return res.status(400).json({ error: "not a valid map", problem });
 
+  // The map's own id is its name in the space, so the two cannot disagree —
+  // a portal names one thing and a URL names the other otherwise.
+  const slug = want ?? doc.id;
+  if (want && doc.id !== want)
+    return res.status(400).json({ error: `the map's id is "${doc.id}" but the path says "${want}"` });
+
   const data = JSON.stringify(doc);
   if (data.length > MAP_MAX_BYTES)
     return res.status(413).json({ error: `map is too large (${data.length} bytes, limit ${MAP_MAX_BYTES})` });
 
+  const existing = await prisma.workspaceMap.findUnique({
+    where: { workspaceId_slug: { workspaceId: w.id, slug } },
+  });
+  const count = await prisma.workspaceMap.count({ where: { workspaceId: w.id } });
+  if (!existing && count >= MAPS_PER_SPACE)
+    return res.status(409).json({ error: `a space may hold ${MAPS_PER_SPACE} maps` });
+
   const saved = await prisma.workspaceMap.upsert({
-    where: { workspaceId: w.id },
-    create: { workspaceId: w.id, data, updatedById: req.user!.id },
+    where: { workspaceId_slug: { workspaceId: w.id, slug } },
+    create: { workspaceId: w.id, slug, order: count, data, updatedById: req.user!.id },
     update: { data, updatedById: req.user!.id },
   });
-  res.json({ ok: true, updatedAt: saved.updatedAt });
+  res.json({ ok: true, slug: saved.slug, updatedAt: saved.updatedAt });
+}
+
+app.put("/workspaces/:slug/map", requireAuth, (req: AuthedRequest, res) => void storeMap(req, res, null));
+app.put("/workspaces/:slug/map/:mapSlug", requireAuth, (req: AuthedRequest, res) => void storeMap(req, res, req.params.mapSlug));
+
+/** the order people meet the maps in; the first is where they land */
+app.put("/workspaces/:slug/maps/order", requireAuth, async (req: AuthedRequest, res) => {
+  const w = await mapEditor(req, res);
+  if (!w) return;
+  const order = req.body?.order;
+  if (!Array.isArray(order) || order.some((v) => typeof v !== "string"))
+    return res.status(400).json({ error: "order must be a list of map names" });
+
+  const rows = await prisma.workspaceMap.findMany({ where: { workspaceId: w.id } });
+  const known = new Set(rows.map((r) => r.slug));
+  // Every map has to appear exactly once, or reordering silently decides the
+  // landing map by leaving something out.
+  if (order.length !== rows.length || new Set(order).size !== order.length || order.some((sl) => !known.has(sl)))
+    return res.status(400).json({ error: "order must name every map in the space exactly once" });
+
+  await prisma.$transaction(order.map((sl, i) =>
+    prisma.workspaceMap.update({ where: { workspaceId_slug: { workspaceId: w.id, slug: sl } }, data: { order: i } })));
+  res.json({ ok: true, landing: order[0] });
+});
+
+app.delete("/workspaces/:slug/map/:mapSlug", requireAuth, async (req: AuthedRequest, res) => {
+  const w = await mapEditor(req, res);
+  if (!w) return;
+  await prisma.workspaceMap.deleteMany({ where: { workspaceId: w.id, slug: req.params.mapSlug } });
+  const left = await prisma.workspaceMap.findMany({
+    where: { workspaceId: w.id }, orderBy: [{ order: "asc" }, { slug: "asc" }], select: { slug: true },
+  });
+  res.json({ ok: true, landing: left[0]?.slug, builtin: left.length ? undefined : (w.theme || "classic") });
 });
 
 app.delete("/workspaces/:slug/map", requireAuth, async (req: AuthedRequest, res) => {
@@ -1233,7 +1323,8 @@ app.delete("/workspaces/:slug/map", requireAuth, async (req: AuthedRequest, res)
   if (!w) return;
   // Deleting is how a space goes back to its stock layout, so it has to
   // succeed when there is nothing to delete — otherwise "reset" fails for the
-  // one space that most obviously needs no resetting.
+  // one space that most obviously needs no resetting. It takes every map,
+  // because half a building is not a layout anybody chose.
   await prisma.workspaceMap.deleteMany({ where: { workspaceId: w.id } });
   res.json({ ok: true, builtin: w.theme || "classic" });
 });

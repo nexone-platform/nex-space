@@ -19,6 +19,11 @@ export class Player extends Schema {
   // a private thread with someone: a session id is gone the moment they reload,
   // and a thread has to survive that.
   @type("string") userId = "";
+  // Which map of the space this player is standing on. A space may hold several
+  // — floors of a building, or separate offices — and everybody stays in one
+  // room so the roster, private messages and "come over" still reach across
+  // them. What does not cross is earshot: proximity is per map.
+  @type("string") map = "";
 }
 
 export class OfficeState extends Schema {

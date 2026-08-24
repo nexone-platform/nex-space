@@ -47,22 +47,22 @@ model User {
 // A company / community space. People join via its invite code; the owner
 // decides whether people without an account (guests) may enter.
 model Workspace {
-  id          String        @id @default(cuid())
-  slug        String        @unique // used in ?w=<slug> and as the room key
+  id          String         @id @default(cuid())
+  slug        String         @unique // used in ?w=<slug> and as the room key
   name        String // display name, e.g. "บริษัท A"
-  inviteCode  String        @unique
-  allowGuests Boolean       @default(true)
+  inviteCode  String         @unique
+  allowGuests Boolean        @default(true)
   // map layout everyone in this space loads. Per workspace, not per person:
   // different maps would put people inside each other's walls.
-  theme       String        @default("classic")
+  theme       String         @default("classic")
   useCase     String? // onboarding: how the team plans to use this space
   ownerId     String
-  owner       User          @relation("OwnedWorkspaces", fields: [ownerId], references: [id], onDelete: Cascade)
+  owner       User           @relation("OwnedWorkspaces", fields: [ownerId], references: [id], onDelete: Cascade)
   members     Membership[]
   guests      GuestPass[]
   messages    Message[]
-  map         WorkspaceMap?
-  createdAt   DateTime      @default(now())
+  maps        WorkspaceMap[]
+  createdAt   DateTime       @default(now())
 }
 
 // The layout this space actually loads, when it is not one of the three built
@@ -75,11 +75,21 @@ model Workspace {
 // record, it is a room nobody can walk into.
 model WorkspaceMap {
   id          String    @id @default(cuid())
-  workspaceId String    @unique
+  workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  // The map's own id, mirroring `id` inside `data` and the ?m= in the URL. A
+  // space may hold several — floors of a building, or separate offices — and
+  // this is what a portal names when it sends somebody to another one.
+  slug        String    @default("main")
+  // Lowest first. The landing map is simply the first, so "which one do people
+  // arrive on" is answered by dragging rather than by a second flag that can
+  // disagree with itself.
+  order       Int       @default(0)
   data        String
   updatedById String?
   updatedAt   DateTime  @updatedAt
+
+  @@unique([workspaceId, slug])
 }
 
 // A named pass that lets one visitor in without an account, listed under
