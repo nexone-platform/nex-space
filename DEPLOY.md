@@ -340,6 +340,24 @@ everything else, so it is included in whatever backs that file up — and it is 
 part of the database that grows on its own, which makes it the first reason this
 deployment will eventually want Postgres.
 
+## Attendance and the dashboard
+
+Owners and admins see who used the space at `/admin.html?w=<slug>`, reachable
+from the space settings: arrivals and departures, hours per day, the hours of the
+day people are actually here, and which rooms get used.
+
+The room server writes each visit with the credential that let that person in,
+so a space whose API is briefly unreachable loses a line in a report rather than
+refusing to let anybody in. A visit that never closed — someone still here, or a
+session lost to a restart — counts as an arrival and contributes no time at all.
+
+```dotenv
+STATS_KEEP_DAYS=365    # 0 keeps everything, and the table grows without end
+```
+
+Like chat, this lives in the same SQLite file as everything else, and it is the
+second table that grows on its own.
+
 ## Stored maps
 
 A space loads one of the three layouts compiled into the client, named by its
