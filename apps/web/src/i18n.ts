@@ -327,6 +327,7 @@ const EN: Record<string, string> = {
   "(คุณ)": "(you)",
   "คุณ": "you",
   "ก่อนหน้านี้": "earlier",
+  "นี่คือบัญชีของคุณเอง — ส่งข้อความหาตัวเองไม่ได้": "That is your own account — you cannot message yourself",
   "โบกมือตอบ": "Wave back",
   "เดินไปหา": "Walk over",
   "ไว้ก่อน": "Not now",

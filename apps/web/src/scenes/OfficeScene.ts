@@ -1254,13 +1254,17 @@ export class OfficeScene extends Phaser.Scene {
             else this.toast(t("หาไม่เจอ — เขาอาจออกไปแล้ว"), "warn");
           });
 
-        // A private thread needs an account at both ends, and a different one at
-        // each: two windows of the same account see each other in this list, and
-        // a message to yourself is refused by the API anyway.
-        if (r.userId && this.myUserId && r.userId !== this.myUserId) {
+        // A private thread needs an account at both ends, so this one is only
+        // there when there is somewhere for a reply to arrive.
+        //
+        // It stays on a row that turns out to be your own second window too.
+        // Hiding it there was correct and unhelpful: the row looks like anybody
+        // else's, so a button that vanishes from it reads as the feature
+        // breaking. openDmThread says what is going on instead.
+        if (r.userId && this.myUserId) {
           act(t("ส่งข้อความ"),
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12a8.5 8.5 0 1 1-3.6-6.9"/><path d="M4.2 19.8l1.1-3.3"/><path d="M20.5 4.5v4h-4"/></svg>',
-            () => { this.showView?.("dm"); void this.openDmThread(r.userId, r.name); });
+            () => this.openDm(r.userId, r.name));
         }
         row.appendChild(acts);
       }
@@ -1327,6 +1331,24 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   /** one conversation, and opening it is what clears its badge */
+  /**
+   * Open a thread with somebody, or say why not.
+   *
+   * Two windows of one account list each other, so "message" on a row can point
+   * at yourself. The check belongs here rather than inside the panel: switching
+   * to the messages view and only then refusing takes somebody somewhere for
+   * nothing.
+   */
+  private openDm(peerId: string, name: string) {
+    if (!peerId) return;
+    if (peerId === this.myUserId) {
+      this.toast(t("นี่คือบัญชีของคุณเอง — ส่งข้อความหาตัวเองไม่ได้"), "warn");
+      return;
+    }
+    this.showView?.("dm");
+    void this.openDmThread(peerId, name);
+  }
+
   private async openDmThread(peerId: string, name: string) {
     this.dmOpen = peerId;
     const list = document.getElementById("dm-list");
@@ -1525,11 +1547,7 @@ export class OfficeScene extends Phaser.Scene {
       const pingBtn = document.getElementById("pc-ping") as HTMLElement | null;
       // a guest has no account, so there is nowhere to send a message that lasts
       if (dmBtn) dmBtn.hidden = !player.userId || !this.myUserId;
-      if (dmBtn) dmBtn.onclick = () => {
-        this.closePersonCard();
-        this.showView?.("dm");
-        void this.openDmThread(player.userId, name);
-      };
+      if (dmBtn) dmBtn.onclick = () => { this.closePersonCard(); this.openDm(player.userId, name); };
       if (findBtn) findBtn.onclick = () => { this.closePersonCard(); this.followPerson(sessionId, name); };
       if (pingBtn) pingBtn.onclick = () => { this.closePersonCard(); this.room?.send("ping", { to: sessionId }); };
       // the other half of "come over": go to them instead of asking them to move
