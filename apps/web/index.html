@@ -69,6 +69,11 @@
         border-radius: 9px; font-family: "Segoe UI", sans-serif;
       }
       :where(input, textarea)::placeholder { color: var(--faint); }
+      /* Corner radii, as three steps rather than the sixteen different values
+         this file had grown. Cards and dialogs share one so the family looks
+         related; boxes nested inside them take the smaller one, which is what
+         keeps a rounded thing inside a rounded thing from looking wrong. */
+      :root { --r-card: 20px; --r-box: 14px; --r-ctl: 12px; }
       html, body { margin: 0; height: 100%; background: var(--surface-2); overflow: hidden; }
       /* ---- the window is two panes, not one pile of overlays ----
          Left: the rail and the people list, a dock of a known width. Right: the
@@ -150,13 +155,30 @@
          top of the panel and the invite sits at the bottom where it stays put as
          the list grows. It used to be the other way round: a card taller than
          three people, above the people. */
-      #sidebar { position: fixed; left: 0; top: 0; height: 100vh; width: 250px; z-index: 25;
-        background: var(--surface-2); box-shadow: 2px 0 16px #0002; display: flex; flex-direction: column;
+      /* A card that floats in the dock rather than a slab bolted to the window.
+         The geometry comes off the same tokens the stage subtracts, so the band
+         stays 306px wide and the card simply sits inside it with an even gutter:
+         8px from the rail, 8px before the map. */
+      #sidebar {
+        position: fixed; z-index: 25;
+        box-sizing: border-box;
+        left: calc(var(--rail) + 8px);
+        /* pinned top and bottom rather than a dvh height: the two disagree on
+           some browsers, and the card then hangs past the bottom of the window */
+        top: 10px; bottom: 10px;
+        width: calc(var(--panel) - 16px);
+        background: var(--surface);
+        /* the page behind is --surface-2, and in dark mode the two are close
+           enough that the shadow alone would not draw the edge */
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: 0 2px 6px #0000000d, 0 12px 32px #00000014;
+        display: flex; flex-direction: column;
         font-family: "Segoe UI", sans-serif; transition: transform .2s;
         /* nothing in here is ever wide enough to scroll sideways, and a panel
            with a horizontal scrollbar looks broken even when it is not */
-        overflow-x: hidden; }
-      #sidebar.closed { transform: translateX(-100%); }
+        overflow: hidden; }
+      #sidebar.closed { transform: translateX(calc(-100% - var(--rail) - 16px)); }
 
       .sb-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px; }
       .sb-head #sb-title {
@@ -173,7 +195,7 @@
       /* search: the icon inside the field, so the field reads as one thing */
       .sb-search {
         display: flex; align-items: center; gap: 8px; margin: 0 14px 10px;
-        padding: 0 11px; border-radius: 11px;
+        padding: 0 11px; border-radius: var(--r-ctl);
         background: var(--surface-3); border: 1px solid transparent;
         transition: border-color .13s, background .13s;
       }
@@ -198,7 +220,7 @@
 
       #people { overflow-y: auto; overflow-x: hidden; flex: 1; padding: 8px; }
       .person {
-        display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 11px;
+        display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: var(--r-ctl);
         transition: background .12s;
       }
       .person:hover { background: var(--surface-3); }
@@ -207,7 +229,7 @@
       /* the ring matches the panel rather than a border colour, so the dot reads
          as sitting on the avatar instead of being cut out of it */
       .p-chip .p-dot { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border-radius: 50%;
-        background: #39d353; border: 2.5px solid var(--surface-2); box-sizing: border-box; }
+        background: #39d353; border: 2.5px solid var(--surface); box-sizing: border-box; }
       .person:hover .p-chip .p-dot { border-color: var(--surface-3); }
       .p-info { display: flex; flex-direction: column; line-height: 1.3; overflow: hidden; flex: 1; min-width: 0; }
       .p-info b { font-size: 13.5px; color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -216,7 +238,7 @@
       /* ---- the invite, at the bottom where an action belongs ---- */
       .sb-invite {
         flex: 0 0 auto; margin: 0 12px 12px; padding: 12px;
-        background: var(--accent-soft); border-radius: 14px;
+        background: var(--accent-soft); border-radius: var(--r-card);
       }
       .invite-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
       /* the real people in the room, not four stock smileys — the point of the
@@ -241,8 +263,6 @@
       #btn-invite:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
       /* left nav rail */
-      #rail { position: fixed; left: 0; top: 0; height: 100vh; height: 100dvh; width: 56px; z-index: 26; background: #26292f;
-        display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0; }
       #rail button { position: relative; width: 40px; height: 40px; border: none; border-radius: 12px;
         background: transparent; color: #c7cdd6; cursor: pointer; display: grid; place-items: center; transition: background .15s; }
       #rail button:hover { background: #ffffff14; }
@@ -260,8 +280,6 @@
       #rail-settings:hover svg { transform: rotate(30deg); }
       #rail .rail-badge { position: absolute; top: -2px; right: -2px; background: var(--danger); color: #fff;
         font: 700 10px sans-serif; border-radius: 9px; padding: 0 5px; min-width: 16px; text-align: center; }
-      /* sidebar now sits next to the rail */
-      #sidebar { left: 56px; }
       .sb-view { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
       .sb-view[hidden] { display: none; }
       /* chat panel */
@@ -291,7 +309,7 @@
       .dm-bar span { font-weight: 600; font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       #dm-log { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
       /* a thread row: who, the last thing said, and how much of it is new */
-      .dm-row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px;
+      .dm-row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: var(--r-ctl);
         cursor: pointer; width: 100%; border: none; background: none; text-align: left; font: inherit; }
       .dm-row:hover { background: var(--surface-3); }
       .dm-row .p-chip { flex: 0 0 auto; }
@@ -309,7 +327,7 @@
         position: relative; border: none; background: transparent; color: var(--muted); cursor: pointer;
         width: 27px; height: 27px; border-radius: 8px; display: grid; place-items: center; padding: 0;
       }
-      .p-act:hover { background: var(--surface); color: var(--accent); }
+      .p-act:hover { background: var(--accent-soft); color: var(--accent); }
       .p-act:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
       .p-act svg { width: 16px; height: 16px; }
       /* the label, above the icon, dark on any theme like every other tooltip */
@@ -330,7 +348,7 @@
       .nf-head button:hover { background: var(--border-2); }
       .nf-head #nf-sound.off { opacity: .45; }
       #nf-list { overflow-y: auto; flex: 1; padding: 0 8px 12px; }
-      .nf-row { display: flex; gap: 10px; padding: 9px 8px; border-radius: 10px; width: 100%;
+      .nf-row { display: flex; gap: 10px; padding: 9px 8px; border-radius: var(--r-ctl); width: 100%;
         border: none; background: none; text-align: left; font: inherit; cursor: pointer; align-items: flex-start; }
       .nf-row:hover { background: var(--surface-3); }
       .nf-row.unseen { background: var(--accent-soft); }
@@ -349,7 +367,7 @@
         position: fixed; z-index: 29; box-sizing: border-box;
         top: 14px; right: 16px; width: 400px; max-width: calc(100vw - var(--dock) - 32px);
         background: var(--surface); border: 1px solid var(--border);
-        border-radius: 14px; box-shadow: 0 2px 6px #00000012, 0 16px 40px #00000024;
+        border-radius: var(--r-card); box-shadow: 0 2px 6px #00000012, 0 16px 40px #00000024;
         padding: 14px 16px 14px;
         font-family: "Segoe UI", sans-serif;
         animation: nudge-in .18s cubic-bezier(.2, .8, .3, 1);
@@ -410,7 +428,7 @@
         position: fixed; z-index: 28; box-sizing: border-box;
         width: 336px; max-width: calc(100vw - 20px);
         background: #23252de8; backdrop-filter: blur(10px);
-        border: 1px solid #ffffff1f; border-radius: 16px;
+        border: 1px solid #ffffff1f; border-radius: var(--r-card);
         box-shadow: 0 18px 44px #00000059;
         padding: 14px 14px 12px;
         font-family: "Segoe UI", sans-serif; color: #eef0f4;
@@ -516,7 +534,7 @@
         transform: translateX(-50%) translateY(10px) scale(.97);
         display: none; align-items: center; gap: 11px;
         max-width: min(80vw, 430px); padding: 11px 18px 11px 13px;
-        border-radius: 14px; background: #23262ef5; color: #f3f5f8;
+        border-radius: var(--r-card); background: #23262ef5; color: #f3f5f8;
         font: 500 14px/1.4 "Segoe UI", sans-serif; letter-spacing: .1px;
         border: 1px solid #ffffff1c; border-left: 3px solid var(--teal);
         box-shadow: 0 12px 34px #0008, inset 0 1px 0 #ffffff12;
@@ -531,7 +549,7 @@
       #toast.info { border-left-color: var(--accent-2); }
       #toast.info .t-ico { background: #6f7ce030; color: #a6afef; }
       #modal { position: fixed; inset: 0; z-index: 45; background: #0b0b10cc; display: none; place-items: center; }
-      #modal .modal-box { width: min(90vw, 1000px); height: min(85vh, 700px); background: var(--surface); border-radius: 14px;
+      #modal .modal-box { width: min(90vw, 1000px); height: min(85vh, 700px); background: var(--surface); border-radius: var(--r-card);
         overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 12px 40px #0007; }
       #modal .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
         background: var(--surface-3); font: 600 14px "Segoe UI", sans-serif; color: var(--text); }
@@ -541,7 +559,7 @@
       /* login / character-select overlay */
       #auth-overlay { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
         background: radial-gradient(circle at 50% 25%, #2a3340, #14161b); font-family: "Segoe UI", sans-serif; }
-      #auth-overlay .card { width: min(92vw, 350px); background: var(--surface); border-radius: 16px; padding: 24px; box-shadow: 0 24px 60px #0008; }
+      #auth-overlay .card { width: min(92vw, 350px); background: var(--surface); border-radius: var(--r-card); padding: 24px; box-shadow: 0 24px 60px #0008; }
       #auth-overlay h1 { margin: 0; font-size: 22px; color: var(--text); }
       #auth-overlay .sub { margin: 2px 0 16px; font-size: 13px; color: var(--muted); }
       .auth-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
@@ -602,7 +620,7 @@
       .sp-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
       .sp-bar b { font-size: 15px; color: var(--text); }
       .sp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px; }
-      .sp-card { background: var(--surface); border: 1px solid var(--border-2); border-radius: 13px; overflow: hidden;
+      .sp-card { background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--r-box); overflow: hidden;
         display: flex; flex-direction: column; }
       .sp-thumb { height: 122px; background: linear-gradient(135deg, #dff3ef, #cfe6ff); display: grid;
         place-items: center; color: var(--teal); font: 700 30px "Segoe UI", sans-serif; cursor: pointer; }
@@ -668,7 +686,7 @@
       /* --- workspace settings / members modal --- */
       #ws-modal, #sec-modal { position: fixed; inset: 0; z-index: 70; background: #0b0b1099; display: none; place-items: center; }
       #ws-modal .wm-box, #sec-modal .wm-box { width: min(94vw, 520px); max-height: 88vh; overflow-y: auto; background: var(--surface);
-        border-radius: 15px; padding: 22px 24px; box-shadow: 0 24px 60px #0007; }
+        border-radius: var(--r-card); padding: 22px 24px; box-shadow: 0 24px 60px #0007; }
       #ws-modal h2, #sec-modal h2 { margin: 0 0 2px; font-size: 18px; color: var(--text); }
       #ws-modal .wm-sub, #sec-modal .wm-sub { margin: 0 0 16px; font-size: 12.5px; color: var(--muted); }
       #ws-modal label.wm-l, #sec-modal label.wm-l { display: block; font-size: 12.5px; color: var(--text-3); margin: 12px 0 5px; font-weight: 600; }
@@ -688,7 +706,7 @@
       /* centred over the stage, which now has its own edges to be centred in */
       #meet-panel { position: fixed; top: 14px; left: calc(var(--dock) + (100vw - var(--dock)) / 2);
         transform: translate(-50%, -14px); z-index: 24;
-        min-width: 216px; max-width: min(86vw, 460px); padding: 10px 12px 8px; border-radius: 14px;
+        min-width: 216px; max-width: min(86vw, 460px); padding: 10px 12px 8px; border-radius: var(--r-card);
         background: #23242ae8; box-shadow: 0 10px 30px #0006; backdrop-filter: blur(6px);
         font-family: "Segoe UI", sans-serif; opacity: 0; pointer-events: none;
         transition: opacity .18s ease, transform .18s ease; }
@@ -725,7 +743,7 @@
       #prefs-modal { position: fixed; inset: 0; z-index: 72; background: #0b0b1066; display: none;
         place-items: center; font-family: "Segoe UI", sans-serif; }
       #prefs-modal .pf-box { display: flex; width: min(96vw, 900px); height: min(88vh, 620px);
-        background: var(--surface); border-radius: 16px; overflow: hidden; box-shadow: 0 28px 70px #0006; }
+        background: var(--surface); border-radius: var(--r-card); overflow: hidden; box-shadow: 0 28px 70px #0006; }
       .pf-nav { width: 216px; flex: 0 0 auto; background: var(--surface-2); border-right: 1px solid var(--border);
         padding: 18px 10px; overflow-y: auto; }
       /* the member table needs the width more than the nav labels do */
@@ -783,7 +801,7 @@
       .pf-msg.err { color: var(--danger); }
       .pf-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
       /* art credits */
-      .cr-card { margin-top: 14px; padding: 13px 15px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+      .cr-card { margin-top: 14px; padding: 13px 15px; border: 1px solid var(--border); border-radius: var(--r-box); background: var(--surface-2); }
       .cr-card h3 { margin: 0 0 3px; font-size: 13.5px; color: var(--text); }
       .cr-card p { margin: 0 0 9px; font-size: 12px; color: var(--muted); line-height: 1.55; }
       .cr-row { display: flex; gap: 8px; font-size: 12px; margin-top: 7px; }
@@ -989,12 +1007,14 @@
       .top-right-actions button:hover { background: #ffffff14; color: #fff; }
 
       /* Rail & Sidebar layout */
-      #rail { position: fixed; left: 0; top: 0; height: 100vh; height: 100dvh; width: 56px; z-index: 26; background: #26292f;
-        display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0; transition: top .15s, height .15s; }
-      #sidebar { position: fixed; left: 56px; top: 0; height: 100vh; height: 100dvh; width: 250px; z-index: 25;
-        background: var(--surface-2); box-shadow: 2px 0 16px #0002; display: flex; flex-direction: column;
-        font-family: "Segoe UI", sans-serif; transition: transform .2s, top .15s, height .15s; }
-      #sidebar.closed { transform: translateX(-100%); }
+      #rail {
+        position: fixed; z-index: 26;
+        box-sizing: border-box;
+        left: 8px; top: 10px; bottom: 10px; width: 48px;
+        background: #26292f; border-radius: 16px;
+        box-shadow: 0 2px 6px #00000014, 0 12px 32px #0000001f;
+        display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0;
+        transition: top .15s, height .15s; }
 
       /* The dock runs the full height of the window; the bar that appears with a
          shared screen belongs to the stage, so it starts where the dock ends and
@@ -1009,7 +1029,7 @@
         font-family: "Segoe UI", sans-serif; box-sizing: border-box;
       }
       #call-main-stage {
-        position: relative; background: #181a24; border-radius: 14px; overflow: hidden;
+        position: relative; background: #181a24; border-radius: var(--r-box); overflow: hidden;
         display: flex; align-items: center; justify-content: center; border: 1px solid #ffffff12;
       }
       #call-stage-video { width: 100%; height: 100%; object-fit: contain; background: #000; display: none; }
@@ -1074,7 +1094,7 @@
          The same conversation as the sidebar chat, not a second one, so nothing
          said in the meeting is missing from the room and the other way round. */
       #meet-chat { display: none; flex-direction: column; background: #181a24;
-        border: 1px solid #ffffff14; border-radius: 14px; overflow: hidden; min-height: 0; }
+        border: 1px solid #ffffff14; border-radius: var(--r-box); overflow: hidden; min-height: 0; }
       #call-view-overlay.chat-open #meet-chat { display: flex; }
       #meet-chat .mc-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px;
         color: #eef0f4; font: 600 15px "Segoe UI", sans-serif; }
