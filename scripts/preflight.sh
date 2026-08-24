@@ -100,6 +100,17 @@ else
   echo "$out" | grep -E '^! FAIL' | head -6 | sed 's/^/        /' >&2
 fi
 
+# The browser's copy of the private-area table decides who you can hear; the
+# game server's decides who receives what you type. Nothing else in the build
+# would notice them disagreeing.
+say "Private areas"
+if out=$(node scripts/areas-check.mjs 2>&1); then
+  ok "$out"
+else
+  bad "the two copies of the private-area table disagree"
+  echo "$out" | sed 's/^/        /' >&2
+fi
+
 say "Relay checker"
 if out=$(node scripts/turn-check.test.mjs 2>&1); then
   ok "turn-check — $(echo "$out" | grep -oE '[0-9]+ passed, [0-9]+ failed' | tail -1)"
@@ -137,7 +148,7 @@ fi
 # failed when the dev stack is down.
 say "End-to-end suites"
 if curl -sf --max-time 2 http://localhost:3001/health >/dev/null 2>&1; then
-  for suite in roles desk guests totp ice chat dm profile presence; do
+  for suite in roles desk guests totp ice chat dm profile presence areas; do
     if out=$(npm run --silent "test:$suite" -w @nexspace/api 2>&1); then
       ok "$suite — $(echo "$out" | grep -oE '[0-9]+ passed, [0-9]+ failed' | tail -1)"
     else

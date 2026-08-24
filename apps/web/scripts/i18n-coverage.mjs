@@ -24,9 +24,9 @@ const walk = (d) => {
   for (const n of readdirSync(d)) {
     const p = join(d, n);
     if (statSync(p).isDirectory()) { if (!["node_modules", "dist", "public", "scripts"].includes(n)) walk(p); }
-    // i18n.ts is the dictionary; artCredits.ts and mapThemes.ts are data whose
-    // display sites call t()
-    else if (/\.(ts|html)$/.test(n) && !/(i18n|artCredits|mapThemes)\.ts$/.test(n)) files.push(p);
+    // i18n.ts is the dictionary; artCredits.ts, mapThemes.ts and areas.ts are
+    // data whose display sites call t()
+    else if (/\.(ts|html)$/.test(n) && !/(i18n|artCredits|mapThemes|areas)\.ts$/.test(n)) files.push(p);
   }
 };
 walk(join(ROOT, "src"));

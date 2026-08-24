@@ -1,5 +1,6 @@
 import { Room, Client } from "colyseus";
 import { OfficeState, Player } from "../schema";
+import { AREAS, areaAt, canHear } from "../areas";
 
 const TILE = 32;
 const SPAWN = { x: 15 * TILE + TILE / 2, y: 18 * TILE + TILE / 2 };
@@ -20,6 +21,9 @@ export class OfficeRoom extends Room<OfficeState> {
                        // (rooms auto-disposing while momentarily empty caused clients to split across instances)
 
   private workspace = "main";
+  /** which map this space is on — "" until the API answers, and "" has no areas */
+  private themeId = "";
+  private themeAt = 0;
   private chatStoreWarned = false;
   private dmStoreWarned = false;
   /** last gesture per sender-to-target pair, keyed by kind, so no button can be leaned on */
@@ -61,6 +65,7 @@ export class OfficeRoom extends Room<OfficeState> {
     this.workspace = String(options.workspace || "main").slice(0, 32);
     this.setState(new OfficeState());
     console.log(`[office] room created for workspace "${this.workspace}"`);
+    void this.loadTheme();
 
     // client-authoritative position for Phase 2 MVP (server relays to others).
     // Hardening (server-side simulation/anti-cheat) is a later phase.
@@ -261,22 +266,62 @@ export class OfficeRoom extends Room<OfficeState> {
     });
   }
 
-  /** other clients whose player is within NEAR_PX of the given session */
+  /** the private area a player is standing in, if any */
+  private areaOf(p: Player) {
+    return areaAt(this.themeId, Math.floor(p.x / TILE), Math.floor(p.y / TILE));
+  }
+
+  /**
+   * Which map this space is on, because the private areas are drawn on it.
+   *
+   * Asked for rather than configured: the theme is chosen when the space is
+   * created and lives in the API's database, which this room already talks to
+   * for the door. Until the answer lands the id is "", and "" has no areas — so
+   * the worst a slow or unreachable API can do is leave the room on plain
+   * proximity for a moment. It can never put somebody in the wrong room.
+   */
+  private async loadTheme() {
+    this.themeAt = Date.now();
+    try {
+      const r = await fetch(`${API_URL}/workspaces/${encodeURIComponent(this.workspace)}`);
+      if (!r.ok) return;
+      const d: any = await r.json();
+      const id = String(d?.workspace?.theme || "");
+      if (!AREAS[id]) return;
+      this.themeId = id;
+      console.log(`[office:${this.workspace}] map "${id}", ${AREAS[id].length} private areas`);
+    } catch (e) {
+      console.warn(`[office:${this.workspace}] could not read the map theme — proximity only for now:`, e);
+    }
+  }
+
+  /**
+   * Other clients who can hear this one.
+   *
+   * Inside a private area that is everyone else inside it, however far off, and
+   * nobody outside it — including whoever is standing one tile the other side of
+   * the line. Out on the open floor it is the radius, as it always was.
+   */
   private nearbyClients(sessionId: string): Client[] {
     const me = this.state.players.get(sessionId);
     if (!me) return [];
+    const mine = this.areaOf(me);
     const out: Client[] = [];
     for (const c of this.clients) {
       if (c.sessionId === sessionId) continue;
       const p = this.state.players.get(c.sessionId);
       if (!p) continue;
       const dx = p.x - me.x, dy = p.y - me.y;
-      if (dx * dx + dy * dy <= NEAR_PX * NEAR_PX) out.push(c);
+      if (canHear(mine, this.areaOf(p), dx * dx + dy * dy <= NEAR_PX * NEAR_PX)) out.push(c);
     }
     return out;
   }
 
   onJoin(client: Client, options: { name?: string; avatar?: string } = {}) {
+    // the room is persistent, so one failed fetch at boot must not cost this
+    // space its private areas for the rest of the day
+    if (!this.themeId && Date.now() - this.themeAt > 30_000) void this.loadTheme();
+
     const p = new Player();
     p.x = SPAWN.x;
     p.y = SPAWN.y;

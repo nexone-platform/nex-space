@@ -528,6 +528,24 @@
         background: #1c1b22e6; color: #fff; padding: 8px 14px; border-radius: 20px; font: 13px "Segoe UI", sans-serif;
         display: none; align-items: center; gap: 8px; box-shadow: 0 3px 12px #0004; }
       #interact-hint kbd { background: var(--teal); border-radius: 6px; padding: 2px 8px; font-weight: 700; font-family: inherit; }
+
+      /* Standing in a private area. Anchored to the stage rather than the window
+         so it does not sit over the panel, and left up the whole time you are in
+         there: it is the only sign that the room you are talking into has walls. */
+      #area-chip {
+        position: fixed; z-index: 22; box-sizing: border-box;
+        left: calc(var(--dock) + (100vw - var(--dock)) / 2); top: 14px; transform: translateX(-50%);
+        display: flex; align-items: center; gap: 8px;
+        max-width: calc(100vw - var(--dock) - 32px);
+        background: #1c1b22e6; color: #fff; border-radius: 20px; padding: 7px 14px 7px 12px;
+        font-family: "Segoe UI", sans-serif; box-shadow: 0 3px 12px #0004;
+      }
+      #area-chip[hidden] { display: none; }
+      #area-chip svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--teal); }
+      #area-chip b { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #area-chip small { font-size: 12px; color: #ffffffa8; white-space: nowrap; }
+      /* the meeting view puts its own bar up here */
+      body.in-meeting #area-chip { display: none; }
       /* transient notifications (desk claim, hints) — DOM so text stays crisp
          instead of being scaled by the pixel-art canvas */
       #toast { position: fixed; left: calc(var(--dock) + (100vw - var(--dock)) / 2); bottom: 120px; z-index: 50;
@@ -1571,6 +1589,13 @@
       <button id="zb-fully" class="zb" title="ซูมออกสุด (M)"></button>
     </div>
     <div id="interact-hint"><kbd>E</kbd> <span id="interact-label"></span></div>
+
+    <!-- standing in a private area: who can hear you, said out loud -->
+    <div id="area-chip" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
+      <b id="area-name"></b>
+      <small>เฉพาะคนในโซนนี้</small>
+    </div>
     <div id="toast"><span class="t-ico"></span><span class="t-msg"></span></div>
     <div id="modal">
       <div class="modal-box">

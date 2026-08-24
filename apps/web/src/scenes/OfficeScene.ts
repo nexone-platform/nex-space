@@ -13,6 +13,7 @@ import { t, onLangChange, locale } from "../i18n";
 import { setupPrefsModal } from "../prefsModal";
 import { roleLabel } from "../memberPanel";
 import { pickTheme, propPath, THEMES, type Interactive } from "./mapThemes";
+import { AREAS, areaAt, canHear, type PrivateArea } from "./areas";
 
 const LPC_COLS = 9; // LPC walk sheet: 9 frames per direction row
 const LPC_SCALE = 0.5;    // 64px LPC frames render large vs 32px furniture -> scale down
@@ -122,6 +123,8 @@ const STATUS_META: Record<string, { color: number; css: string; label: string }>
 const statusMeta = (s: string) => STATUS_META[s] ?? STATUS_META.online;
 const AFK_MS = 180_000;              // no input for 3 min -> away
 const MEETING_ROOM = THEME.meetingRoom;
+/** the private areas drawn on this map — empty for a map that has none */
+const PRIVATE_AREAS = AREAS[THEME.id] ?? [];
 
 interface MeetingPerson { id: string; name: string; self: boolean; status: string; mic: boolean; hand: boolean }
 
@@ -170,6 +173,8 @@ export class OfficeScene extends Phaser.Scene {
   private room?: Room;
   private mySessionId = "";
   private remotes = new Map<string, Remote>();
+  /** the area I am standing in, remembered so entering one can be announced once */
+  private myArea?: PrivateArea;
   private lastSent = 0;
   private lastState = { x: 0, y: 0, dir: "", moving: false };
   private readonly NEAR = 5 * TILE; // proximity radius (must match server)
@@ -242,6 +247,21 @@ export class OfficeScene extends Phaser.Scene {
     }
     const floorMap = this.make.tilemap({ data: floorData, tileWidth: TILE, tileHeight: TILE });
     floorMap.createLayer(0, floorMap.addTilesetImage("floors")!, 0, 0)!.setDepth(-1000);
+
+    // --- private areas: a tinted panel and a label, over the floor ---
+    // Drawn rather than merely enforced. The audio rule is invisible by nature,
+    // so the only way somebody learns where a conversation stops carrying is if
+    // the map says so before they walk in.
+    for (const a of PRIVATE_AREAS) {
+      const px = a.x0 * TILE, py = a.y0 * TILE;
+      const w = (a.x1 - a.x0 + 1) * TILE, h = (a.y1 - a.y0 + 1) * TILE;
+      const g = this.add.graphics().setDepth(-950);
+      g.fillStyle(0x2bb3a3, 0.07).fillRect(px, py, w, h);
+      g.lineStyle(1, 0x2bb3a3, 0.35).strokeRect(px + 0.5, py + 0.5, w - 1, h - 1);
+      this.add.text(px + 5, py + 3, "🔒 " + t(a.label), {
+        fontFamily: "monospace", fontSize: "9px", color: "#2bb3a3",
+      }).setAlpha(0.85).setDepth(-949).setResolution(3);
+    }
 
     // --- walls: perimeter + partitions, defined by the theme ---
     const walls = THEME.walls();
@@ -2440,6 +2460,31 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
+  /** the private area a point falls in, if any */
+  private areaOf(x: number, y: number): PrivateArea | undefined {
+    return areaAt(THEME.id, Math.floor(x / TILE), Math.floor(y / TILE));
+  }
+
+  /**
+   * Walked into a private area, or out of one.
+   *
+   * Said once on the way in, because the rule it announces is one people cannot
+   * see working: everyone here hears you, and nobody out there does.
+   */
+  private updateArea() {
+    const now = this.areaOf(this.player.x, this.player.y);
+    if (now?.id === this.myArea?.id) return;
+    this.myArea = now;
+
+    const chip = document.getElementById("area-chip");
+    if (chip) {
+      chip.hidden = !now;
+      const label = document.getElementById("area-name");
+      if (label && now) label.textContent = t(now.label);
+    }
+    if (now) this.toast(t("เข้า {area} — คุยกันเฉพาะคนในโซนนี้").replace("{area}", t(now.label)), "info");
+  }
+
   /** the same test for anyone, so the panel and the status dot cannot disagree */
   private isInMeeting(x: number, y: number): boolean {
     const tx = x / TILE, ty = y / TILE;
@@ -3125,6 +3170,8 @@ export class OfficeScene extends Phaser.Scene {
     // a connection already open is kept until they are clearly out of range
     const keep2 = (this.NEAR * 1.4) * (this.NEAR * 1.4);
     const FULL = 2 * TILE; // distance for full audio volume
+    this.updateArea();
+    const mine = this.myArea;
     let anyNear = false;
     const nearbyIds = new Set<string>();
     for (const [id, r] of this.remotes) {
@@ -3142,8 +3189,16 @@ export class OfficeScene extends Phaser.Scene {
 
       const dx = r.sprite.x - this.player.x, dy = r.sprite.y - this.player.y;
       const d2 = dx * dx + dy * dy;
-      const near = d2 <= near2;
+      const theirs = this.areaOf(r.sprite.x, r.sprite.y);
+      // Inside an area, distance stops counting in both directions. Outside, it
+      // is the radius — and anyone standing in an area is out of earshot of it.
+      const near = canHear(mine, theirs, d2 <= near2);
       if (near) { anyNear = true; }
+      // Whoever cannot hear you is drawn faded, so "who is in this conversation"
+      // is answered by looking rather than by trying and getting no reply.
+      const dim = !!mine && theirs?.id !== mine.id ? 0.4 : 1;
+      r.sprite.setAlpha(dim);
+      r.label.setAlpha(dim);
       // Hysteresis on the media connection only — the ring and the volume still
       // follow the real radius. syncPeers runs every frame, so a single radius
       // meant standing on the line rebuilt the peer connection frame after
@@ -3153,7 +3208,11 @@ export class OfficeScene extends Phaser.Scene {
       // connection can also begin with the other side's offer, and one this pass
       // had not asked for would be dropped on the very next frame — which is a
       // connection built and destroyed forever, in the band between the two radii.
-      if (d2 <= keep2 && (near || !!this.webrtc?.hasPeer(id))) nearbyIds.add(id);
+      // The hysteresis is for the radius only. An area boundary is a hard edge,
+      // and softening it would leak the room for the seconds a connection takes
+      // to wind down.
+      const onFloor = !mine && !theirs;
+      if (near || (onFloor && d2 <= keep2 && !!this.webrtc?.hasPeer(id))) nearbyIds.add(id);
       if (near && !r.ring) r.ring = this.add.circle(0, 0, 15).setStrokeStyle(2, 0x2bb3a3, 0.9).setDepth(1);
       if (r.ring) r.ring.setVisible(near).setPosition(r.sprite.x, r.sprite.y + 18);
 
@@ -3166,7 +3225,12 @@ export class OfficeScene extends Phaser.Scene {
         // The connection stays up while silenced, so turning it off is instant
         // and the other person is never told they were muted — which is a
         // thing about them, not about us.
-        const vol = this.dnd ? 0 : dist <= FULL ? 1 : 1 - (dist - FULL) / (this.NEAR - FULL);
+        // Sharing an area is a conversation, not a soundscape: the far end of the
+        // meeting room is as loud as the near end, which is the whole point of
+        // standing in one.
+        const vol = this.dnd ? 0
+          : (near && mine) ? 1
+          : dist <= FULL ? 1 : 1 - (dist - FULL) / (this.NEAR - FULL);
         this.webrtc?.setPeerVolume(id, Math.max(0, Math.min(1, vol)));
       }
     }
