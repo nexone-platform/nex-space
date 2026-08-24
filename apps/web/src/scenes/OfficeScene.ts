@@ -746,6 +746,11 @@ export class OfficeScene extends Phaser.Scene {
       room.onMessage("roomchat", (msg: { from: string; name: string; text: string }) => this.appendChatLog(msg.from, msg.name, msg.text));
       room.onMessage("dm", (msg: { from: string; to: string; name: string; text: string }) => this.onDm(msg));
       room.onMessage("ping", (msg: { from: string; name: string; x: number; y: number }) => this.onPing(msg));
+      room.onMessage("wave", (msg: { from: string; name: string }) =>
+        this.notify("👋", t("{name} โบกมือให้คุณ").replace("{name}", msg.name), t("ทักกลับได้จากรายชื่อคน"),
+          () => { this.showView?.("people"); this.followPerson(msg.from, msg.name); }));
+      room.onMessage("waveSent", (msg: { name: string }) =>
+        this.toast(t("โบกมือให้ {name} แล้ว").replace("{name}", msg.name), "info"));
       room.onMessage("pingRefused", (msg: { name: string }) =>
         this.toast(t("{name} กำลังห้ามรบกวน — ลองส่งข้อความแทน").replace("{name}", msg.name), "warn"));
       room.onMessage("pingSent", (msg: { name: string }) =>
@@ -1212,19 +1217,47 @@ export class OfficeScene extends Phaser.Scene {
       info.append(nm, st); row.append(chip, info);
       row.style.cursor = "pointer";
       row.addEventListener("click", (e) => {
-        // the message button on this row has its own job
-        if ((e.target as HTMLElement).closest(".p-dm")) return;
+        // the buttons on this row have their own jobs
+        if ((e.target as HTMLElement).closest(".p-act")) return;
         this.openPersonCard(r.sessionId, row);
       });
-      // A private thread needs an account at both ends, so the button is only
-      // there when there is somewhere for a reply to arrive.
-      if (!r.self && r.userId && this.myUserId) {
-        const dm = document.createElement("button");
-        dm.className = "p-dm";
-        dm.title = t("ส่งข้อความส่วนตัว");
-        dm.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H7l-3 3z"/></svg>';
-        dm.addEventListener("click", () => { this.showView?.("dm"); void this.openDmThread(r.userId, r.name); });
-        row.appendChild(dm);
+      if (!r.self) {
+        const acts = document.createElement("span");
+        acts.className = "p-acts";
+        const act = (tip: string, svg: string, go: () => void) => {
+          const b = document.createElement("button");
+          b.className = "p-act";
+          b.type = "button";
+          b.dataset.tip = tip;
+          b.setAttribute("aria-label", tip);   // the tooltip is decoration, not a label
+          b.innerHTML = svg;
+          b.addEventListener("click", (e) => { e.stopPropagation(); go(); });
+          acts.appendChild(b);
+        };
+
+        // Waving first, because it is the smallest thing to do and the one
+        // people reach for; the message is last because it is the one that
+        // takes them away from the list.
+        act(t("โบกมือ"),
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3.5a1.4 1.4 0 0 1 2.8 0V11"/><path d="M8.2 6a1.4 1.4 0 0 1 2.8 0v5"/><path d="M13.8 6.6a1.4 1.4 0 0 1 2.8 0V12"/><path d="M16.6 9.2a1.4 1.4 0 0 1 2.8 0v4.3a7 7 0 0 1-7 7h-.7a6 6 0 0 1-4.3-1.8L4 16.8a1.5 1.5 0 0 1 2.1-2.1L8.2 16"/></svg>',
+          () => this.room?.send("wave", { to: r.sessionId }));
+
+        act(t("ไปที่"),
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8 12h7"/><path d="M12 8.5l3.5 3.5L12 15.5"/></svg>',
+          () => {
+            const them = this.remotes.get(r.sessionId)?.sprite;
+            if (them) this.goTo(them.x, them.y);
+            else this.toast(t("หาไม่เจอ — เขาอาจออกไปแล้ว"), "warn");
+          });
+
+        // a private thread needs an account at both ends, so this one is only
+        // there when there is somewhere for a reply to arrive
+        if (r.userId && this.myUserId) {
+          act(t("ส่งข้อความ"),
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12a8.5 8.5 0 1 1-3.6-6.9"/><path d="M4.2 19.8l1.1-3.3"/><path d="M20.5 4.5v4h-4"/></svg>',
+            () => { this.showView?.("dm"); void this.openDmThread(r.userId, r.name); });
+        }
+        row.appendChild(acts);
       }
       list.appendChild(row);
     }

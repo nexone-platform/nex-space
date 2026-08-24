@@ -235,12 +235,27 @@
       .dm-row small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .dm-row .dm-new { flex: 0 0 auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
         background: var(--danger); color: #fff; font: 700 11px "Segoe UI", sans-serif; line-height: 18px; text-align: center; }
-      /* the button that starts a thread, revealed on the person's row */
-      .p-dm { margin-left: auto; border: none; background: transparent; color: var(--muted); cursor: pointer;
-        width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; opacity: 0; transition: opacity .12s; }
-      .person:hover .p-dm, .p-dm:focus-visible { opacity: 1; }
-      .p-dm:hover { background: var(--surface); color: var(--accent); }
-      .p-dm svg { width: 16px; height: 16px; }
+      /* What you can do to somebody, on their own row. Hidden until the pointer
+         is on the row: three icons on every line at rest is a wall of controls,
+         and the list is read far more often than it is acted on. */
+      .p-acts { margin-left: auto; display: flex; gap: 2px; opacity: 0; transition: opacity .12s; }
+      .person:hover .p-acts, .p-acts:focus-within { opacity: 1; }
+      .p-act {
+        position: relative; border: none; background: transparent; color: var(--muted); cursor: pointer;
+        width: 27px; height: 27px; border-radius: 8px; display: grid; place-items: center; padding: 0;
+      }
+      .p-act:hover { background: var(--surface); color: var(--accent); }
+      .p-act:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+      .p-act svg { width: 16px; height: 16px; }
+      /* the label, above the icon, dark on any theme like every other tooltip */
+      .p-act::after {
+        content: attr(data-tip);
+        position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+        background: #23252df2; color: #eef0f4; font: 11.5px/1 "Segoe UI", sans-serif;
+        padding: 5px 8px; border-radius: 7px; white-space: nowrap; pointer-events: none;
+        opacity: 0; transition: opacity .1s; z-index: 3;
+      }
+      .p-act:hover::after, .p-act:focus-visible::after { opacity: 1; }
 
       /* ---- notifications ---- */
       .nf-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px 8px; }

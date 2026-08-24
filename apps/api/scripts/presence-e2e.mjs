@@ -148,6 +148,46 @@ ok("both are in the room", !!bobId && !!aliceId, `${aliceId} / ${bobId}`);
   await alice2.leave();
 }
 
+// ---- waving ------------------------------------------------------------------
+// A wave asks for nothing, so unlike a call to come over it goes through even to
+// somebody who has asked not to be interrupted. That difference is the whole
+// point of having both, so it is what this section checks.
+
+{
+  const alice3 = await new Client(GAME).joinOrCreate("office", { workspace: ws.slug, token: alice.token, name: "alice" });
+  alice3.onMessage("pingSent", () => {});
+  await settle();
+  const bobId3 = sessionOf(alice3, "bob");
+
+  bobRoom.send("status", "busy");
+  await settle();
+
+  const arriving = awaited(bobRoom, "wave");
+  const confirmed = awaited(alice3, "waveSent");
+  const bubble = awaited(alice3, "chat");
+  alice3.send("wave", { to: bobId3 });
+
+  const got = await arriving;
+  ok("a wave reaches the other person", !!got, got ? "" : "nothing arrived");
+  ok("  · naming who waved", got?.name === "alice", got?.name);
+  ok("  · even though they are on do not disturb",
+    !!got && bobRoom.state.players.get(sessionOf(bobRoom, "bob"))?.status === "busy");
+
+  const back = await confirmed;
+  ok("the waver is told it went", back?.name === "bob", back?.name);
+
+  const seen = await bubble;
+  ok("and it shows over their own head, the way a reaction does", seen?.text === "👋", seen?.text);
+
+  bobRoom.onMessage("chat", () => {});   // the bubble reaches them too; not this test's business
+  const second = awaited(bobRoom, "wave", 1200);
+  alice3.send("wave", { to: bobId3 });
+  ok("waving again straight away is dropped", (await second) === null);
+
+  bobRoom.send("status", "online");
+  await alice3.leave();
+}
+
 await bobRoom.leave();
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

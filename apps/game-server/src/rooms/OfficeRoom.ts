@@ -22,7 +22,7 @@ export class OfficeRoom extends Room<OfficeState> {
   private workspace = "main";
   private chatStoreWarned = false;
   private dmStoreWarned = false;
-  /** last "come here" per sender-to-target pair, so the button cannot be leaned on */
+  /** last gesture per sender-to-target pair, keyed by kind, so no button can be leaned on */
   private pingedAt = new Map<string, number>();
 
   /**
@@ -211,6 +211,37 @@ export class OfficeRoom extends Room<OfficeState> {
       client.send("pingSent", { to, name: target.name });
     });
 
+    /**
+     * A wave.
+     *
+     * The lightest thing one person can send another: it asks for nothing, so
+     * unlike a call to come over it is delivered even to somebody on
+     * do-not-disturb — their client decides whether to make a sound about it.
+     *
+     * It also shows up in the room. A wave nobody can see is a notification;
+     * the bubble over the waver is what makes it a gesture, so the people near
+     * them get it the same way they get any other reaction.
+     */
+    this.onMessage("wave", (client, msg: { to?: string }) => {
+      const me = this.state.players.get(client.sessionId);
+      const to = String(msg?.to ?? "");
+      const target = this.state.players.get(to);
+      if (!me || !target || to === client.sessionId) return;
+
+      const key = `wave:${client.sessionId}->${to}`;
+      const now = Date.now();
+      if (now - (this.pingedAt.get(key) ?? 0) < 8_000) return;
+      this.pingedAt.set(key, now);
+
+      this.clients.find((c) => c.sessionId === to)?.send("wave", { from: client.sessionId, name: me.name });
+      client.send("waveSent", { to, name: target.name });
+
+      // the same fan-out a reaction gets, so the gesture is visible where it happened
+      const bubble = { from: client.sessionId, name: me.name, text: "👋" };
+      client.send("chat", bubble);
+      for (const c of this.nearbyClients(client.sessionId)) c.send("chat", bubble);
+    });
+
     // sit pose: relay to peers so they render the seated sprite
     this.onMessage("sit", (client, msg: { on: boolean; dir: string }) => {
       this.broadcast("sit", { from: client.sessionId, on: !!msg?.on, dir: String(msg?.dir ?? "down") }, { except: client });
@@ -326,7 +357,7 @@ export class OfficeRoom extends Room<OfficeState> {
     this.state.players.delete(client.sessionId);
     // their throttle entries are dead weight the moment they are gone
     for (const key of this.pingedAt.keys()) {
-      if (key.startsWith(`${client.sessionId}->`) || key.endsWith(`->${client.sessionId}`)) this.pingedAt.delete(key);
+      if (key.includes(`${client.sessionId}->`) || key.endsWith(`->${client.sessionId}`)) this.pingedAt.delete(key);
     }
     console.log(`[office:${this.workspace}] leave ${client.sessionId} (${this.state.players.size} online)`);
   }
