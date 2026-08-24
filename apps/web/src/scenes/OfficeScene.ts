@@ -1254,9 +1254,10 @@ export class OfficeScene extends Phaser.Scene {
             else this.toast(t("หาไม่เจอ — เขาอาจออกไปแล้ว"), "warn");
           });
 
-        // a private thread needs an account at both ends, so this one is only
-        // there when there is somewhere for a reply to arrive
-        if (r.userId && this.myUserId) {
+        // A private thread needs an account at both ends, and a different one at
+        // each: two windows of the same account see each other in this list, and
+        // a message to yourself is refused by the API anyway.
+        if (r.userId && this.myUserId && r.userId !== this.myUserId) {
           act(t("ส่งข้อความ"),
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12a8.5 8.5 0 1 1-3.6-6.9"/><path d="M4.2 19.8l1.1-3.3"/><path d="M20.5 4.5v4h-4"/></svg>',
             () => { this.showView?.("dm"); void this.openDmThread(r.userId, r.name); });
@@ -1734,6 +1735,9 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private onWave(msg: { from: string; name: string }) {
+    // The panel is easy to miss when the person testing is looking at the window
+    // that SENT the wave, so leave a trace of the arrival in the console.
+    console.debug("[wave] from", msg.name, msg.from);
     const WAVE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3.5a1.4 1.4 0 0 1 2.8 0V11"/><path d="M8.2 6a1.4 1.4 0 0 1 2.8 0v5"/><path d="M13.8 6.6a1.4 1.4 0 0 1 2.8 0V12"/><path d="M16.6 9.2a1.4 1.4 0 0 1 2.8 0v4.3a7 7 0 0 1-7 7h-.7a6 6 0 0 1-4.3-1.8L4 16.8a1.5 1.5 0 0 1 2.1-2.1L8.2 16"/></svg>';
     const GO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8 12h7"/><path d="M12 8.5l3.5 3.5L12 15.5"/></svg>';
 
@@ -1906,7 +1910,11 @@ export class OfficeScene extends Phaser.Scene {
     const el = document.getElementById("nudge") as HTMLElement | null;
     const chip = document.getElementById("nudge-chip") as HTMLElement | null;
     const acts = document.getElementById("nudge-acts");
-    if (!el || !chip || !acts) return;
+    if (!el || !chip || !acts) {
+      // silently doing nothing is how a missing element becomes an afternoon
+      console.warn("[nudge] the panel is not in the page — nothing will be shown");
+      return;
+    }
 
     const player: any = this.room?.state.players.get(opts.from);
     const name = player?.name || "?";
