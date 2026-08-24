@@ -8,6 +8,7 @@
 // sprite's CENTRE, matching how the scene places images.
 
 import { cachedTheme, themeOverride } from "../workspace";
+import { AREAS, type PrivateArea } from "./areas";
 
 // scale is optional and defaults to 1. Keep it to halves: anything else lands
 // source pixels between screen pixels and the art goes soft.
@@ -41,6 +42,12 @@ export interface MapTheme {
   decor: Flat[];
   desks: Desk[];
   interactives: Interactive[];
+  /**
+   * Where "same room" beats "close enough". Carried on the map rather than
+   * looked up by its id, because a stored map has an id nothing recognises —
+   * and areas the browser cannot see are areas only the server enforces.
+   */
+  areas: PrivateArea[];
 }
 
 const rect = (add: (x: number, y: number) => void, x0: number, y0: number, x1: number, y1: number) => {
@@ -53,6 +60,7 @@ const CLASSIC_BUILD = { x0: 4, y0: 3, x1: 27, y1: 20 };
 
 export const classicTheme: MapTheme = {
   id: "classic",
+  areas: AREAS.classic,
   label: "ออฟฟิศพาสเทล",
   cols: 32,
   rows: 25,
@@ -210,6 +218,7 @@ const DEPT_STATIONS: { id: string; x: number; y: number; desk: string; chair: st
 
 export const departmentsTheme: MapTheme = {
   id: "departments",
+  areas: AREAS.departments,
   label: "ออฟฟิศแบ่งแผนก",
   cols: 32,
   rows: 24,
@@ -362,6 +371,7 @@ const OFFICE_STATIONS: { id: string; x: number; y: number }[] = [
 
 export const officeTheme: MapTheme = {
   id: "office",
+  areas: AREAS.office,
   label: "ออฟฟิศคลาสสิก (โต๊ะใหญ่)",
   cols: 31,
   rows: 20,

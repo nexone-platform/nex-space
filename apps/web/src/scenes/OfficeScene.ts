@@ -7,13 +7,14 @@ import type { MediaManager } from "../net/media";
 import { buildWalkCanvas, buildSitCanvas, SIT_COLS, SIT_SEATED_COL, decodeAvatar, encodeAvatar, isLpc, avatarKey, defaultDressedConfig, LPC_ROW } from "../avatar/avatarCompose";
 import { openAvatarEditor } from "../avatar/avatarEditor";
 import { WORKSPACE, IS_DEFAULT_WORKSPACE, workspaceLabel, inviteLink, wsKey,
-         rememberTheme, themeOverride, GUEST_CODE } from "../workspace";
+         GUEST_CODE } from "../workspace";
 import { API as AUTH_API } from "../api";
 import { t, onLangChange, locale } from "../i18n";
 import { setupPrefsModal } from "../prefsModal";
 import { roleLabel } from "../memberPanel";
-import { pickTheme, propPath, THEMES, type Interactive } from "./mapThemes";
-import { AREAS, areaAt, canHear, type PrivateArea } from "./areas";
+import { propPath, type Interactive } from "./mapThemes";
+import { currentTheme } from "./mapSource";
+import { canHear, type PrivateArea } from "./areas";
 
 const LPC_COLS = 9; // LPC walk sheet: 9 frames per direction row
 const LPC_SCALE = 0.5;    // 64px LPC frames render large vs 32px furniture -> scale down
@@ -69,7 +70,9 @@ interface Remote {
 const TILE = 32;
 
 // the layout is chosen per page load; see mapThemes.ts
-const THEME = pickTheme();
+// Resolved before this module was imported — see mapSource.loadMap(), which
+// main.ts awaits. The scene therefore never guesses which world it is in.
+const THEME = currentTheme();
 const COLS = THEME.cols;
 const ROWS = THEME.rows;
 const SPAWN = THEME.spawn;
@@ -124,7 +127,7 @@ const statusMeta = (s: string) => STATUS_META[s] ?? STATUS_META.online;
 const AFK_MS = 180_000;              // no input for 3 min -> away
 const MEETING_ROOM = THEME.meetingRoom;
 /** the private areas drawn on this map — empty for a map that has none */
-const PRIVATE_AREAS = AREAS[THEME.id] ?? [];
+const PRIVATE_AREAS = THEME.areas;
 
 interface MeetingPerson { id: string; name: string; self: boolean; status: string; mic: boolean; hand: boolean }
 
@@ -1021,15 +1024,8 @@ export class OfficeScene extends Phaser.Scene {
               nameTheComposer(d.workspace.name);
               localStorage.setItem(wsKey("nexspace-ws-name"), d.workspace.name);
             }
-            // Someone changed the layout (or this is a first visit and the cache
-            // was empty). Everyone has to be on the same map, so take the
-            // server's answer and boot again — writing the cache first is what
-            // stops this from looping. A ?theme= preview stays untouched.
-            const want = d.workspace.theme || "classic";
-            if (!themeOverride() && want !== THEME.id && THEMES[want]) {
-              rememberTheme(WORKSPACE, want);
-              location.reload();
-            }
+            // The layout is no longer guessed here and then corrected by a
+            // reload: mapSource asked the server before this scene existed.
           })
           .catch(() => {});
       }
@@ -2462,7 +2458,11 @@ export class OfficeScene extends Phaser.Scene {
 
   /** the private area a point falls in, if any */
   private areaOf(x: number, y: number): PrivateArea | undefined {
-    return areaAt(THEME.id, Math.floor(x / TILE), Math.floor(y / TILE));
+    const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE);
+    for (const a of PRIVATE_AREAS) {
+      if (tx >= a.x0 && tx <= a.x1 && ty >= a.y0 && ty <= a.y1) return a;
+    }
+    return undefined;
   }
 
   /**

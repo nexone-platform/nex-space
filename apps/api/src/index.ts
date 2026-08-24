@@ -9,6 +9,7 @@ import {
 } from "./auth";
 import { sendLoginCode, mailEnabled } from "./mailer";
 import { iceConfig, turnEnabled } from "./ice";
+import { mapDocProblem } from "./mapValidate";
 import {
   newTotpSecret, otpauthUri, qrDataUrl, checkTotp,
   newRecoveryCodes, hashRecoveryCodes, countRecoveryCodes, spendRecoveryCode,
@@ -531,6 +532,12 @@ const canInvite = (role?: string) => role === "owner" || role === "admin" || rol
 // map layouts the client can render — mirrors THEMES in apps/web/src/scenes/mapThemes.ts.
 // Validated here so a bad value can never reach everyone's map loader.
 const THEMES = ["classic", "departments", "office"];
+
+// A stored map is handed to every browser that opens the space, so its size is
+// everyone's page load, not just a row in a table. The three built-in layouts
+// bake down to roughly 30-60 KB, so this leaves a lot of room and still refuses
+// something that would make the space slow to enter for everybody.
+const MAP_MAX_BYTES = Number(process.env.MAP_MAX_BYTES || 2_000_000);
 
 const wsView = (w: any, role?: string) => ({
   slug: w.slug, name: w.name, allowGuests: w.allowGuests,
@@ -1154,6 +1161,82 @@ async function sweepOldMessages() {
   const { count } = await prisma.message.deleteMany({ where: { createdAt: { lt: cutoff } } });
   if (count) console.log(`[chat] removed ${count} message(s) older than ${CHAT_KEEP_DAYS} days`);
 }
+
+// ---- the map a space loads ----
+//
+// `theme` on the workspace names one of the three layouts compiled into the
+// client. A row here overrides it with a map made rather than written — which
+// is the whole point: until now a map could only exist as our TypeScript, so
+// only we could make one.
+//
+// Reading is open to the same extent the space is visible at all, because the
+// map is not a secret: every browser in the room is handed it, and the door
+// that matters is the one on the room. Writing is owner and admin only.
+
+/** owner/admin of this space, or the response has already been sent */
+async function mapEditor(req: AuthedRequest, res: express.Response) {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) { res.status(404).json({ error: "not found" }); return null; }
+  const m = await prisma.membership.findUnique({
+    where: { userId_workspaceId: { userId: req.user!.id, workspaceId: w.id } },
+  });
+  if (!m || (m.role !== "owner" && m.role !== "admin")) { res.status(403).json({ error: "forbidden" }); return null; }
+  return w;
+}
+
+app.get("/workspaces/:slug/map", async (req, res) => {
+  const w = await prisma.workspace.findUnique({
+    where: { slug: req.params.slug },
+    include: { map: true },
+  });
+  if (!w) return res.status(404).json({ error: "not found" });
+  if (!w.map) return res.json({ builtin: w.theme || "classic" });
+
+  // A row that no longer parses, or that predates a format change, must not
+  // take the space down with it: name the stock map instead and say why, so
+  // the space still opens while somebody looks at it.
+  let doc: unknown;
+  try { doc = JSON.parse(w.map.data); } catch { doc = null; }
+  const problem = mapDocProblem(doc);
+  if (problem) {
+    console.warn(`[map] ${w.slug} has an unreadable stored map (${problem}) — serving the built-in`);
+    return res.json({ builtin: w.theme || "classic", problem });
+  }
+  res.json({ map: doc, updatedAt: w.map.updatedAt });
+});
+
+app.put("/workspaces/:slug/map", requireAuth, async (req: AuthedRequest, res) => {
+  const w = await mapEditor(req, res);
+  if (!w) return;
+
+  const doc = req.body?.map;
+  const problem = mapDocProblem(doc);
+  // Refused here rather than merely warned about later: this row reaches every
+  // browser in the space, so a bad one is not a bad record, it is a room
+  // nobody can walk into.
+  if (problem) return res.status(400).json({ error: "not a valid map", problem });
+
+  const data = JSON.stringify(doc);
+  if (data.length > MAP_MAX_BYTES)
+    return res.status(413).json({ error: `map is too large (${data.length} bytes, limit ${MAP_MAX_BYTES})` });
+
+  const saved = await prisma.workspaceMap.upsert({
+    where: { workspaceId: w.id },
+    create: { workspaceId: w.id, data, updatedById: req.user!.id },
+    update: { data, updatedById: req.user!.id },
+  });
+  res.json({ ok: true, updatedAt: saved.updatedAt });
+});
+
+app.delete("/workspaces/:slug/map", requireAuth, async (req: AuthedRequest, res) => {
+  const w = await mapEditor(req, res);
+  if (!w) return;
+  // Deleting is how a space goes back to its stock layout, so it has to
+  // succeed when there is nothing to delete — otherwise "reset" fails for the
+  // one space that most obviously needs no resetting.
+  await prisma.workspaceMap.deleteMany({ where: { workspaceId: w.id } });
+  res.json({ ok: true, builtin: w.theme || "classic" });
+});
 
 // ---- saved maps ----
 app.get("/maps", requireAuth, async (req: AuthedRequest, res) => {
