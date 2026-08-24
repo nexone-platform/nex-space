@@ -145,6 +145,7 @@ export class OfficeScene extends Phaser.Scene {
   private notifs: { icon: string; title: string; body: string; at: number; seen: boolean; go?: () => void }[] = [];
   private cardFor = "";                         // sessionId the open person card belongs to
   private cardTimer?: number;                   // pending open (hover) or close (leave)
+  private nudgeTimer?: number;                  // how long an unanswered nudge stays
   private following = "";                       // sessionId the camera is trailing, "" for me
   private dnd = false;                          // hearing nobody, on purpose                       // sessionId the camera is trailing, "" for me
   private panning = false;                      // a drag is moving the camera right now
@@ -746,9 +747,7 @@ export class OfficeScene extends Phaser.Scene {
       room.onMessage("roomchat", (msg: { from: string; name: string; text: string }) => this.appendChatLog(msg.from, msg.name, msg.text));
       room.onMessage("dm", (msg: { from: string; to: string; name: string; text: string }) => this.onDm(msg));
       room.onMessage("ping", (msg: { from: string; name: string; x: number; y: number }) => this.onPing(msg));
-      room.onMessage("wave", (msg: { from: string; name: string }) =>
-        this.notify("👋", t("{name} โบกมือให้คุณ").replace("{name}", msg.name), t("ทักกลับได้จากรายชื่อคน"),
-          () => { this.showView?.("people"); this.followPerson(msg.from, msg.name); }));
+      room.onMessage("wave", (msg: { from: string; name: string }) => this.onWave(msg));
       room.onMessage("waveSent", (msg: { name: string }) =>
         this.toast(t("โบกมือให้ {name} แล้ว").replace("{name}", msg.name), "info"));
       room.onMessage("pingRefused", (msg: { name: string }) =>
@@ -942,6 +941,11 @@ export class OfficeScene extends Phaser.Scene {
     this.refreshSoundButton();
 
     document.getElementById("btn-dnd")?.addEventListener("click", () => this.setDnd(!this.dnd));
+    document.getElementById("nudge-x")?.addEventListener("click", () => this.closeNudge());
+    const nudge = document.getElementById("nudge");
+    nudge?.addEventListener("mouseenter", () => window.clearTimeout(this.nudgeTimer));
+    nudge?.addEventListener("mouseleave", () => this.armNudgeTimer());
+
     const card = document.getElementById("person-card");
     // moving from the person onto the card must not count as leaving
     card?.addEventListener("mouseenter", () => window.clearTimeout(this.cardTimer));
@@ -1729,11 +1733,46 @@ export class OfficeScene extends Phaser.Scene {
     this.toast(t("กำลังตามดู {name} — เดินเมื่อไหร่กล้องกลับมาเอง").replace("{name}", name), "info");
   }
 
+  private onWave(msg: { from: string; name: string }) {
+    const WAVE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3.5a1.4 1.4 0 0 1 2.8 0V11"/><path d="M8.2 6a1.4 1.4 0 0 1 2.8 0v5"/><path d="M13.8 6.6a1.4 1.4 0 0 1 2.8 0V12"/><path d="M16.6 9.2a1.4 1.4 0 0 1 2.8 0v4.3a7 7 0 0 1-7 7h-.7a6 6 0 0 1-4.3-1.8L4 16.8a1.5 1.5 0 0 1 2.1-2.1L8.2 16"/></svg>';
+    const GO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8 12h7"/><path d="M12 8.5l3.5 3.5L12 15.5"/></svg>';
+
+    this.showNudge({
+      from: msg.from,
+      title: t("{name} โบกมือให้คุณ").replace("{name}", msg.name),
+      sub: this.whereabouts(msg.from),
+      actions: [
+        { label: t("โบกมือตอบ"), icon: WAVE, go: () => this.room?.send("wave", { to: msg.from }) },
+        { label: t("เดินไปหา"), icon: GO, primary: true, go: () => {
+          const them = this.remotes.get(msg.from)?.sprite;
+          if (them) this.walkOrJump(them.x, them.y);
+          else this.toast(t("หาไม่เจอ — เขาอาจออกไปแล้ว"), "warn");
+        } },
+      ],
+    });
+
+    // and it stays in the bell, so dismissing the panel does not lose it
+    this.notify("👋", t("{name} โบกมือให้คุณ").replace("{name}", msg.name), this.whereabouts(msg.from),
+      () => { this.showView?.("people"); this.followPerson(msg.from, msg.name); });
+  }
+
   /** somebody would like us to come over */
   private onPing(msg: { from: string; name: string; x: number; y: number }) {
-    this.notify("🖐", t("{name} เรียกให้ไปหา").replace("{name}", msg.name), t("กดเพื่อไปที่นั่น"),
-      () => this.goTo(msg.x, msg.y));
-    this.toast(t("{name} เรียกให้ไปหา — เปิดกระดิ่งเพื่อไป").replace("{name}", msg.name), "info");
+    const GO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8 12h7"/><path d="M12 8.5l3.5 3.5L12 15.5"/></svg>';
+    const LATER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v4l2.5 2"/></svg>';
+
+    this.showNudge({
+      from: msg.from,
+      title: t("{name} เรียกให้ไปหา").replace("{name}", msg.name),
+      sub: this.whereabouts(msg.from),
+      actions: [
+        { label: t("ไว้ก่อน"), icon: LATER, go: () => { /* the panel closing is the answer */ } },
+        { label: t("เดินไปหา"), icon: GO, primary: true, go: () => this.walkOrJump(msg.x, msg.y) },
+      ],
+    });
+
+    this.notify("🖐", t("{name} เรียกให้ไปหา").replace("{name}", msg.name), this.whereabouts(msg.from),
+      () => this.walkOrJump(msg.x, msg.y));
   }
 
   /**
@@ -1844,6 +1883,106 @@ export class OfficeScene extends Phaser.Scene {
         osc.stop(now + at + 0.13);
       }
     } catch { /* audio is a nicety; never let it break the room */ }
+  }
+
+  // ---- somebody wants something ---------------------------------------------
+
+  /**
+   * A wave, or a call over: one line about who and where, and the answer right
+   * underneath it.
+   *
+   * There is one panel, and the newest thing wins it. Stacking these would
+   * turn a friendly room into a queue of demands, and the bell keeps the ones
+   * that scroll past anyway — this is the copy that is worth interrupting for.
+   *
+   * It clears itself after a while, because an unanswered wave stops being
+   * true. Not while the pointer is on it: taking a button away from under
+   * somebody's hand is worse than leaving it up too long.
+   */
+  private showNudge(opts: {
+    from: string; title: string; sub: string;
+    actions: { label: string; icon: string; go: () => void; primary?: boolean }[];
+  }) {
+    const el = document.getElementById("nudge") as HTMLElement | null;
+    const chip = document.getElementById("nudge-chip") as HTMLElement | null;
+    const acts = document.getElementById("nudge-acts");
+    if (!el || !chip || !acts) return;
+
+    const player: any = this.room?.state.players.get(opts.from);
+    const name = player?.name || "?";
+    const { initial, color } = this.chipParts(name);
+    const st = statusMeta(player?.status || "online");
+    chip.style.setProperty("--pc-tint", color);
+    chip.style.setProperty("--pc-dot", st.css);
+
+    // the same portrait the card uses, so the two agree about who this is
+    const dot = document.getElementById("nudge-dot");
+    chip.innerHTML = "";
+    const png = this.portraitOf(player?.avatar || "1", player?.dir || "down");
+    if (png) {
+      const img = document.createElement("img");
+      img.src = png; img.alt = name;
+      chip.appendChild(img);
+    } else {
+      chip.appendChild(document.createTextNode(initial));
+    }
+    if (dot) chip.appendChild(dot);
+
+    const titleEl = document.getElementById("nudge-title");
+    const subEl = document.getElementById("nudge-sub");
+    if (titleEl) titleEl.textContent = opts.title;
+    if (subEl) subEl.textContent = opts.sub;
+
+    acts.innerHTML = "";
+    for (const a of opts.actions) {
+      const b = document.createElement("button");
+      b.type = "button";
+      if (a.primary) b.className = "go";
+      b.innerHTML = a.icon;
+      const span = document.createElement("span");
+      span.textContent = a.label;
+      b.appendChild(span);
+      b.addEventListener("click", () => { this.closeNudge(); a.go(); });
+      acts.appendChild(b);
+    }
+
+    el.hidden = false;
+    this.armNudgeTimer();
+  }
+
+  private armNudgeTimer() {
+    window.clearTimeout(this.nudgeTimer);
+    this.nudgeTimer = window.setTimeout(() => this.closeNudge(), 20_000);
+  }
+
+  private closeNudge() {
+    window.clearTimeout(this.nudgeTimer);
+    const el = document.getElementById("nudge") as HTMLElement | null;
+    if (el) el.hidden = true;
+  }
+
+  /**
+   * Where somebody is, in words: their desk if they have claimed one, and
+   * otherwise nothing rather than a guess. "From their desk" tells you whether
+   * this is a wave across the room or from somebody settled in.
+   */
+  private whereabouts(sessionId: string) {
+    const player: any = this.room?.state.players.get(sessionId);
+    const deskId: string = player?.desk || "";
+    if (!deskId) return t("ตอนนี้");
+    return t("ตอนนี้ • จากโต๊ะของ {name}").replace("{name}", player?.name || "");
+  }
+
+  /**
+   * Walk there if there is a way, and fade across if there is not.
+   *
+   * The button says walk, so it walks — but a person on the far side of a wall
+   * the pathfinder cannot get around would otherwise be a button that does
+   * nothing, which is worse than arriving in an unexplained way.
+   */
+  private walkOrJump(x: number, y: number) {
+    this.walkTo(x, y);
+    if (!this.path.length) this.goTo(x, y);
   }
 
   private async openDeviceMenu(kind: "mic" | "cam", anchor: HTMLElement) {
