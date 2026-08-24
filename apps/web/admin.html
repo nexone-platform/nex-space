@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>แดชบอร์ดผู้ดูแล — NexSpace</title>
+  <style>
+    /* The app's tokens. Copied rather than imported: this is its own entry
+       point, and pulling in the app's stylesheet would pull in the app. */
+    :root {
+      --surface: #fff; --surface-2: #f7f8fa; --surface-3: #f2f3f6;
+      --border: #e4e6eb; --border-2: #d7dae1;
+      --text: #1b2027; --text-2: #3d434c; --text-3: #545a63;
+      --muted: #6b7079; --faint: #9aa0a8;
+      --accent: #10786e; --accent-hover: #0c635b; --accent-soft: #d7ecea;
+      --danger: #c0392b;
+      /* One hue for every chart on this page: each is a single series, and
+         more-is-darker needs no second colour to be read. */
+      --mark: #10786e;
+      --mark-soft: #10786e26;
+      --grid: #e4e6eb;
+      --sans: "IBM Plex Sans Thai", "Noto Sans Thai", "Leelawadee UI", "Segoe UI", system-ui, sans-serif;
+      --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --surface: #1e1f26; --surface-2: #17181e; --surface-3: #2b2d36;
+        --border: #343741; --border-2: #414552;
+        --text: #e6eaef; --text-2: #c3c9d2; --text-3: #a9b0ba;
+        --muted: #9aa2ad; --faint: #7b8390;
+        --accent: #3fb3a5; --accent-hover: #4fd0be; --accent-soft: #1b3a37;
+        --danger: #e5776f;
+        /* chosen against the dark surface, not flipped from the light step */
+        --mark: #3fb3a5;
+        --mark-soft: #3fb3a533;
+        --grid: #343741;
+      }
+    }
+    /* an explicit choice in the app beats the operating system's */
+    :root[data-theme="dark"] {
+      --surface: #1e1f26; --surface-2: #17181e; --surface-3: #2b2d36;
+      --border: #343741; --border-2: #414552;
+      --text: #e6eaef; --text-2: #c3c9d2; --text-3: #a9b0ba;
+      --muted: #9aa2ad; --faint: #7b8390;
+      --accent: #3fb3a5; --accent-hover: #4fd0be; --accent-soft: #1b3a37;
+      --danger: #e5776f;
+      /* chosen against the dark surface, not flipped from the light step */
+      --mark: #3fb3a5;
+      --mark-soft: #3fb3a533;
+      --grid: #343741;
+    }
+
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--surface-2); color: var(--text);
+      font: 14px var(--sans); -webkit-font-smoothing: antialiased;
+    }
+
+    .top {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      padding: 12px 20px; background: var(--surface); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 5;
+    }
+    .brand { font-weight: 700; letter-spacing: -.01em; }
+    .brand small { display: block; font-weight: 400; font-size: 11.5px; color: var(--muted); }
+    .top .sp { flex: 1; }
+    .range { display: flex; gap: 4px; }
+    button, .btn {
+      font: 600 13px var(--sans); cursor: pointer; border-radius: 9px;
+      border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2);
+      padding: 7px 12px; text-decoration: none; transition: background .12s, border-color .12s, color .12s;
+    }
+    button:hover { background: var(--surface-3); }
+    button[aria-pressed="true"] {
+      background: var(--accent-soft); border-color: var(--accent); color: var(--accent); cursor: default;
+    }
+    button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* minmax(0, 1fr), not the default auto: a grid column sized to its content
+       lets the widest card push the page sideways, and the widest card here is a
+       chart that is supposed to scroll inside itself. */
+    main {
+      max-width: 1080px; margin: 0 auto; padding: 22px 20px 72px;
+      display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px;
+    }
+    main > * { min-width: 0; }
+
+    /* ---- the numbers a dashboard leads with ---- */
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+    .kpi {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px;
+    }
+    .kpi .k {
+      font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+      color: var(--faint); margin-bottom: 6px;
+    }
+    .kpi .v { font-size: 30px; font-weight: 700; line-height: 1.1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+    .kpi .n { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+
+    /* ---- charts ---- */
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px 14px;
+      min-width: 0;
+    }
+    .card > h2 { margin: 0 0 2px; font-size: 15.5px; font-weight: 700; }
+    .card > p.sub { margin: 0 0 14px; font-size: 12.5px; color: var(--muted); }
+    .plot { width: 100%; overflow-x: auto; }
+    .plot svg { display: block; }
+    /* recessive: hairline, solid, one step off the surface */
+    .plot .grid line { stroke: var(--grid); stroke-width: 1; shape-rendering: crispEdges; }
+    .plot .tick { fill: var(--faint); font-size: 10.5px; font-family: var(--sans); }
+    .plot .lab { fill: var(--text-2); font-size: 11px; font-weight: 600; font-family: var(--sans); }
+    .plot .bar { fill: var(--mark); }
+    .plot .hit { fill: transparent; cursor: default; }
+    .plot .hit:hover + .bar, .plot .bar:hover { fill: var(--accent-hover); }
+    .empty { color: var(--faint); font-size: 13px; padding: 26px 2px; text-align: center; }
+
+    details { margin-top: 10px; }
+    summary { cursor: pointer; font-size: 12.5px; color: var(--muted); }
+    summary:hover { color: var(--text-2); }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 8px; }
+    th, td { text-align: left; padding: 7px 10px 7px 0; border-bottom: 1px solid var(--border); }
+    th { font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; padding-right: 0; }
+    tbody tr:last-child td { border-bottom: none; }
+
+    #tip {
+      position: fixed; z-index: 20; pointer-events: none; opacity: 0;
+      background: #1c1b22f0; color: #fff; border-radius: 9px; padding: 7px 11px;
+      font: 12.5px var(--sans); box-shadow: 0 4px 16px #0004; transition: opacity .1s;
+      white-space: nowrap;
+    }
+
+    .wall { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: var(--surface-2); padding: 24px; }
+    .wall[hidden] { display: none; }
+    .wall .card { max-width: 420px; border-radius: 16px; }
+    .wall h2 { margin: 0 0 8px; font-size: 18px; }
+    .wall p { margin: 0 0 14px; color: var(--muted); line-height: 1.6; font-size: 13.5px; }
+    .wall a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">NexSpace<small id="which">แดชบอร์ดผู้ดูแล</small></div>
+    <span class="sp"></span>
+    <div class="range" id="range"></div>
+    <a class="btn" id="back" href="/">← กลับไปที่ Space</a>
+  </header>
+
+  <main>
+    <section class="kpis" id="kpis"></section>
+
+    <section class="card">
+      <h2>การใช้งานรายวัน</h2>
+      <p class="sub">รวมเวลาที่ทุกคนอยู่ในพื้นที่ แยกตามวัน</p>
+      <div class="plot" id="plot-daily"></div>
+      <details id="tbl-daily"></details>
+    </section>
+
+    <section class="card">
+      <h2>ช่วงเวลาที่คนอยู่มากที่สุด</h2>
+      <p class="sub">รวมเวลาทั้งช่วง แยกตามชั่วโมงของวัน — เวลาของเซิร์ฟเวอร์</p>
+      <div class="plot" id="plot-hourly"></div>
+      <details id="tbl-hourly"></details>
+    </section>
+
+    <section class="card">
+      <h2>ห้องที่ถูกใช้มากที่สุด</h2>
+      <p class="sub">เวลาที่คนยืนอยู่ในแต่ละโซน รวมทุกคน</p>
+      <div class="plot" id="plot-rooms"></div>
+    </section>
+
+    <section class="card">
+      <h2>รายคน</h2>
+      <p class="sub">เรียงตามเวลารวมที่อยู่ในพื้นที่</p>
+      <div id="people"></div>
+    </section>
+  </main>
+
+  <div id="tip"></div>
+
+  <div class="wall" id="wall" hidden>
+    <div class="card">
+      <h2 id="wall-title">ต้องเข้าสู่ระบบก่อน</h2>
+      <p id="wall-body"></p>
+      <a id="wall-link" href="/">← กลับไปที่ NexSpace</a>
+    </div>
+  </div>
+
+  <script type="module" src="/src/admin/main.ts"></script>
+</body>
+</html>

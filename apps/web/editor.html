@@ -27,6 +27,16 @@
         --danger: #e5776f; --warn: #f0b429;
       }
     }
+    /* an explicit choice in the app beats the operating system's */
+    :root[data-theme="dark"] {
+      --surface: #1e1f26; --surface-2: #24262e; --surface-3: #2b2d36;
+      --border: #343741; --border-2: #414552;
+      --text: #e6eaef; --text-2: #c3c9d2; --text-3: #a9b0ba;
+      --muted: #9aa2ad; --faint: #7b8390;
+      --accent: #3fb3a5; --accent-hover: #4fd0be; --accent-soft: #1b3a37;
+      --danger: #e5776f; --warn: #f0b429;
+    }
+
 
     * { box-sizing: border-box; }
     html, body { height: 100%; }

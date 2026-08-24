@@ -1329,6 +1329,197 @@ app.delete("/workspaces/:slug/map", requireAuth, async (req: AuthedRequest, res)
   res.json({ ok: true, builtin: w.theme || "classic" });
 });
 
+// ---- who used the space, and when ----
+//
+// Written by the room server as people come and go, using the credential that
+// let them in — the same arrangement chat history uses, so there is no second
+// secret between the two services and no way to log a visit to a space you
+// could not enter.
+
+/** how long a space keeps its attendance, in days. 0 keeps everything. */
+const STATS_KEEP_DAYS = Number(process.env.STATS_KEEP_DAYS || 365);
+
+app.post("/workspaces/:slug/visits", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  // the same door chat uses: whoever may speak in this space may be counted in it
+  const who = await speakerFor(req, w);
+  if (!who) return res.status(401).json({ error: "unauthorized" });
+
+  const visit = await prisma.visit.create({
+    data: {
+      workspaceId: w.id,
+      userId: who.userId,
+      name: (who.name || "Guest").slice(0, 60),
+      guest: !who.userId,
+    },
+    select: { id: true },
+  });
+  res.json({ id: visit.id });
+});
+
+/**
+ * The visit ended.
+ *
+ * The id is the capability: it is a cuid handed back to the room server and to
+ * nobody else, so knowing it is what proves the caller is the one that opened
+ * the visit. The door is still checked, so a stranger cannot close visits in a
+ * space they have no business in even if an id leaked.
+ */
+app.patch("/workspaces/:slug/visits/:id", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const who = await speakerFor(req, w);
+  if (!who) return res.status(401).json({ error: "unauthorized" });
+
+  const visit = await prisma.visit.findUnique({ where: { id: req.params.id } });
+  if (!visit || visit.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
+  if (visit.leftAt) return res.json({ ok: true, already: true });
+
+  // seconds per "map/areaId" — trusted only as far as its shape, and only ever
+  // summed, so a nonsense number skews a chart rather than breaking a query
+  const raw = req.body?.areas;
+  let areas: string | undefined;
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const clean: Record<string, number> = {};
+    for (const [k, v] of Object.entries(raw).slice(0, 100)) {
+      if (typeof k === "string" && k.length <= 100 && typeof v === "number" && Number.isFinite(v) && v >= 0) {
+        clean[k] = Math.min(Math.round(v), 86_400);
+      }
+    }
+    if (Object.keys(clean).length) areas = JSON.stringify(clean);
+  }
+
+  await prisma.visit.update({
+    where: { id: visit.id },
+    data: { leftAt: new Date(), ...(areas ? { areas } : {}) },
+  });
+  res.json({ ok: true });
+});
+
+/**
+ * What the dashboard draws.
+ *
+ * Owners and admins only: this is who was where and for how long, which is a
+ * different thing from who is online now. Everything is computed here rather
+ * than in the browser so the page can stay a page — and so the numbers are the
+ * same whoever opens it.
+ */
+app.get("/workspaces/:slug/stats", requireAuth, async (req: AuthedRequest, res) => {
+  const w = await mapEditor(req, res);
+  if (!w) return;
+
+  const days = Math.max(1, Math.min(365, Number(req.query.days) || 30));
+  const to = new Date();
+  const from = new Date(to.getTime() - days * 86_400_000);
+
+  const visits = await prisma.visit.findMany({
+    where: { workspaceId: w.id, joinedAt: { gte: from } },
+    orderBy: { joinedAt: "asc" },
+  });
+
+  // A visit still open is somebody here now, or a session the server lost. It
+  // counts as an arrival and contributes no time: guessing how long they stayed
+  // would put invented hours in a report somebody makes decisions from.
+  const closed = visits.filter((v) => v.leftAt);
+  const secondsOf = (v: (typeof visits)[number]) =>
+    Math.max(0, Math.round(((v.leftAt as Date).getTime() - v.joinedAt.getTime()) / 1000));
+
+  // Days in the server's own time, not UTC — the hour buckets below already
+  // are, and a report where "Tuesday" and "3pm" disagree about which clock they
+  // are on is a report that quietly attributes an evening to the wrong day.
+  const dayKey = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const daily = new Map<string, { day: string; visits: number; seconds: number; people: Set<string> }>();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(from.getTime() + i * 86_400_000);
+    daily.set(dayKey(d), { day: dayKey(d), visits: 0, seconds: 0, people: new Set() });
+  }
+  const hourly = new Array(24).fill(0);
+  const people = new Map<string, { name: string; userId: string | null; guest: boolean; visits: number; seconds: number; last: string }>();
+  const rooms = new Map<string, number>();
+
+  for (const v of visits) {
+    const row = daily.get(dayKey(v.joinedAt));
+    if (row) row.visits++;
+    const key = v.userId ?? `guest:${v.name}`;
+    const p = people.get(key) ?? { name: v.name, userId: v.userId, guest: v.guest, visits: 0, seconds: 0, last: v.joinedAt.toISOString() };
+    p.visits++;
+    p.name = v.name; // the most recent name they went by
+    if (v.joinedAt.toISOString() > p.last) p.last = v.joinedAt.toISOString();
+    people.set(key, p);
+    if (row) row.people.add(key);
+  }
+
+  for (const v of closed) {
+    const secs = secondsOf(v);
+    const row = daily.get(dayKey(v.joinedAt));
+    if (row) row.seconds += secs;
+    const key = v.userId ?? `guest:${v.name}`;
+    const p = people.get(key);
+    if (p) p.seconds += secs;
+
+    // Spread the stay across the hours it actually covered, so a visit from
+    // 09:40 to 11:10 reads as busy at ten rather than busy at nine.
+    let cursor = v.joinedAt.getTime();
+    const end = (v.leftAt as Date).getTime();
+    while (cursor < end) {
+      const hour = new Date(cursor).getHours();
+      const nextHour = new Date(cursor).setMinutes(60, 0, 0);
+      const slice = Math.min(end, nextHour) - cursor;
+      hourly[hour] += Math.round(slice / 1000);
+      cursor += slice;
+    }
+
+    if (v.areas) {
+      try {
+        for (const [k, secs2] of Object.entries(JSON.parse(v.areas) as Record<string, number>)) {
+          rooms.set(k, (rooms.get(k) ?? 0) + (Number(secs2) || 0));
+        }
+      } catch { /* a row we cannot read is a row we leave out */ }
+    }
+  }
+
+  // Names for the rooms, from the space's own maps. A key is "map/areaId", and
+  // an empty area id is that map's open floor.
+  const stored = await prisma.workspaceMap.findMany({ where: { workspaceId: w.id } });
+  const labels = new Map<string, string>();
+  for (const m of stored) {
+    try {
+      const doc = JSON.parse(m.data);
+      labels.set(`${m.slug}/`, String(doc.label || m.slug));
+      for (const a of doc.areas ?? []) labels.set(`${m.slug}/${a.id}`, String(a.label || a.id));
+    } catch { /* an unreadable map still has a slug */ }
+  }
+
+  res.json({
+    days,
+    from: from.toISOString(),
+    to: to.toISOString(),
+    totals: {
+      visits: visits.length,
+      open: visits.length - closed.length,
+      people: people.size,
+      seconds: closed.reduce((n, v) => n + secondsOf(v), 0),
+    },
+    daily: [...daily.values()].map(({ day, visits: n, seconds, people: set }) => ({ day, visits: n, seconds, people: set.size })),
+    hourly,
+    people: [...people.values()].sort((a, b) => b.seconds - a.seconds || b.visits - a.visits).slice(0, 100),
+    rooms: [...rooms.entries()]
+      .map(([key, seconds]) => ({ key, label: labels.get(key) ?? (key.endsWith("/") ? key.slice(0, -1) : key.split("/")[1]), open: key.endsWith("/"), seconds }))
+      .sort((a, b) => b.seconds - a.seconds)
+      .slice(0, 40),
+  });
+});
+
+/** the same sweep chat gets, for the same reason: this table only ever grows */
+async function sweepOldVisits() {
+  if (!STATS_KEEP_DAYS) return;
+  const cutoff = new Date(Date.now() - STATS_KEEP_DAYS * 86_400_000);
+  const { count } = await prisma.visit.deleteMany({ where: { joinedAt: { lt: cutoff } } });
+  if (count) console.log(`[stats] removed ${count} visit(s) older than ${STATS_KEEP_DAYS} days`);
+}
+
 // ---- saved maps ----
 app.get("/maps", requireAuth, async (req: AuthedRequest, res) => {
   const maps = await prisma.savedMap.findMany({
@@ -1374,6 +1565,8 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 
 void sweepOldMessages().catch((e) => console.error("[chat] sweep failed:", e));
 setInterval(() => void sweepOldMessages().catch((e) => console.error("[chat] sweep failed:", e)), DAY_MS).unref();
+void sweepOldVisits().catch((e) => console.error("[stats] sweep failed:", e));
+setInterval(() => void sweepOldVisits().catch((e) => console.error("[stats] sweep failed:", e)), DAY_MS).unref();
 
 if (!turnEnabled) console.warn("[ice] no TURN relay configured — calls will fail for anyone behind a strict firewall (set TURN_SECRET and TURN_HOST)");
 app.listen(port, () => console.log(`[api] NexSpace API on http://localhost:${port}  (db: ${process.env.DATABASE_URL})`));

@@ -34,6 +34,13 @@ export class OfficeRoom extends Room<OfficeState> {
    * admitted still hears nothing and is heard by nobody.
    */
   private admits = new Map<string, Set<string>>();
+  /**
+   * The attendance line open for each person here, and where their time is
+   * going. `at` is the moment they arrived in the room they are standing in;
+   * `spent` is the seconds already banked against the rooms they have left.
+   */
+  private visits = new Map<string, { id?: string; where: string; at: number; spent: Record<string, number> }>();
+  private visitWarned = false;
   private chatStoreWarned = false;
   private dmStoreWarned = false;
   /** last gesture per sender-to-target pair, keyed by kind, so no button can be leaned on */
@@ -87,6 +94,7 @@ export class OfficeRoom extends Room<OfficeState> {
       if (typeof data.dir === "string") p.dir = data.dir;
       p.moving = !!data.moving;
       this.maybeAdmit(client.sessionId, p);
+      this.bankTime(client.sessionId, p);
     });
 
     // player changed their avatar mid-session -> update state so peers re-render
@@ -109,7 +117,7 @@ export class OfficeRoom extends Room<OfficeState> {
     this.onMessage("map", (client, slug: string) => {
       const p = this.state.players.get(client.sessionId);
       const clean = String(slug ?? "").slice(0, 32);
-      if (p && /^[a-z0-9-]*$/.test(clean)) p.map = clean;
+      if (p && /^[a-z0-9-]*$/.test(clean)) { p.map = clean; this.bankTime(client.sessionId, p); }
     });
 
     /**
@@ -385,6 +393,90 @@ export class OfficeRoom extends Room<OfficeState> {
     return (a.map || this.landing) === (b.map || this.landing);
   }
 
+  /**
+   * Where somebody's time is being spent: "map/areaId", with an empty area id
+   * meaning that map's open floor.
+   *
+   * The unlocked area is what counts even for a room they were never admitted
+   * to, because this measures where people are, not who could hear them. A
+   * dashboard that under-reported the busiest room because somebody was
+   * standing outside its door would be answering a different question.
+   */
+  private whereabouts(p: Player) {
+    const a = this.standingIn(p);
+    return `${p.map || this.landing}/${a?.id ?? ""}`;
+  }
+
+  /**
+   * Bank the time since they last changed room.
+   *
+   * Called on every move, which is often — but it only writes when the room
+   * actually changed, so the common case is one string comparison.
+   */
+  private bankTime(sessionId: string, p: Player, force = false) {
+    const v = this.visits.get(sessionId);
+    if (!v) return;
+    const now = this.whereabouts(p);
+    if (!force && now === v.where) return;
+    const secs = Math.max(0, Math.round((Date.now() - v.at) / 1000));
+    if (secs) v.spent[v.where] = (v.spent[v.where] ?? 0) + secs;
+    v.where = now;
+    v.at = Date.now();
+  }
+
+  /**
+   * Attendance, written with the credential that opened the door.
+   *
+   * Best effort on purpose: a space whose API is briefly unreachable should
+   * lose a line in a report, not refuse to let anybody in. The warning is said
+   * once per room rather than once per arrival.
+   */
+  private async openVisit(client: Client) {
+    const auth = client.auth as { token?: string; guest?: string } | undefined;
+    const qs = auth?.guest ? `?guest=${encodeURIComponent(auth.guest)}` : "";
+    try {
+      const r = await fetch(`${API_URL}/workspaces/${encodeURIComponent(this.workspace)}/visits${qs}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(auth?.token ? { authorization: `Bearer ${auth.token}` } : {}),
+        },
+        body: "{}",
+      });
+      if (!r.ok) throw new Error(`API answered ${r.status}`);
+      const d: any = await r.json();
+      const v = this.visits.get(client.sessionId);
+      // they may have left again while this was in flight
+      if (v && d?.id) v.id = d.id;
+      else if (d?.id) void this.closeVisit(client, d.id, {});
+    } catch (e) {
+      if (!this.visitWarned) {
+        this.visitWarned = true;
+        console.warn(`[office:${this.workspace}] attendance is not being recorded:`, e);
+      }
+    }
+  }
+
+  private async closeVisit(client: Client, id: string, spent: Record<string, number>) {
+    const auth = client.auth as { token?: string; guest?: string } | undefined;
+    const qs = auth?.guest ? `?guest=${encodeURIComponent(auth.guest)}` : "";
+    try {
+      await fetch(`${API_URL}/workspaces/${encodeURIComponent(this.workspace)}/visits/${encodeURIComponent(id)}${qs}`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          ...(auth?.token ? { authorization: `Bearer ${auth.token}` } : {}),
+        },
+        body: JSON.stringify({ areas: spent }),
+      });
+    } catch (e) {
+      if (!this.visitWarned) {
+        this.visitWarned = true;
+        console.warn(`[office:${this.workspace}] a visit could not be closed:`, e);
+      }
+    }
+  }
+
   /** let somebody into a locked room, and tell them so */
   private admit(key: string, sessionId: string, by = "", area?: PrivateArea) {
     let set = this.admits.get(key);
@@ -498,6 +590,11 @@ export class OfficeRoom extends Room<OfficeState> {
     // guests keep "", which is what makes them un-addressable in a private thread
     p.userId = (client.auth as { userId?: string } | undefined)?.userId || "";
     this.state.players.set(client.sessionId, p);
+    // The attendance line is opened here and closed in onLeave. It is kept
+    // locally first so the clock starts at the door rather than whenever the
+    // API gets round to answering.
+    this.visits.set(client.sessionId, { where: this.whereabouts(p), at: Date.now(), spent: {} });
+    void this.openVisit(client);
     console.log(`[office:${this.workspace}] join ${client.sessionId} (${this.state.players.size} online)`);
   }
 
@@ -567,6 +664,14 @@ export class OfficeRoom extends Room<OfficeState> {
   }
 
   onLeave(client: Client) {
+    // banked before the player is dropped, or the last room they stood in is
+    // the one thing the visit forgets
+    const p = this.state.players.get(client.sessionId);
+    const visit = this.visits.get(client.sessionId);
+    if (p && visit) this.bankTime(client.sessionId, p, true);
+    this.visits.delete(client.sessionId);
+    if (visit?.id) void this.closeVisit(client, visit.id, visit.spent);
+
     this.state.players.delete(client.sessionId);
     // their throttle entries are dead weight the moment they are gone
     for (const key of this.pingedAt.keys()) {

@@ -10,6 +10,7 @@
 
 import { API, authToken } from "../api";
 import { t, applyLang } from "../i18n";
+import { applyColorMode, watchSystemColorMode } from "../appearance";
 import { WORKSPACE, MAP_SLUG } from "../workspace";
 import { THEMES, classicTheme } from "../scenes/mapThemes";
 import { bakeTheme } from "../scenes/mapFormat";
@@ -615,6 +616,9 @@ async function revert() {
 // ---- boot ---------------------------------------------------------------------
 
 async function boot() {
+  // the light/dark choice made in the app, not just the operating system's
+  applyColorMode();
+  watchSystemColorMode();
   applyLang();
   $("which").textContent = `${t("แก้ไขแผนที่")} · ${WORKSPACE}`;
   $<HTMLAnchorElement>("wall-link").href = `/?w=${encodeURIComponent(WORKSPACE)}`;

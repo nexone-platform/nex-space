@@ -31,7 +31,7 @@ const walk = (d) => {
 };
 walk(join(ROOT, "src"));
 /** the pages with Thai sitting directly in the markup */
-const PAGES = ["index.html", "editor.html"];
+const PAGES = ["index.html", "editor.html", "admin.html"];
 
 const THAI = /[฀-๿]/;
 const dict = new Set();

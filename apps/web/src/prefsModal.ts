@@ -260,6 +260,8 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
       $("pf-theme-name")!.textContent = THEMES[theme] ? t(THEMES[theme].label) : theme;
       const edit = $<HTMLAnchorElement>("pf-edit-map");
       if (edit) edit.href = `/editor.html?w=${encodeURIComponent(slug)}`;
+      const dash = $<HTMLAnchorElement>("pf-dashboard");
+      if (dash) dash.href = `/admin.html?w=${encodeURIComponent(slug)}`;
       $<HTMLInputElement>("pf-invite")!.value = inviteCode ? inviteLink() : "—";
       applyRole();
       if (themeOverride()) say(t('กำลังดูตัวอย่างธีม "{theme}" จาก URL — ไม่ใช่ธีมที่ Space นี้ใช้จริง', { theme: themeOverride() }));

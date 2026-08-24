@@ -19,7 +19,8 @@
     "test:profile": "node scripts/profile-e2e.mjs",
     "test:presence": "node scripts/presence-e2e.mjs",
     "test:areas": "node scripts/areas-e2e.mjs",
-    "test:map": "node scripts/map-e2e.mjs"
+    "test:map": "node scripts/map-e2e.mjs",
+    "test:stats": "node scripts/stats-e2e.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

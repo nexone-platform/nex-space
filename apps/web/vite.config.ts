@@ -12,6 +12,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, "index.html"),
         editor: resolve(__dirname, "editor.html"),
+        admin: resolve(__dirname, "admin.html"),
       },
     },
   },

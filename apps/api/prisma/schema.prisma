@@ -42,6 +42,7 @@ model User {
   sent          Message[]    @relation("MessagesSent")
   received      Message[]    @relation("MessagesReceived")
   dmReads       DmRead[]
+  visits        Visit[]
 }
 
 // A company / community space. People join via its invite code; the owner
@@ -62,6 +63,7 @@ model Workspace {
   guests      GuestPass[]
   messages    Message[]
   maps        WorkspaceMap[]
+  visits      Visit[]
   createdAt   DateTime       @default(now())
 }
 
@@ -200,4 +202,34 @@ model DmRead {
   readAt      DateTime @default(now())
 
   @@id([workspaceId, userId, peerId])
+}
+
+// One person's stay in a space: when they arrived, when they left, and where
+// they spent it. Written by the room server using the credential that opened
+// the door, the same way a chat line is — so there is no second secret between
+// the two services and no way to log a visit to a space you cannot enter.
+//
+// A visit that never closes is a session the server lost (a crash, a killed
+// process). Those are counted as arrivals and excluded from any total of time,
+// because guessing how long somebody stayed is worse than saying we do not know.
+model Visit {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  // Null for a guest: there is no account to point at, which is also what makes
+  // "how many of our own people used it" answerable.
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // the name they were showing at the time — a pass holder has no account to
+  // look one up from later, and a member may since have renamed themselves
+  name        String
+  guest       Boolean   @default(false)
+  joinedAt    DateTime  @default(now())
+  leftAt      DateTime?
+  // seconds per "map/areaId", "map/" being that map's open floor. JSON rather
+  // than a row per area: it is written once, read in bulk, and never queried
+  // across visits by area — the dashboard sums it in memory.
+  areas       String?
+
+  @@index([workspaceId, joinedAt])
 }
