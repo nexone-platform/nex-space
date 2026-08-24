@@ -1195,6 +1195,27 @@ export class OfficeScene extends Phaser.Scene {
       const e = document.getElementById(id);
       if (e) e.textContent = String(count);
     }
+    // the stack on the invite card is who is already here, not four stock faces
+    const avas = document.getElementById("invite-avas");
+    if (avas) {
+      avas.innerHTML = "";
+      const here = [...(this.room?.state.players as any ?? [])].map(([, p]: any) => p.name || "Guest");
+      for (const name of here.slice(0, 4)) {
+        const { initial, color } = this.chipParts(name);
+        const sp = document.createElement("span");
+        sp.style.background = color;
+        sp.textContent = initial;
+        sp.title = name;
+        avas.appendChild(sp);
+      }
+      if (here.length > 4) {
+        const more = document.createElement("span");
+        more.className = "more";
+        more.textContent = "+" + (here.length - 4);
+        avas.appendChild(more);
+      }
+    }
+
     const list = document.getElementById("people");
     if (!list || !this.room) return;
     const q = (document.getElementById("sb-search") as HTMLInputElement | null)?.value.toLowerCase() ?? "";
