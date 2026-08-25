@@ -861,16 +861,33 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     } catch { /* the room join is the real gate; a failed lookup only costs the name */ }
   };
 
+  /**
+   * The character step, which now offers one character: yours.
+   *
+   * Somebody who has never opened the editor still has to be able to press
+   * "enter" — so the dressed default is not just a thumbnail, it is what they
+   * will be wearing. An account that had picked one of the old stock avatars
+   * gets the same treatment: the tile shows what they will look like, which is
+   * the one thing this screen must not lie about.
+   */
   const toChar = (u: User | null) => {
-    if (u?.avatar?.lpc) { customConfig = u.avatar.lpc; selected = encodeAvatar(u.avatar.lpc); setCustomThumb(u.avatar.lpc); }
-    else { void defaultDressedConfig().then(setCustomThumb); }
-    if (u?.avatar?.avatarId && !u?.avatar?.lpc) selected = u.avatar.avatarId;
+    if (u?.avatar?.lpc) {
+      customConfig = u.avatar.lpc;
+      selected = encodeAvatar(u.avatar.lpc);
+      setCustomThumb(u.avatar.lpc);
+    } else {
+      void defaultDressedConfig().then((cfg) => {
+        customConfig = cfg;
+        selected = encodeAvatar(cfg);
+        setCustomThumb(cfg);
+      });
+    }
     showStep("char-step");
     const hello = $("char-hello");
     const pass = !u && guestPass?.state === "active" ? guestPass : null;
     if (hello) hello.textContent = u ? t("สวัสดี {name}", { name: u.name }) : pass ? t("ผู้เยี่ยมชม · {name}", { name: pass.name }) : t("โหมด Guest");
     if (cName) cName.value = u?.name ?? pass?.name ?? "";
-    if (u?.avatar?.lpc) highlight("custom"); else selectPreset(selected);
+    highlight("custom");
   };
 
   document.querySelectorAll<HTMLElement>(".char-opt").forEach((el) => (el.onclick = () => {
@@ -881,6 +898,9 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
   $("c-enter")!.onclick = () => {
     const name = cName?.value.trim() || user?.name || "Guest";
     if (token()) {
+      // selectedTile is still consulted rather than assumed: the stock tiles are
+      // gone from this screen, but selectPreset is the path a future one would
+      // take, and an avatarId is still what an older account has stored.
       const body = selectedTile === "custom" && customConfig ? { lpc: customConfig } : { avatarId: selected };
       fetch(`${API}/me/avatar`, { method: "PUT", headers: authHeaders(), body: JSON.stringify(body) }).catch(() => {});
     }

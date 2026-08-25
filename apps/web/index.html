@@ -1030,11 +1030,14 @@
       .ws-sep { text-align: center; font-size: 12px; color: var(--fainter); margin: 4px 0 10px; }
       .ws-check { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-3); margin-bottom: 10px; }
       .ws-check input { width: auto; margin: 0; }
-      .char-grid { display: flex; gap: 8px; justify-content: center; margin: 10px 0 16px; flex-wrap: wrap; }
-      .char-opt { border: 3px solid transparent; border-radius: 14px; padding: 6px; cursor: pointer; background: var(--surface-3); width: 68px; box-sizing: border-box; }
+      .char-grid { display: flex; gap: 8px; justify-content: center; margin: 14px 0 8px; flex-wrap: wrap; }
+      /* One tile, so it is drawn at a size worth looking at rather than at
+         thumbnail size next to seven others. */
+      .char-opt { border: 3px solid transparent; border-radius: 18px; padding: 14px 18px; cursor: pointer; background: var(--surface-3); box-sizing: border-box; }
+      #char-hint { text-align: center; margin: 0 0 14px; }
       .char-opt.sel { border-color: var(--teal); background: #e9f7f4; }
-      .char-opt img { width: 56px; height: 56px; image-rendering: pixelated; display: block; margin: 0 auto; }
-      .char-opt span { display: block; text-align: center; font-size: 11px; color: var(--text-3); margin-top: 3px; }
+      .char-opt img { width: 96px; height: 96px; image-rendering: pixelated; display: block; margin: 0 auto; border-radius: 12px; }
+      .char-opt span { display: block; text-align: center; font-size: 12.5px; color: var(--text-3); margin-top: 6px; }
       /* zoom controls (right side) */
       #zoom-bar { position: fixed; right: 12px; top: 50%; transform: translateY(-50%); z-index: 20;
         display: flex; flex-direction: column; gap: 8px; align-items: center; }
@@ -1341,16 +1344,18 @@
         <div id="char-step" style="display:none">
           <h1>เลือกตัวละคร</h1>
           <p class="sub" id="char-hello"></p>
-          <div class="char-grid" style="flex-wrap:wrap;">
-            <div class="char-opt" id="c-custom" data-avatar="custom" title="ออกแบบอวาตาร์เอง"><img id="c-custom-img" src="" alt="custom" style="background:#e7efff" /><span>✏️ สร้างเอง</span></div>
-            <div class="char-opt sel" data-avatar="1"><img src="/assets/avatar1.png" alt="avatar 1" /><span>เสื้อฟ้า</span></div>
-            <div class="char-opt" data-avatar="2"><img src="/assets/avatar2.png" alt="avatar 2" /><span>เสื้อเขียว</span></div>
-            <div class="char-opt" data-avatar="3"><img src="/assets/avatar3.png" alt="avatar 3" /><span>เสื้อเหลือง</span></div>
-            <div class="char-opt" data-avatar="4"><img src="/assets/avatar4.png" alt="avatar 4" /><span>เชิ้ตขาว</span></div>
-            <div class="char-opt" data-avatar="5"><img src="/assets/avatar5.png" alt="avatar 5" /><span>แจ็คเก็ตแดง</span></div>
-            <div class="char-opt" data-avatar="6"><img src="/assets/avatar6.png" alt="avatar 6" /><span>หมวกแดง</span></div>
-            <div class="char-opt" data-avatar="7"><img src="/assets/avatar7.png" alt="avatar 7" /><span>เชิ้ตฟ้า</span></div>
+          <!-- One avatar: your own. The seven stock characters used to sit
+               beside it and were what most people ended up wearing, because a
+               ready-made face is easier than making one — which left a room of
+               strangers in the same eight shirts. The editor still opens with a
+               dressed default, so "make one" is a change away, not a blank. -->
+          <div class="char-grid">
+            <div class="char-opt sel" id="c-custom" data-avatar="custom" title="ออกแบบอวาตาร์เอง">
+              <img id="c-custom-img" src="" alt="ตัวละครของคุณ" style="background:#e7efff" />
+              <span>✏️ แต่งตัวละคร</span>
+            </div>
           </div>
+          <p class="sub" id="char-hint">แตะเพื่อเลือกผม เสื้อผ้า และสีที่ชอบ</p>
           <input id="c-name" type="text" placeholder="ชื่อในห้อง" autocomplete="off" />
           <button class="primary" id="c-enter">เข้าห้อง</button>
         </div>

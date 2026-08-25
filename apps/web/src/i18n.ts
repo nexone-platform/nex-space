@@ -449,6 +449,11 @@ const EN: Record<string, string> = {
   "แชตห้อง": "Room chat",
   "แชตห้องรวม": "Room chat",
   "ห้องประชุม": "Meeting room",
+  // ---- the one character on the picker ----
+  "✏️ แต่งตัวละคร": "✏️ Dress your character",
+  "แตะเพื่อเลือกผม เสื้อผ้า และสีที่ชอบ": "Tap to pick the hair, the clothes and the colours you want",
+  "ตัวละครของคุณ": "Your character",
+
   // ---- gestures and stickers (P2-10) ----
   "พูดออกไป": "Say it",
   "ท่าทาง": "Gestures",
