@@ -27,6 +27,28 @@ const systemDark = () =>
   typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches;
 
 /** stamp the resolved palette on <html>; "system" is resolved, never stored as a third theme */
+// ---- microphone treatment ----
+// Echo cancellation, noise suppression and gain control. Asked for explicitly
+// rather than left to the browser's defaults, because "the default" is not the
+// same on every browser and is not something anybody can turn off when it is
+// doing the wrong thing — a guitar through a suppressor comes out as gargling.
+
+const MIC_KEY = "nexspace-mic-clean";
+
+export const micClean = () => {
+  try { return localStorage.getItem(MIC_KEY) !== "off"; } catch { return true; }
+};
+
+export const setMicClean = (on: boolean) => {
+  try { localStorage.setItem(MIC_KEY, on ? "on" : "off"); } catch { /* private mode: this visit only */ }
+};
+
+/** the constraints a microphone track is opened with */
+export const micTreatment = (): MediaTrackConstraints => {
+  const on = micClean();
+  return { echoCancellation: on, noiseSuppression: on, autoGainControl: on };
+};
+
 export const applyColorMode = (mode: ColorMode = colorMode()) => {
   const dark = mode === "dark" || (mode === "system" && systemDark());
   document.documentElement.dataset.theme = dark ? "dark" : "light";

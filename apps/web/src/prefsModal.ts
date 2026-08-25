@@ -8,7 +8,7 @@ import { API, authHeaders, authToken } from "./api";
 import { mountMemberPanel, type MemberPanel } from "./memberPanel";
 import { mountGuestPanel, type GuestPanel } from "./guestPanel";
 import { inviteLink, themeOverride } from "./workspace";
-import { colorMode, setColorMode, type ColorMode } from "./appearance";
+import { colorMode, setColorMode, micClean, setMicClean, type ColorMode } from "./appearance";
 import { THEMES } from "./scenes/mapThemes";
 import { ART_CREDITS } from "./artCredits";
 import { t, lang, setLang, onLangChange, type Lang } from "./i18n";
@@ -26,8 +26,15 @@ export interface PrefsModal { open(pane?: string): void; close(): void; }
  * @param slug     the workspace this room belongs to
  * @param isPublic the shared space has no workspace record, so there is nothing
  *                 to manage — the panes say so rather than showing an error
+ * @param onMicSettingChange called when the microphone treatment is switched, so
+ *                 an already-open microphone can be reopened with it. The dialog
+ *                 has no idea a media stack exists; the scene owns that.
  */
-export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
+export function setupPrefsModal(
+  slug: string,
+  isPublic: boolean,
+  onMicSettingChange?: () => void,
+): PrefsModal {
   const modal = $("prefs-modal");
   if (!modal) return { open() {}, close() {} };
 
@@ -216,6 +223,17 @@ export function setupPrefsModal(slug: string, isPublic: boolean): PrefsModal {
     if (language) {
       language.value = lang();
       language.onchange = () => setLang(language.value as Lang);
+    }
+    const mic = $<HTMLSelectElement>("pf-mic-clean");
+    if (mic) {
+      mic.value = micClean() ? "on" : "off";
+      mic.onchange = () => {
+        setMicClean(mic.value === "on");
+        // A microphone already open keeps the treatment it was opened with, so
+        // the switch has to reopen it — otherwise it appears to do nothing
+        // until the next time somebody turns their mic off and on again.
+        onMicSettingChange?.();
+      };
     }
   };
 

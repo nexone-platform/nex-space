@@ -43,7 +43,16 @@ let propKey = "desk";
 let propDir = "furniture";
 let propSolid = true;
 let propScale = 1;
-let objType: "whiteboard" | "screen" | "portal" = "whiteboard";
+let objType: "whiteboard" | "screen" | "portal" | "embed" = "whiteboard";
+/**
+ * For a whiteboard or an embed: the page it opens.
+ *
+ * Https only, because the validator refuses anything else — an embed becomes an
+ * iframe, and "javascript:" in one is a script on our origin with the signed-in
+ * user's session behind it. The whiteboard starts on the board the built-in
+ * layouts already use, so placing one is useful without typing anything.
+ */
+let objUrl = "https://excalidraw.com";
 /** for a portal: which map it leads to, "" meaning this one */
 let portalMap = "";
 /** for a portal: where it puts you down, null meaning that map's own spawn */
@@ -409,14 +418,46 @@ function paintOptions() {
   if (tool === "interactive") {
     head("วัตถุโต้ตอบ");
     const sel = document.createElement("select");
-    for (const [v, name] of [["whiteboard", "ไวท์บอร์ด"], ["screen", "จอนำเสนอ"], ["portal", "ประตูมิติ"]] as const) {
+    for (const [v, name] of [["whiteboard", "ไวท์บอร์ด"], ["screen", "จอนำเสนอ"], ["portal", "ประตูมิติ"], ["embed", "ฝังหน้าเว็บ"]] as const) {
       const o = document.createElement("option");
       o.value = v; o.textContent = t(name);
       if (objType === v) o.selected = true;
       sel.appendChild(o);
     }
-    sel.addEventListener("change", () => { objType = sel.value as typeof objType; paintOptions(); });
+    sel.addEventListener("change", () => {
+      objType = sel.value as typeof objType;
+      // An embed with the whiteboard's address still open in the field would be
+      // a link to somebody else's drawing board, which is nobody's intent.
+      if (objType === "embed" && objUrl === "https://excalidraw.com") objUrl = "";
+      if (objType === "whiteboard" && !objUrl) objUrl = "https://excalidraw.com";
+      paintOptions();
+    });
     box.appendChild(sel);
+
+    if (objType === "whiteboard" || objType === "embed") {
+      head("ที่อยู่เว็บที่จะเปิด");
+      const url = document.createElement("input");
+      url.type = "text";
+      url.placeholder = "https://…";
+      url.value = objUrl;
+      url.addEventListener("input", () => { objUrl = url.value.trim(); paintUrlNote(); });
+      box.appendChild(url);
+
+      const note = document.createElement("p");
+      note.className = "hint";
+      note.id = "obj-url-note";
+      box.appendChild(note);
+      // said while typing rather than on refusal: the map cannot be saved with a
+      // bad one, and finding that out at save time means finding it out late
+      const paintUrlNote = () => {
+        const ok = /^https:\/\/\S+$/i.test(objUrl);
+        note.textContent = ok
+          ? t("กด E ตอนยืนข้าง ๆ เพื่อเปิด")
+          : t("ต้องเป็น https:// — วางแบบอื่นไม่ได้ เพราะหน้านี้ถูกเปิดในเฟรมบนโดเมนของเรา");
+        note.style.color = ok ? "" : "var(--danger)";
+      };
+      paintUrlNote();
+    }
 
     if (objType === "portal") {
       head("ไปที่แผนที่");
@@ -457,7 +498,8 @@ function paintOptions() {
         : "ประตูมิติในแผนที่เดียวกันต้องระบุช่องปลายทาง");
     }
 
-    hint("ยืนข้างวัตถุแล้วกด E เพื่อใช้งาน");
+    // the url field says this already for the two kinds that have one
+    if (objType === "screen" || objType === "portal") hint("ยืนข้างวัตถุแล้วกด E เพื่อใช้งาน");
     return;
   }
   if (tool === "erase") {
@@ -573,9 +615,19 @@ function apply(x: number, y: number, alt: boolean) {
     case "interactive": {
       // stored in Thai, like every other label on a map, and translated where
       // it is displayed — a map made here has to read the same in both languages
-      const label = objType === "whiteboard" ? "ไวท์บอร์ด" : objType === "screen" ? "จอนำเสนอ" : "ประตูมิติ";
+      const label = objType === "whiteboard" ? "ไวท์บอร์ด"
+        : objType === "screen" ? "จอนำเสนอ"
+        : objType === "embed" ? "ฝังหน้าเว็บ" : "ประตูมิติ";
       const to = objType === "portal" ? { map: portalMap, target: portalTo ?? undefined } : undefined;
-      state.addInteractive(objType, x, y, label, to);
+      const needsUrl = objType === "whiteboard" || objType === "embed";
+      if (needsUrl && !/^https:\/\/\S+$/i.test(objUrl)) {
+        // Refused here rather than placed and rejected at save: an object that
+        // opens nothing looks identical to one that works until somebody
+        // presses E on it.
+        alert(t("ต้องใส่ที่อยู่ https:// ก่อนวางวัตถุนี้"));
+        break;
+      }
+      state.addInteractive(objType, x, y, label, to, needsUrl ? objUrl : undefined);
       break;
     }
     case "erase": state.eraseAt(x, y); break;

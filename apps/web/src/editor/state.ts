@@ -213,20 +213,25 @@ export class EditorState {
    * @param to for a portal: the map it leads to and where it puts you down.
    *   An empty map name means this one, which is the in-map teleport that
    *   already existed; leaving the tile out lands people on that map's spawn.
+   * @param url for a whiteboard or an embed: the page it opens. Without one
+   *   both are furniture that does nothing when you press E, which is what an
+   *   editor-placed whiteboard used to be.
    */
   addInteractive(
-    type: "whiteboard" | "screen" | "portal",
+    type: "whiteboard" | "screen" | "portal" | "embed",
     x: number, y: number, label: string,
     to?: { map?: string; target?: { x: number; y: number } },
+    url?: string,
   ) {
     if (!this.inside(x, y)) return;
-    const icon = type === "whiteboard" ? "🖊" : type === "screen" ? "🖥" : "🚪";
+    const icon = type === "whiteboard" ? "🖊" : type === "screen" ? "🖥" : type === "embed" ? "🔗" : "🚪";
     this.edit((d) => {
       const it: any = { type, x, y, label, icon };
       if (type === "portal") {
         if (to?.map) it.map = to.map;
         if (to?.target) it.target = { x: to.target.x, y: to.target.y };
       }
+      if ((type === "whiteboard" || type === "embed") && url) it.url = url;
       d.interactives.push(it);
     });
   }

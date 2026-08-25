@@ -3,6 +3,7 @@
 // "perfect negotiation" pattern to avoid offer glare. No media server needed.
 import type { Room } from "colyseus.js";
 import type { MediaManager } from "./media";
+import { micTreatment } from "../appearance";
 import { t } from "../i18n";
 import { iceConfig, loadIce } from "./ice";
 
@@ -85,7 +86,9 @@ export class WebRTCManager implements MediaManager {
     }
     const sel = kind === "audio" ? this.selMic : this.selCam;
     const ask = (id?: string): MediaStreamConstraints => {
-      const c: MediaTrackConstraints | boolean = id ? { deviceId: { exact: id } } : true;
+      const c: MediaTrackConstraints | boolean =
+        kind === "audio" ? { ...micTreatment(), ...(id ? { deviceId: { exact: id } } : {}) }
+        : id ? { deviceId: { exact: id } } : true;
       return kind === "audio" ? { audio: c } : { video: c };
     };
 
@@ -200,11 +203,37 @@ export class WebRTCManager implements MediaManager {
     };
   }
 
+  /**
+   * Reopen the microphone with the current treatment settings.
+   *
+   * Noise suppression and the rest are decided when a track is created, not
+   * afterwards — `applyConstraints` is honoured for some of them by some
+   * browsers and quietly ignored by others. Taking a fresh track is the only
+   * way to be sure the switch did what it says.
+   */
+  async refreshMic() {
+    if (!this.micTrack) return; // the next open will pick the setting up
+    const ns = await navigator.mediaDevices.getUserMedia({
+      audio: { ...micTreatment(), ...(this.selMic ? { deviceId: { exact: this.selMic } } : {}) },
+    });
+    const nt = ns.getAudioTracks()[0];
+    nt.enabled = this.micOn;
+    this.local.getAudioTracks().forEach((tr) => { this.local.removeTrack(tr); tr.stop(); });
+    this.local.addTrack(nt);
+    this.micTrack = nt;
+    for (const { pc } of this.peers.values()) {
+      const s = pc.getSenders().find((se) => se.track?.kind === "audio");
+      if (s) await s.replaceTrack(nt);
+    }
+  }
+
   async setMic(id: string) {
     this.selMic = id;
     // nothing to swap yet: the choice is remembered and used when the mic opens
     if (!this.micTrack) return;
-    const ns = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: id } } });
+    const ns = await navigator.mediaDevices.getUserMedia({
+      audio: { ...micTreatment(), deviceId: { exact: id } },
+    });
     const nt = ns.getAudioTracks()[0]; nt.enabled = this.micOn;
     this.local.getAudioTracks().forEach((tr) => { this.local.removeTrack(tr); tr.stop(); });
     this.local.addTrack(nt);

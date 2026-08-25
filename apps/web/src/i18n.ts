@@ -521,6 +521,14 @@ const EN: Record<string, string> = {
   "กำลังไป {name}": "Heading to {name}",
 
   // ---- the map editor (editor.html) ----
+  "ตัดเสียงรบกวนและเสียงสะท้อน": "Cut background noise and echo",
+  "ตัดเสียงพัดลม เสียงพิมพ์ และเสียงก้องจากลำโพง พร้อมปรับความดังให้สม่ำเสมอ — ปิดถ้าจะเล่นดนตรีหรือใช้ไมค์ที่มีตัวประมวลผลของตัวเองอยู่แล้ว": "Cuts fan noise, typing and speaker echo, and evens out the volume — turn it off to play music, or for a microphone that already does its own processing",
+  "เปิด": "On",
+  "ฝังหน้าเว็บ": "Embedded page",
+  "ที่อยู่เว็บที่จะเปิด": "The page it opens",
+  "กด E ตอนยืนข้าง ๆ เพื่อเปิด": "Stand next to it and press E to open",
+  "ต้องเป็น https:// — วางแบบอื่นไม่ได้ เพราะหน้านี้ถูกเปิดในเฟรมบนโดเมนของเรา": "Must be https:// — anything else is refused, because the page is opened in a frame on our own domain",
+  "ต้องใส่ที่อยู่ https:// ก่อนวางวัตถุนี้": "Enter an https:// address before placing this object",
   "ย้ายมาก่อนหน้า": "Move earlier",
   "ย้ายไปถัดไป": "Move later",
   "ลบแผนที่นี้": "Delete this map",

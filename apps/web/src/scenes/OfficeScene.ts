@@ -1090,7 +1090,10 @@ export class OfficeScene extends Phaser.Scene {
     dmInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") sendDm(); });
     // the gear opens the preferences dialog (members, space settings)
     void this.buildMapSwitcher();
-    const prefs = setupPrefsModal(WORKSPACE, IS_DEFAULT_WORKSPACE);
+    const prefs = setupPrefsModal(WORKSPACE, IS_DEFAULT_WORKSPACE, () => {
+      // reopening is the only way the change reaches a track that is already live
+      void (this.webrtc as { refreshMic?: () => Promise<void> } | undefined)?.refreshMic?.();
+    });
     document.getElementById("rail-settings")?.addEventListener("click", () => prefs.open("members"));
     document.getElementById("sb-close")?.addEventListener("click", () => sidebar?.classList.add("closed"));
     document.getElementById("sb-search")?.addEventListener("input", () => this.refreshRoster());
