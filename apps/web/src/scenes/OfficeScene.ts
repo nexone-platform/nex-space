@@ -129,6 +129,16 @@ const STATUS_META: Record<string, { color: number; css: string; label: string }>
 const statusMeta = (s: string) => STATUS_META[s] ?? STATUS_META.online;
 const AFK_MS = 180_000;              // no input for 3 min -> away
 const MEETING_ROOM = THEME.meetingRoom;
+
+/** what each gesture is called, for the button's tooltip */
+const EMOTE_NAMES: Record<string, string> = {
+  wave: "โบกมือ", dance: "เต้น", clap: "ปรบมือ",
+  thumbs: "ยกนิ้วให้", party: "ฉลอง", think: "กำลังคิด",
+};
+
+// Must match STICKERS in the game server, which is the side that refuses one:
+// an emoji this list offers and that one rejects is a button that does nothing.
+const STICKER_SET = ["❤️", "👍", "🎉", "⭐", "❗", "❓", "💡", "🔥", "☕", "🍕", "🌿", "🚧"];
 /** the private areas drawn on this map — empty for a map that has none */
 const PRIVATE_AREAS = THEME.areas;
 /** which map of the space this tab is on; "" on one of the built-in layouts */
@@ -185,6 +195,10 @@ export class OfficeScene extends Phaser.Scene {
   private myArea?: PrivateArea;
   /** locked rooms this visit has been let into, by area id */
   private admitted = new Set<string>();
+  /** the sticker the next click on the floor will leave, if any */
+  private armedSticker = "";
+  /** what is drawn for each sticker in room state, so removals can be undrawn */
+  private stickerArt = new Map<string, Phaser.GameObjects.Text>();
   /** the last place I stood that I was allowed to stand in */
   private lastAllowed?: { x: number; y: number };
   /** the locked room I am being turned away from, if any */
@@ -445,6 +459,13 @@ export class OfficeScene extends Phaser.Scene {
       downAt = null;
       if (!from || from.onObject || p.button !== 0) return;
       if (Math.hypot(p.x - from.x, p.y - from.y) > 6) return; // a drag, not a click
+      // an armed sticker owns the next click: walking there instead would be a
+      // button that appears to do nothing
+      if (this.armedSticker) {
+        this.room?.send("sticker", { emoji: this.armedSticker, x: Math.round(p.worldX), y: Math.round(p.worldY) });
+        this.armSticker("");
+        return;
+      }
       this.walkTo(p.worldX, p.worldY);
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
@@ -802,6 +823,18 @@ export class OfficeScene extends Phaser.Scene {
       room.onMessage("ping", (msg: { from: string; name: string; x: number; y: number }) => this.onPing(msg));
       room.onMessage("wave", (msg: { from: string; name: string }) => this.onWave(msg));
 
+      // a gesture, played on whoever made it
+      room.onMessage("emote", (msg: { from: string; kind: string }) => this.playEmote(msg.from, msg.kind));
+
+      $(room.state).stickers.onAdd((st: any, id: string) => {
+        this.drawSticker(id, st);
+        $(st).onChange(() => this.drawSticker(id, st));
+      });
+      $(room.state).stickers.onRemove((_st: any, id: string) => {
+        this.stickerArt.get(id)?.destroy();
+        this.stickerArt.delete(id);
+      });
+
       // somebody is at the door of the locked room I am in
       room.onMessage("knock", (msg: { from: string; name: string; area: string; label: string }) =>
         this.onKnock(msg));
@@ -950,15 +983,55 @@ export class OfficeScene extends Phaser.Scene {
     w.onState = refresh;
     refresh();
 
-    // emoji reactions → sent as a proximity chat bubble
+    // Three things that look alike and are not: something you SAY, something
+    // your avatar DOES, and something you LEAVE BEHIND. They share a popover
+    // because that is where a person looks for all three, and they are labelled
+    // because a reaction that vanishes and a sticker that stays are not the
+    // same offer.
     const pop = document.getElementById("emoji-pop") as HTMLElement | null;
     if (emoji && pop) {
-      pop.innerHTML = ["👍", "❤️", "😂", "🎉", "👋", "😮"].map((e) => `<button>${e}</button>`).join("");
-      Array.from(pop.children).forEach((b) => ((b as HTMLElement).onclick = () => {
-        this.room?.send("chat", { text: (b as HTMLElement).textContent ?? "" });
-        pop.style.display = "none";
-      }));
+      const hide = () => { pop.style.display = "none"; };
+      const row = (label: string, items: string[], make: (v: string) => HTMLElement) => {
+        const head = document.createElement("div");
+        head.className = "ep-head";
+        head.textContent = t(label);
+        pop.appendChild(head);
+        const box = document.createElement("div");
+        box.className = "ep-row";
+        for (const v of items) box.appendChild(make(v));
+        pop.appendChild(box);
+      };
+
+      pop.innerHTML = "";
+      row("พูดออกไป", ["👍", "❤️", "😂", "🎉", "👋", "😮"], (e) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = e;
+        b.onclick = () => { this.room?.send("chat", { text: e }); hide(); };
+        return b;
+      });
+      row("ท่าทาง", Object.keys(OfficeScene.EMOTES), (kind) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = OfficeScene.EMOTES[kind].icon;
+        b.title = t(EMOTE_NAMES[kind] ?? kind);
+        b.setAttribute("aria-label", b.title);
+        b.onclick = () => { this.room?.send("emote", kind); hide(); };
+        return b;
+      });
+      row("สติกเกอร์ — เลือกแล้วคลิกบนพื้น", STICKER_SET, (e) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = e;
+        b.dataset.sticker = e;
+        b.onclick = () => { this.armSticker(this.armedSticker === e ? "" : e); hide(); };
+        return b;
+      });
+
       emoji.onclick = () => { pop.style.display = pop.style.display === "flex" ? "none" : "flex"; };
+      // Escape puts a held sticker away — the key that closes everything else here
+      this.input.keyboard!.on("keydown-ESC", () => { if (this.armedSticker) this.armSticker(""); });
+      document.getElementById("place-cancel")?.addEventListener("click", () => this.armSticker(""));
     }
 
     // leave the room
@@ -1909,6 +1982,87 @@ export class OfficeScene extends Phaser.Scene {
     });
     this.notify("🚪", t("{name} เคาะประตู {area}").replace("{name}", msg.name).replace("{area}", t(msg.label)),
       t("เปิดให้เข้าได้จากการ์ดนี้"), () => this.onKnock(msg));
+  }
+
+  // ---- gestures and stickers -----------------------------------------------
+
+  /** what each gesture looks like: the mark shown, and how the body moves */
+  private static readonly EMOTES: Record<string, { icon: string; move: "swing" | "hop" | "none" }> = {
+    wave: { icon: "\ud83d\udc4b", move: "swing" },
+    dance: { icon: "\ud83d\udd7a", move: "hop" },
+    clap: { icon: "\ud83d\udc4f", move: "swing" },
+    thumbs: { icon: "\ud83d\udc4d", move: "none" },
+    party: { icon: "\ud83c\udf89", move: "hop" },
+    think: { icon: "\ud83e\udd14", move: "none" },
+  };
+
+  /**
+   * Play a gesture on somebody's avatar.
+   *
+   * The mark rises and fades over a couple of seconds. The body moves too,
+   * because a symbol floating over a motionless figure reads as a notification
+   * rather than as that person doing something.
+   */
+  private playEmote(sessionId: string, kind: string) {
+    const spec = OfficeScene.EMOTES[kind];
+    if (!spec) return;
+    const sprite = sessionId === this.mySessionId ? this.player : this.remotes.get(sessionId)?.sprite;
+    if (!sprite) return;
+
+    const mark = this.add.text(sprite.x, sprite.y - 40, spec.icon, { fontSize: "20px" })
+      .setOrigin(0.5).setDepth(100000).setResolution(3);
+    this.tweens.add({
+      targets: mark, y: sprite.y - 62, alpha: 0, duration: 2000, ease: "Sine.easeOut",
+      onComplete: () => mark.destroy(),
+    });
+
+    if (spec.move === "hop") {
+      this.tweens.add({ targets: sprite, y: sprite.y - 7, duration: 160, yoyo: true, repeat: 3, ease: "Sine.easeInOut" });
+    } else if (spec.move === "swing") {
+      this.tweens.add({ targets: sprite, angle: 9, duration: 130, yoyo: true, repeat: 3, ease: "Sine.easeInOut",
+        onComplete: () => sprite.setAngle(0) });
+    }
+  }
+
+  /**
+   * Draw one sticker, or move it if it changed.
+   *
+   * Only the ones on the map this tab is showing: a space may hold several, and
+   * a doodle from the second floor drawn over the ground floor would be a ghost.
+   * Clicking your own picks it back up; the server decides whether it is yours.
+   */
+  private drawSticker(id: string, st: { emoji: string; x: number; y: number; map: string; by: string }) {
+    // THEME.id is this tab's map: for a stored map the API holds its id and its
+    // name in the space to the same value, and for a built-in it is the theme's
+    // own id, which is what the room server names too. A sticker with no map at
+    // all predates the field and belongs wherever it is found.
+    const here = !st.map || st.map === THEME.id;
+    if (!here) { this.stickerArt.get(id)?.destroy(); this.stickerArt.delete(id); return; }
+
+    let art = this.stickerArt.get(id);
+    if (!art) {
+      art = this.add.text(st.x, st.y, st.emoji, { fontSize: "18px" })
+        .setOrigin(0.5).setDepth(-880).setResolution(3).setAlpha(0.95);
+      art.setInteractive({ useHandCursor: true });
+      art.on("pointerdown", (p: Phaser.Input.Pointer) => {
+        p.event.stopPropagation();
+        this.room?.send("unsticker", id);
+      });
+      this.stickerArt.set(id, art);
+    }
+    art.setText(st.emoji).setPosition(st.x, st.y);
+    if (st.by) art.setData("by", st.by);
+  }
+
+  /** hold a sticker, ready to put it down; passing "" puts it away */
+  private armSticker(emoji: string) {
+    this.armedSticker = emoji;
+    const pop = document.getElementById("emoji-pop");
+    pop?.querySelectorAll<HTMLElement>("[data-sticker]").forEach((b) =>
+      b.setAttribute("aria-pressed", String(b.dataset.sticker === emoji && !!emoji)));
+    document.body.classList.toggle("placing", !!emoji);
+    const hint = document.getElementById("place-hint");
+    if (hint) hint.hidden = !emoji;
   }
 
   /** somebody would like us to come over */

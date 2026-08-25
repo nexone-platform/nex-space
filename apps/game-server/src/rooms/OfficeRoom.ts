@@ -1,5 +1,5 @@
 import { Room, Client } from "colyseus";
-import { OfficeState, Player } from "../schema";
+import { OfficeState, Player, Sticker } from "../schema";
 import { AREAS, canHear, type PrivateArea } from "../areas";
 
 const TILE = 32;
@@ -10,6 +10,18 @@ const NEAR_PX = 5 * TILE; // proximity radius (5 tiles)
 // to come over is exactly what somebody on do-not-disturb is asking not to get.
 const STATUSES = ["online", "afk", "muted", "meeting", "busy"];
 const DEFAULT_WORKSPACE = "main";
+
+// The gestures and stickers a browser may ask for. An allow-list rather than
+// "any short string": these are drawn in everybody's window, and an open text
+// field there is a way to write on somebody else's screen.
+const EMOTES = ["wave", "dance", "clap", "thumbs", "party", "think"];
+const STICKERS = ["\u2764\ufe0f", "\ud83d\udc4d", "\ud83c\udf89", "\u2b50", "\u2757", "\u2753", "\ud83d\udca1", "\ud83d\udd25", "\u2615", "\ud83c\udf55", "\ud83c\udf3f", "\ud83d\udea7"];
+
+/** how long a sticker stays before the room sweeps it */
+const STICKER_TTL_MS = 4 * 60 * 60 * 1000;
+/** and how many there may be at once — a floor nobody can see is not decorated */
+const STICKERS_PER_ROOM = 80;
+const STICKERS_PER_PERSON = 12;
 const API_URL = process.env.API_URL || "http://localhost:3001";
 
 type MoveMsg = { x: number; y: number; dir: string; moving: boolean };
@@ -45,6 +57,9 @@ export class OfficeRoom extends Room<OfficeState> {
   private dmStoreWarned = false;
   /** last gesture per sender-to-target pair, keyed by kind, so no button can be leaned on */
   private pingedAt = new Map<string, number>();
+  /** who placed each sticker, so only they can pick it up again */
+  private stickerBy = new Map<string, string>();
+  private stickerSeq = 0;
 
   /**
    * Gate the room on workspace membership. The API is the source of truth:
@@ -83,6 +98,9 @@ export class OfficeRoom extends Room<OfficeState> {
     this.setState(new OfficeState());
     console.log(`[office] room created for workspace "${this.workspace}"`);
     void this.loadAreas();
+    // The room outlives everybody in it, so the sweep is on a clock rather than
+    // on somebody arriving to trigger it.
+    this.clock.setInterval(() => this.sweepStickers(), 10 * 60 * 1000);
 
     // client-authoritative position for Phase 2 MVP (server relays to others).
     // Hardening (server-side simulation/anti-cheat) is a later phase.
@@ -168,6 +186,78 @@ export class OfficeRoom extends Room<OfficeState> {
         return;
       }
       this.admit(this.key(me, a), msg.to!, me.name, a);
+    });
+
+    /**
+     * A gesture, played on the avatar.
+     *
+     * Sent to everybody who can SEE you rather than everybody who can hear you:
+     * a wave across a room is the whole point of waving, and the earshot rule
+     * would swallow it. Another map is out of sight, so that is where it stops.
+     */
+    this.onMessage("emote", (client, kind: string) => {
+      const me = this.state.players.get(client.sessionId);
+      if (!me || EMOTES.indexOf(String(kind)) < 0) return;
+
+      const gate = `emote:${client.sessionId}`;
+      if (Date.now() - (this.pingedAt.get(gate) ?? 0) < 1500) return;
+      this.pingedAt.set(gate, Date.now());
+
+      const payload = { from: client.sessionId, kind: String(kind) };
+      client.send("emote", payload);
+      for (const c of this.clients) {
+        if (c.sessionId === client.sessionId) continue;
+        const p = this.state.players.get(c.sessionId);
+        if (p && this.sameMap(me, p)) c.send("emote", payload);
+      }
+    });
+
+    /**
+     * Leave a sticker on the floor.
+     *
+     * It goes into room state rather than out as a message, so it is still
+     * there for somebody who walks past in an hour — which is the only reason
+     * to leave one.
+     */
+    this.onMessage("sticker", (client, msg: { emoji?: string; x?: number; y?: number }) => {
+      const me = this.state.players.get(client.sessionId);
+      if (!me) return;
+      const emoji = String(msg?.emoji ?? "");
+      if (STICKERS.indexOf(emoji) < 0) return;
+      if (typeof msg?.x !== "number" || typeof msg?.y !== "number") return;
+      if (!Number.isFinite(msg.x) || !Number.isFinite(msg.y)) return;
+
+      const gate = `sticker:${client.sessionId}`;
+      if (Date.now() - (this.pingedAt.get(gate) ?? 0) < 1000) return;
+      this.pingedAt.set(gate, Date.now());
+
+      // one person cannot paper the whole floor, and the room as a whole has a
+      // ceiling too — the oldest goes rather than the newest being refused,
+      // because a button that silently does nothing is worse than a short memory
+      const mine = [...this.stickerBy].filter(([, sid]) => sid === client.sessionId).map(([id]) => id);
+      if (mine.length >= STICKERS_PER_PERSON) this.dropSticker(this.oldestOf(mine));
+      if (this.state.stickers.size >= STICKERS_PER_ROOM) this.dropSticker(this.oldestOf([...this.state.stickers.keys()]));
+
+      const st = new Sticker();
+      st.emoji = emoji;
+      st.x = Math.round(msg.x);
+      st.y = Math.round(msg.y);
+      st.map = me.map || this.landing;
+      st.by = me.name;
+      st.at = Date.now();
+      const id = `s${++this.stickerSeq}`;
+      this.state.stickers.set(id, st);
+      this.stickerBy.set(id, client.sessionId);
+    });
+
+    /** pick one back up — yours, or anybody's if you run the place */
+    this.onMessage("unsticker", (client, id: string) => {
+      const key = String(id ?? "");
+      if (!this.state.stickers.has(key)) return;
+      const role = (client.auth as { role?: string } | undefined)?.role;
+      const mine = this.stickerBy.get(key) === client.sessionId;
+      if (!mine && role !== "owner" && role !== "admin") return;
+      this.dropSticker(key);
     });
 
     // presence status shown as the dot on each player's name tag
@@ -475,6 +565,28 @@ export class OfficeRoom extends Room<OfficeState> {
         console.warn(`[office:${this.workspace}] a visit could not be closed:`, e);
       }
     }
+  }
+
+  private dropSticker(id: string | undefined) {
+    if (!id) return;
+    this.state.stickers.delete(id);
+    this.stickerBy.delete(id);
+  }
+
+  private oldestOf(ids: string[]) {
+    let best: string | undefined;
+    let when = Infinity;
+    for (const id of ids) {
+      const at = this.state.stickers.get(id)?.at ?? 0;
+      if (at < when) { when = at; best = id; }
+    }
+    return best;
+  }
+
+  /** stickers do not last forever, or a space is eventually only its doodles */
+  private sweepStickers() {
+    const cutoff = Date.now() - STICKER_TTL_MS;
+    for (const [id, st] of this.state.stickers) if (st.at < cutoff) this.dropSticker(id);
   }
 
   /** let somebody into a locked room, and tell them so */

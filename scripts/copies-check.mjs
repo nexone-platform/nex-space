@@ -48,5 +48,51 @@ for (const { what, a, b } of PAIRS) {
   console.error(`    copy one over the other:  cp ${a} ${b}`);
 }
 
-if (!bad) console.log(`copies: ${PAIRS.length} duplicated files match their twin`);
+// ---- lists that have to agree, in files that are not copies ------------------
+//
+// The browser offers these and the game server refuses anything not on its own
+// list. An entry on one side only is a button that does nothing when pressed.
+
+const LISTS = [
+  {
+    what: "stickers",
+    a: { file: "apps/web/src/scenes/OfficeScene.ts", re: /const STICKER_SET = \[([^\]]+)\]/ },
+    b: { file: "apps/game-server/src/rooms/OfficeRoom.ts", re: /const STICKERS = \[([^\]]+)\]/ },
+  },
+  {
+    what: "gestures",
+    a: { file: "apps/web/src/scenes/OfficeScene.ts", re: /EMOTES: Record<[^>]+> = \{([\s\S]*?)\};/, keys: true },
+    b: { file: "apps/game-server/src/rooms/OfficeRoom.ts", re: /const EMOTES = \[([^\]]+)\]/ },
+  },
+];
+
+const values = ({ file, re, keys }) => {
+  const src = readFileSync(join(ROOT, file), "utf8");
+  const m = re.exec(src);
+  if (!m) throw new Error(`${file}: could not find the list`);
+  if (keys) return [...m[1].matchAll(/^\s{4}(\w+):/gm)].map((k) => k[1]).sort();
+  // the source is a JS array literal of strings, so JSON can read it once the
+  // whitespace is gone — and any escape in it has already been resolved by tsc
+  return JSON.parse(`[${m[1].replace(/\s+/g, "")}]`).sort();
+};
+
+for (const { what, a, b } of LISTS) {
+  let x, y;
+  try { x = values(a); y = values(b); } catch (e) {
+    bad++;
+    console.error(`! ${what}: ${e.message}`);
+    continue;
+  }
+  if (JSON.stringify(x) === JSON.stringify(y)) {
+    console.log(`  ${what}: both sides offer the same ${x.length}`);
+    continue;
+  }
+  bad++;
+  const only = (p, q) => p.filter((v) => !q.includes(v));
+  console.error(`! ${what}: the two lists disagree`);
+  if (only(x, y).length) console.error(`    only in ${a.file}: ${only(x, y).join(" ")}`);
+  if (only(y, x).length) console.error(`    only in ${b.file}: ${only(y, x).join(" ")}`);
+}
+
+if (!bad) console.log(`copies: ${PAIRS.length} duplicated files and ${LISTS.length} shared lists all agree`);
 process.exit(bad ? 1 : 0);

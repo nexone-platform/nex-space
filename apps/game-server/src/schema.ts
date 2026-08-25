@@ -26,6 +26,29 @@ export class Player extends Schema {
   @type("string") map = "";
 }
 
+/**
+ * Something somebody left on the floor.
+ *
+ * In room state rather than in a message, because the point of a sticker is
+ * that it is still there when you walk past later — a message only reaches the
+ * people who were already looking. That also means it survives a reload of
+ * anybody's browser, and does not survive a restart of this server, which is
+ * the right trade for a doodle.
+ */
+export class Sticker extends Schema {
+  @type("string") emoji = "";
+  /** world pixels, like a player's position */
+  @type("number") x = 0;
+  @type("number") y = 0;
+  /** which map of the space it is stuck to */
+  @type("string") map = "";
+  /** who left it, for the tooltip — a name, not an account */
+  @type("string") by = "";
+  /** when, so the browser can fade the old ones and the server can sweep them */
+  @type("number") at = 0;
+}
+
 export class OfficeState extends Schema {
   @type({ map: Player }) players = new MapSchema<Player>();
+  @type({ map: Sticker }) stickers = new MapSchema<Sticker>();
 }

@@ -142,6 +142,32 @@
         background: #2e3238f2; border-radius: 12px; padding: 5px; display: none; gap: 2px; box-shadow: 0 6px 20px #0006; }
       #emoji-pop button { border: none; background: transparent; font-size: 20px; cursor: pointer; padding: 4px 7px; border-radius: 8px; }
       #emoji-pop button:hover { background: #ffffff1f; }
+      /* Three offers in one popover, each labelled: a reaction that vanishes and
+         a sticker that stays are not the same thing, and the icons alone cannot
+         say which is which. */
+      #emoji-pop { flex-direction: column; align-items: stretch; gap: 2px; padding: 8px 8px 9px; }
+      #emoji-pop .ep-head {
+        font-size: 10.5px; font-weight: 700; letter-spacing: .04em; color: #ffffff8c;
+        padding: 5px 4px 2px; white-space: nowrap;
+      }
+      #emoji-pop .ep-head:first-child { padding-top: 0; }
+      #emoji-pop .ep-row { display: flex; flex-wrap: wrap; gap: 1px; max-width: 268px; }
+      #emoji-pop button[aria-pressed="true"] { background: var(--teal); }
+
+      /* holding a sticker: the map says where it will land */
+      body.placing #app { cursor: copy; }
+      #place-hint {
+        position: fixed; z-index: 23; left: calc(var(--dock) + (100vw - var(--dock)) / 2); bottom: 108px;
+        transform: translateX(-50%); display: flex; align-items: center; gap: 10px;
+        background: #1c1b22e6; color: #fff; padding: 8px 10px 8px 14px; border-radius: 20px;
+        font: 13px "Segoe UI", sans-serif; box-shadow: 0 3px 12px #0004; white-space: nowrap;
+      }
+      #place-hint[hidden] { display: none; }
+      #place-hint button {
+        border: none; background: #ffffff1f; color: #fff; border-radius: 14px;
+        padding: 4px 10px; font: 600 12px "Segoe UI", sans-serif; cursor: pointer;
+      }
+      #place-hint button:hover { background: #ffffff33; }
       /* zoom controls (right, vertical) */
       #zoom-bar { position: fixed; right: 12px; top: 50%; transform: translateY(-50%); z-index: 20;
         display: flex; flex-direction: column; gap: 6px; }
@@ -1614,6 +1640,17 @@
       <button id="zb-fully" class="zb" title="ซูมออกสุด (M)"></button>
     </div>
     <div id="interact-hint"><kbd>E</kbd> <span id="interact-label"></span></div>
+
+    <!-- What the emoji button opens. This element was referenced by the CSS and
+         by the scene but never existed in the markup, so the button did nothing
+         at all until stickers needed it. -->
+    <div id="emoji-pop"></div>
+
+    <!-- a sticker in hand, waiting for somewhere to go -->
+    <div id="place-hint" hidden>
+      <span>คลิกบนพื้นเพื่อวางสติกเกอร์</span>
+      <button type="button" id="place-cancel">ยกเลิก</button>
+    </div>
 
     <!-- standing in a private area: who can hear you, said out loud -->
     <div id="area-chip" hidden>

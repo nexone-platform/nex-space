@@ -449,6 +449,16 @@ const EN: Record<string, string> = {
   "แชตห้อง": "Room chat",
   "แชตห้องรวม": "Room chat",
   "ห้องประชุม": "Meeting room",
+  // ---- gestures and stickers (P2-10) ----
+  "พูดออกไป": "Say it",
+  "ท่าทาง": "Gestures",
+  "สติกเกอร์ — เลือกแล้วคลิกบนพื้น": "Stickers — pick one, then click the floor",
+  "คลิกบนพื้นเพื่อวางสติกเกอร์": "Click the floor to leave the sticker",
+  "เต้น": "Dance",
+  "ปรบมือ": "Clap",
+  "ยกนิ้วให้": "Thumbs up",
+  "ฉลอง": "Celebrate",
+  "กำลังคิด": "Thinking",
 
   // ---- the admin dashboard (admin.html) ----
   "แดชบอร์ดผู้ดูแล": "Admin dashboard",
