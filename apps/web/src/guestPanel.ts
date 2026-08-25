@@ -76,6 +76,14 @@ const closeMenus = () => document.querySelectorAll(".mp-menu").forEach((el) => e
 document.addEventListener("click", closeMenus);
 
 export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
+  /**
+   * Staff, learned from the same answer the list comes in.
+   *
+   * A member may read this pane — "who is that visitor by the pantry" is a fair
+   * question for anybody who works here — but issuing and revoking passes is
+   * staff work, and the API does not send them the codes at all.
+   */
+  let staff = true;
   o.host.innerHTML = "";
   o.host.className = "mp mp-table gp";
 
@@ -276,6 +284,7 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
    * a new length, since clearing a revocation would leave the date in the past.
    */
   const menuItems = (p: GuestPass): MenuItem[] => {
+    if (!staff) return [];
     const items: MenuItem[] = [];
     if (p.state === "archived") {
       items.push({ label: t("เอาออกจากที่เก็บถาวร"), icon: "↩", run: () => void patch(p, { archived: false }, t("กู้คืนบัตรของ {name} แล้ว", { name: p.name })) });
@@ -392,6 +401,8 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
       row.append(ava, info, chip, seen);
 
       const items = menuItems(p);
+      // an empty menu is a button that opens nothing, which reads as broken
+      if (!items.length) { list.appendChild(row); continue; }
       const wrap = document.createElement("span");
       wrap.className = "mp-kebab";
       const btn = document.createElement("button");
@@ -435,7 +446,12 @@ export function mountGuestPanel(o: GuestPanelOptions): GuestPanel {
           : d.error || t("โหลดรายชื่อผู้เยี่ยมชมไม่ได้"), "err");
       }
       denied = false;
+      staff = d.myRole === "owner" || d.myRole === "admin";
       tools.style.display = "";
+      // A member gets the list and the search, and no way to invite anybody:
+      // that button would only ever be refused.
+      add.style.display = staff ? "" : "none";
+      if (!staff) form.hidden = true;
       passes = d.guests ?? [];
       o.onCount?.(passes.filter((p) => p.state === "active").length);
       render();

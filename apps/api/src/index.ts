@@ -788,12 +788,37 @@ const passState = (g: { expiresAt: Date | null; revokedAt: Date | null; archived
   : g.expiresAt && g.expiresAt.getTime() <= Date.now() ? "expired"
   : "active";
 
-const passView = (g: any) => ({
-  id: g.id, name: g.name, code: g.code, note: g.note ?? undefined,
+/**
+ * A pass as staff see it — including the code, which is the credential.
+ *
+ * @param full false for a plain member, who may see WHO is visiting but must
+ *   not be handed the thing that lets somebody in. A member reading the list is
+ *   answering "who is this stranger by the pantry"; issuing a pass is not
+ *   theirs to do, and a code they can copy is a pass they can issue.
+ */
+const passView = (g: any, full = true) => ({
+  id: g.id, name: g.name, note: g.note ?? undefined,
   state: passState(g), expiresAt: g.expiresAt, revokedAt: g.revokedAt,
   archivedAt: g.archivedAt, lastSeenAt: g.lastSeenAt, visits: g.visits,
   createdAt: g.createdAt,
+  ...(full ? { code: g.code } : {}),
 });
+
+/**
+ * The workspace and this person's standing in it, for anybody who belongs.
+ *
+ * Separate from managedWorkspace because seeing and doing are different rights:
+ * a member may look at the guest list, and only staff may change it.
+ */
+async function memberWorkspace(slug: string, userId: string) {
+  const w = await prisma.workspace.findUnique({ where: { slug } });
+  if (!w) return { error: 404 as const };
+  const m = await prisma.membership.findUnique({
+    where: { userId_workspaceId: { userId, workspaceId: w.id } },
+  });
+  if (!m || m.role === "guest") return { error: 403 as const };
+  return { w, role: m.role };
+}
 
 /** guest passes are staff business: resolve the workspace and refuse below admin */
 async function managedWorkspace(slug: string, userId: string) {
@@ -810,13 +835,15 @@ const DAY_MS = 86_400_000;
 const PASS_DAYS = [1, 7, 30, 90];
 
 app.get("/workspaces/:slug/guests", requireAuth, async (req: AuthedRequest, res) => {
-  const got = await managedWorkspace(req.params.slug, req.user!.id);
+  // A member may read the list; only staff get the codes and the buttons.
+  const got = await memberWorkspace(req.params.slug, req.user!.id);
   if (got.error) return res.status(got.error).json({ error: got.error === 404 ? "not found" : "forbidden" });
+  const staff = got.role === "owner" || got.role === "admin";
   const rows = await prisma.guestPass.findMany({
     where: { workspaceId: got.w.id },
     orderBy: { createdAt: "desc" },
   });
-  res.json({ myRole: got.role, guests: rows.map(passView) });
+  res.json({ myRole: got.role, guests: rows.map((g) => passView(g, staff)) });
 });
 
 app.post("/workspaces/:slug/guests", requireAuth, async (req: AuthedRequest, res) => {

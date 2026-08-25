@@ -66,8 +66,15 @@ await call("PATCH", `/workspaces/${slug}/members/${admin.id}`, { token: owner.to
 const other = await call("POST", "/workspaces", { token: owner.token, body: { name: `Other ${stamp}` } });
 
 // ---- who may manage passes ----
+// Reading and managing were split apart when the roles were written down: a
+// member may see WHO is visiting, because that is a fair question for anybody
+// who works here, and never the code, because a code they can copy is a pass
+// they can issue. The rest of this section is about managing, which is staff work.
 const listedByMember = await call("GET", `/workspaces/${slug}/guests`, { token: plain.token });
-ok("a plain member cannot see the guest list", listedByMember.status === 403, `status=${listedByMember.status}`);
+ok("a plain member may read the guest list", listedByMember.status === 200, `status=${listedByMember.status}`);
+ok("  · and is never handed a pass code",
+  (listedByMember.guests ?? []).every((g) => g.code === undefined),
+  JSON.stringify(listedByMember.guests?.[0] ?? null).slice(0, 90));
 
 const madeByMember = await call("POST", `/workspaces/${slug}/guests`, { token: plain.token, body: { name: "X" } });
 ok("a plain member cannot issue a pass", madeByMember.status === 403, `status=${madeByMember.status}`);

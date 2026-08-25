@@ -544,6 +544,9 @@
       #pc-actions button:not(.icon) { flex: 1; }
       #pc-actions button.icon { padding: 9px 11px; flex: 0 0 auto; }
       #pc-actions button:hover { background: var(--teal); border-color: var(--teal); color: #fff; }
+      #pc-actions .danger { color: #ff9a92; }
+      #pc-actions .danger:hover { background: #4a2320; border-color: #7a3a34; color: #ffb3ac; }
+      #pc-actions .danger[hidden] { display: none; }
       #pc-actions button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
       #pc-actions button[hidden], #pc-actions[hidden] { display: none; }
 
@@ -1512,11 +1515,11 @@
           <div class="pf-group">ออฟฟิศ</div>
           <button class="pf-item active" data-pane="members">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6a3 3 0 0 1 0 6"/><path d="M18 20a6 6 0 0 0-3-5"/></svg>
-            <span>จัดการสมาชิก</span>
+            <span id="pf-nav-members-label">จัดการสมาชิก</span>
           </button>
           <button class="pf-item" data-pane="guests" id="pf-nav-guests">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="8" r="3.2"/><path d="M4 20a6 6 0 0 1 12 0"/><path d="M19 8v6M16 11h6"/></svg>
-            <span>จัดการแขก</span>
+            <span id="pf-nav-guests-label">จัดการแขก</span>
           </button>
         </nav>
         <section class="pf-main">
@@ -1815,6 +1818,11 @@
         </button>
         <button id="pc-ping" class="icon" title="เรียกมาหา">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        </button>
+        <!-- staff only, and last: it is the one action here that is done TO
+             somebody rather than with them -->
+        <button id="pc-kick" class="icon danger" title="เชิญออกจากพื้นที่" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10 20H5.5A1.5 1.5 0 0 1 4 18.5v-13A1.5 1.5 0 0 1 5.5 4H10"/><path d="M20 12H10"/><path d="M16.5 8.5 20 12l-3.5 3.5"/></svg>
         </button>
       </div>
 

@@ -184,12 +184,31 @@ export function setupPrefsModal(
     guests = mountGuestPanel({ host, slug, openDoor: () => allowGuests });
   };
 
-  /** hide what this role may not do instead of letting the server refuse later */
+  /**
+   * What each role is shown.
+   *
+   * Everybody who belongs sees the same two office panes; what changes is
+   * whether they are lists or desks. Staff get "จัดการ…" and the buttons that
+   * go with it; a member gets the same rooms with the controls taken out,
+   * because "who is in this space" and "who is that visitor" are reasonable
+   * questions for anybody who works here. A guest is a visitor and gets
+   * neither — they are the subject of those lists, not a reader of them.
+   *
+   * Hiding is a courtesy, not the rule. Every entry taken away here is refused
+   * again by the API, which is the copy that counts.
+   */
   const applyRole = () => {
     const manager = myRole === "owner" || myRole === "admin";
-    // the pane itself refuses below admin; hiding the entry saves the dead end
+    const belongs = myRole !== "guest";
+
+    const navMembers = modal.querySelector<HTMLElement>('[data-pane="members"]');
     const navGuests = $("pf-nav-guests");
-    if (navGuests) navGuests.style.display = manager && !isPublic ? "" : "none";
+    if (navMembers) navMembers.style.display = belongs && !isPublic ? "" : "none";
+    if (navGuests) navGuests.style.display = belongs && !isPublic ? "" : "none";
+    const mLabel = $("pf-nav-members-label");
+    const gLabel = $("pf-nav-guests-label");
+    if (mLabel) mLabel.textContent = manager ? t("จัดการสมาชิก") : t("สมาชิก");
+    if (gLabel) gLabel.textContent = manager ? t("จัดการแขก") : t("ผู้เยี่ยมชม");
     for (const id of ["pf-name", "pf-guests"]) {
       const el = $<HTMLInputElement>(id);
       if (el) el.disabled = !manager;

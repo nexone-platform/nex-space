@@ -197,6 +197,14 @@ export class OfficeScene extends Phaser.Scene {
   private remotes = new Map<string, Remote>();
   /** the area I am standing in, remembered so entering one can be announced once */
   private myArea?: PrivateArea;
+  /**
+   * What I may do in this space: owner, admin, member or guest.
+   *
+   * Only used to decide what to OFFER. Every rule it stands in for is enforced
+   * again by the server, which is the copy that matters — this one exists so a
+   * person is not shown a button that will be refused.
+   */
+  private myRole = "member";
   /** locked rooms this visit has been let into, by area id */
   private admitted = new Set<string>();
   /** the sticker the next click on the floor will leave, if any */
@@ -800,6 +808,21 @@ export class OfficeScene extends Phaser.Scene {
       room.onMessage("ping", (msg: { from: string; name: string; x: number; y: number }) => this.onPing(msg));
       room.onMessage("wave", (msg: { from: string; name: string }) => this.onWave(msg));
 
+      /**
+       * Somebody with the standing to do it has ended this visit.
+       *
+       * Said plainly and by name. Being disconnected with no explanation is
+       * indistinguishable from the network failing, and a person who thinks the
+       * network failed will reconnect immediately.
+       */
+      room.onMessage("kicked", (msg: { by: string }) => {
+        this.webrtc?.dispose();
+        alert(msg.by
+          ? t("{name} เชิญคุณออกจากพื้นที่นี้").replace("{name}", msg.by)
+          : t("คุณถูกเชิญออกจากพื้นที่นี้"));
+        location.href = location.pathname;
+      });
+
       // a gesture, played on whoever made it
       room.onMessage("emote", (msg: { from: string; kind: string }) => this.playEmote(msg.from, msg.kind));
 
@@ -1124,6 +1147,8 @@ export class OfficeScene extends Phaser.Scene {
           .then((r) => (r.ok ? r.json() : null))
           .then((d) => {
             if (!d?.workspace) return;
+            // what this account may do here, used only to decide what to offer
+            this.myRole = String(d.workspace.role || "member");
             if (d.workspace.name) {
               title.textContent = d.workspace.name;
               nameTheComposer(d.workspace.name);
@@ -1712,6 +1737,20 @@ export class OfficeScene extends Phaser.Scene {
       if (dmBtn) dmBtn.onclick = () => { this.closePersonCard(); this.openDm(player.userId, name); };
       if (findBtn) findBtn.onclick = () => { this.closePersonCard(); this.followPerson(sessionId, name); };
       if (pingBtn) pingBtn.onclick = () => { this.closePersonCard(); this.room?.send("ping", { to: sessionId }); };
+
+      // Staff only, and never against staff: the server applies the same rule,
+      // so hiding the button only saves somebody a refusal.
+      const kickBtn = document.getElementById("pc-kick") as HTMLButtonElement | null;
+      if (kickBtn) {
+        const staff = this.myRole === "owner" || this.myRole === "admin";
+        kickBtn.hidden = !staff;
+        kickBtn.onclick = () => {
+          this.closePersonCard();
+          if (!confirm(t("เชิญ {name} ออกจากพื้นที่นี้?").replace("{name}", name))) return;
+          this.room?.send("kick", { to: sessionId });
+          this.toast(t("เชิญ {name} ออกแล้ว — เขากลับเข้ามาได้ถ้ายังมีสิทธิ์เข้า").replace("{name}", name), "info");
+        };
+      }
       // the other half of "come over": go to them instead of asking them to move
       const gotoBtn = document.getElementById("pc-goto") as HTMLElement | null;
       if (gotoBtn) gotoBtn.onclick = () => {

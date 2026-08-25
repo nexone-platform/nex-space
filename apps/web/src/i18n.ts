@@ -449,6 +449,13 @@ const EN: Record<string, string> = {
   "แชตห้อง": "Room chat",
   "แชตห้องรวม": "Room chat",
   "ห้องประชุม": "Meeting room",
+
+  // ---- roles: what each may see and do ----
+  "เชิญออกจากพื้นที่": "Remove from the space",
+  "เชิญ {name} ออกจากพื้นที่นี้?": "Remove {name} from this space?",
+  "เชิญ {name} ออกแล้ว — เขากลับเข้ามาได้ถ้ายังมีสิทธิ์เข้า": "{name} was removed — they can come back if they still have a way in",
+  "{name} เชิญคุณออกจากพื้นที่นี้": "{name} removed you from this space",
+  "คุณถูกเชิญออกจากพื้นที่นี้": "You were removed from this space",
   // ---- the one character on the picker ----
   "✏️ แต่งตัวละคร": "✏️ Dress your character",
   "แตะเพื่อเลือกผม เสื้อผ้า และสีที่ชอบ": "Tap to pick the hair, the clothes and the colours you want",

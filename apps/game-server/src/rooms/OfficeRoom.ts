@@ -260,6 +260,39 @@ export class OfficeRoom extends Room<OfficeState> {
       this.dropSticker(key);
     });
 
+    /**
+     * Show somebody the door.
+     *
+     * For the case a space that is open to visitors eventually has: a person
+     * nobody can talk over. It ends this visit and nothing more — there is no
+     * list of the banned, so somebody with a live pass or a membership can come
+     * straight back. That is a deliberate stopping point rather than an
+     * oversight: a ban is a record about a person, it outlives the afternoon it
+     * was made in, and it deserves more thought than a button in a roster.
+     *
+     * The rule is here rather than in the browser because the browser asking to
+     * be disconnected is a browser that can decline to ask.
+     */
+    this.onMessage("kick", (client, msg: { to?: string }) => {
+      const role = (client.auth as { role?: string } | undefined)?.role;
+      if (role !== "owner" && role !== "admin") return;
+      const target = this.clients.find((c) => c.sessionId === msg?.to);
+      const them = msg?.to ? this.state.players.get(msg.to) : undefined;
+      if (!target || !them || target.sessionId === client.sessionId) return;
+
+      // An admin cannot remove the owner or another admin, the same rule the
+      // API applies to changing somebody's role — otherwise one admin can
+      // clear the room of everybody who could stop them.
+      const theirRole = (target.auth as { role?: string } | undefined)?.role;
+      if (role === "admin" && (theirRole === "owner" || theirRole === "admin")) return;
+
+      const me = this.state.players.get(client.sessionId);
+      console.log(`[office:${this.workspace}] ${me?.name ?? client.sessionId} removed ${them.name}`);
+      target.send("kicked", { by: me?.name ?? "" });
+      // a moment for the message to land before the socket goes
+      this.clock.setTimeout(() => { try { target.leave(4000); } catch { /* already gone */ } }, 250);
+    });
+
     // presence status shown as the dot on each player's name tag
     this.onMessage("status", (client, status: string) => {
       const p = this.state.players.get(client.sessionId);
