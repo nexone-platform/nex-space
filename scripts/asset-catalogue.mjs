@@ -30,9 +30,13 @@ const FOLDERS = [
 ];
 
 /**
- * Chairs ship as eight directions of the same chair and the game rotates them
- * in place, so a palette listing all eight is 128 entries for 16 chairs. Only
- * the south-facing one is offered; the rest are still on disk for the rotation.
+ * Chairs ship as eight directions of the same chair, and a palette listing all
+ * eight is 128 entries for 16 chairs. Only the south-facing one is offered.
+ *
+ * The other seven are still on disk and still used: a map may place a chair
+ * facing any of them by naming the key directly, and sitting down faces you the
+ * way the seat does. What the editor offers is one entry per chair, not one
+ * direction per chair.
  */
 const CHAIR_DIR = /^(chair-\d+)-(east|north|north-east|north-west|south|south-east|south-west|west)$/;
 

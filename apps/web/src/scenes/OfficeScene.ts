@@ -184,10 +184,14 @@ export class OfficeScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private facing = "down"; // one of 8: down/up/left/right/down-right/down-left/up-right/up-left
-  private rotatables: Phaser.GameObjects.Image[] = [];
-  private chairStyles = new Map<Phaser.GameObjects.Image, string>(); // image -> chair style prefix (e.g. "chair-2")
-  private selected?: Phaser.GameObjects.Image;
-  private selRing!: Phaser.GameObjects.Arc;
+  /**
+   * Every chair on the map, so sitting can find the nearest one.
+   *
+   * A plain list now. Chairs used to be selectable and turnable, which is why
+   * they also carried a style prefix and a tint — all of that is gone, and with
+   * it the reason a chair listened for the mouse at all.
+   */
+  private chairs: Phaser.GameObjects.Image[] = [];
   private room?: Room;
   private mySessionId = "";
   private remotes = new Map<string, Remote>();
@@ -247,18 +251,10 @@ export class OfficeScene extends Phaser.Scene {
     new Set(OUTDOOR.map((o) => o[0])).forEach((k) => loadProp(k, "outdoor"));
     new Set(DECALS.map((d) => d[0])).forEach((k) => loadProp(k, "outdoor"));
 
-    // Chairs can be rotated in-game, so every direction of a placed chair has to be
-    // preloaded — but only for the styles the map actually uses. Loading all 16
-    // styles would fetch 128 images for the ~8 that appear.
-    const placedStyles = new Set(
-      [...items].map((k) => k.match(/^(chair-\d+)/)?.[1]).filter(Boolean) as string[],
-    );
-    for (const style of placedStyles) {
-      for (const dir of CHAIR_DIRS) {
-        const key = `${style}-${dir}`;
-        if (!items.has(key)) this.load.image(key, `/assets/furniture/${key}.png`);
-      }
-    }
+    // A chair is loaded facing the way the map places it, and no other way. The
+    // seven other directions of every placed style used to be fetched as well,
+    // because a chair could be turned in-game — around a hundred images for a
+    // map with eight chair styles on it.
   }
 
   create() {
@@ -326,12 +322,10 @@ export class OfficeScene extends Phaser.Scene {
         }
       } else {
         const spr = this.add.image(px, py, k).setScale(s).setDepth(k.startsWith("rug") ? -900 : py);
+        // Somewhere to sit. Not interactive: a chair takes no clicks, so
+        // clicking one walks you to it, which is what you wanted anyway.
         if (k.includes("chair") || k === "stool" || k.includes("sofa") || k.includes("bean-bag")) {
-          spr.setInteractive({ useHandCursor: true });
-          this.rotatables.push(spr);
-          // extract chair style prefix (e.g. "chair-2" from "chair-2-south")
-          const m = k.match(/^(chair-\d+)/);
-          if (m) this.chairStyles.set(spr, m[1]);
+          this.chairs.push(spr);
         }
       }
     }
@@ -430,12 +424,8 @@ export class OfficeScene extends Phaser.Scene {
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keys = this.input.keyboard!.addKeys("W,A,S,D") as Record<string, Phaser.Input.Keyboard.Key>;
 
-    // --- input: rotate chairs by swapping directional sprites (click to select, drag/wheel = change direction) ---
-    this.selRing = this.add.circle(0, 0, 17).setStrokeStyle(2, 0x2bb3a3).setFillStyle(0x2bb3a3, 0.08)
-      .setVisible(false).setDepth(99999);
-
     // click empty floor to walk there. Tracked from pointerdown to pointerup so a
-    // drag — which is how a chair gets rotated — never also sends the avatar off.
+    // drag of the map never also sends the avatar off.
     let downAt: { x: number; y: number; onObject: boolean; scrollX: number; scrollY: number } | null = null;
     // far enough that a shaky click is still a click, short enough that a drag
     // feels immediate
@@ -443,10 +433,7 @@ export class OfficeScene extends Phaser.Scene {
 
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       const hits = this.input.hitTestPointer(p);
-      const hit = hits.find((o) => this.rotatables.includes(o as Phaser.GameObjects.Image));
-      if (hit) this.selectChair(hit as Phaser.GameObjects.Image);
-      else this.deselectChair();
-      // any hit means a desk or chair owns this click and handles it itself
+      // any hit means a desk or an object owns this click and handles it itself
       const cam = this.cameras.main;
       // A person is not furniture: their sprite listens for the mouse so the
       // card can open, but a click through them should still walk there.
@@ -469,12 +456,6 @@ export class OfficeScene extends Phaser.Scene {
       this.walkTo(p.worldX, p.worldY);
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
-      // a selected chair owns the drag — that is how it gets turned
-      if (this.selected && p.isDown) {
-        const ang = Phaser.Math.Angle.Between(this.selected.x, this.selected.y, p.worldX, p.worldY);
-        this.rotateChairToAngle(this.selected, ang);
-        return;
-      }
       if (!p.isDown || !downAt || downAt.onObject) return;
       const dx = p.x - downAt.x, dy = p.y - downAt.y;
       if (!this.panning && Math.hypot(dx, dy) <= PAN_START) return;
@@ -504,14 +485,10 @@ export class OfficeScene extends Phaser.Scene {
     this.input.on("pointerup", endPan);
     this.input.on("pointerupoutside", endPan);
     this.input.on("wheel", (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
-      if (this.selected) this.rotateChairStep(this.selected, Math.sign(dy));
-      else this.zoomBy(dy > 0 ? -1 : 1); // scroll = zoom the camera, one whole step
+      this.zoomBy(dy > 0 ? -1 : 1); // scroll = zoom the camera, one whole step
     });
-    this.input.keyboard!.on("keydown-ESC", () => this.deselectChair());
-    this.input.keyboard!.on("keydown-Q", () => { if (this.selected) this.rotateChairStep(this.selected, -1); });
     this.input.keyboard!.on("keydown-E", () => {
       if (document.activeElement instanceof HTMLInputElement) return; // typing
-      if (this.selected) { this.rotateChairStep(this.selected, 1); return; } // rotate chair
       if (this.nearInteractive) void this.activateInteractive(this.nearInteractive);
     });
     this.input.keyboard!.on("keydown-F", () => {
@@ -3111,23 +3088,10 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  private selectChair(obj: Phaser.GameObjects.Image) {
-    this.selected?.clearTint();
-    this.selected = obj;
-    obj.setTint(0xfff2c0);
-    this.selRing.setPosition(obj.x, obj.y).setVisible(true);
-  }
-
-  private deselectChair() {
-    this.selected?.clearTint();
-    this.selected = undefined;
-    this.selRing.setVisible(false);
-  }
-
-  /** nearest directional chair to the player, within ~1.5 tiles (else undefined) */
+  /** nearest chair to the player, within ~1.5 tiles (else undefined) */
   private chairNearPlayer(): Phaser.GameObjects.Image | undefined {
     let best: Phaser.GameObjects.Image | undefined, bd = (1.5 * TILE) ** 2;
-    for (const c of this.rotatables) {
+    for (const c of this.chairs) {
       const d2 = (c.x - this.player.x) ** 2 + (c.y - this.player.y) ** 2;
       if (d2 < bd) { bd = d2; best = c; }
     }
@@ -3264,50 +3228,18 @@ export class OfficeScene extends Phaser.Scene {
     }, 2300);
   }
 
-  /** Get the current direction index of a directional chair from its texture key */
+  /**
+   * Which way a chair faces, from its texture key.
+   *
+   * Still needed after chair-turning went away: sitting down faces you the way
+   * the seat does, which is the whole reason the art has eight directions.
+   */
   private getChairDirIndex(obj: Phaser.GameObjects.Image): number {
     const texKey = obj.texture.key;
     for (let i = 0; i < CHAIR_DIRS.length; i++) {
       if (texKey.endsWith(`-${CHAIR_DIRS[i]}`)) return i;
     }
     return 0; // default south
-  }
-
-  /** Rotate a chair to the nearest 8-way direction based on angle (radians) */
-  private rotateChairToAngle(obj: Phaser.GameObjects.Image, ang: number) {
-    const style = this.chairStyles.get(obj);
-    if (!style) return; // stool or non-directional chair
-    // Snap angle to nearest of 8 directions
-    let deg = Phaser.Math.RadToDeg(ang);
-    if (deg < 0) deg += 360;
-    // 0=E, 45=SE, 90=S, 135=SW, 180=W, 225=NW, 270=N, 315=NE
-    const snapDirs: [number, string][] = [
-      [0, "east"], [45, "south-east"], [90, "south"], [135, "south-west"],
-      [180, "west"], [225, "north-west"], [270, "north"], [315, "north-east"],
-    ];
-    let best = "south";
-    let bestDist = 999;
-    for (const [a, d] of snapDirs) {
-      let diff = Math.abs(deg - a);
-      if (diff > 180) diff = 360 - diff;
-      if (diff < bestDist) { bestDist = diff; best = d; }
-    }
-    const key = `${style}-${best}`;
-    if (this.textures.exists(key)) obj.setTexture(key);
-  }
-
-  /** Step a chair through directions by +1 or -1 */
-  private rotateChairStep(obj: Phaser.GameObjects.Image, step: number) {
-    const style = this.chairStyles.get(obj);
-    if (!style) {
-      // fallback for non-directional chairs (stool etc): use rotation
-      obj.rotation += step * Phaser.Math.DegToRad(45);
-      return;
-    }
-    const idx = this.getChairDirIndex(obj);
-    const newIdx = ((idx + step) % CHAIR_DIRS.length + CHAIR_DIRS.length) % CHAIR_DIRS.length;
-    const key = `${style}-${CHAIR_DIRS[newIdx]}`;
-    if (this.textures.exists(key)) obj.setTexture(key);
   }
 
   // ------------------------------------------------------------ click to move

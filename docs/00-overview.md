@@ -119,7 +119,7 @@ flowchart LR
 
 | เฟส | เป้าหมาย | สิ่งที่ได้ |
 |-----|---------|-----------|
-| **1 — Foundation** ✅ | โหลดแผนที่ + เดินตัวละครคนเดียว | ✅ ออฟฟิศเล็ก compact **20×15** (open desk 6 ที่, meeting room, pantry, reception, plants), movement+collision, walk anim (PixelLab), chair rotate, decor — `apps/web` |
+| **1 — Foundation** ✅ | โหลดแผนที่ + เดินตัวละครคนเดียว | ✅ ออฟฟิศเล็ก compact **20×15** (open desk 6 ที่, meeting room, pantry, reception, plants), movement+collision, walk anim (PixelLab), decor — `apps/web` |
 | **2 — Multiplayer** ✅ | หลายคนในห้องเดียว เห็นกันเดินได้ | ✅ Colyseus `office` room, state sync, remote interpolation+anim, ป้ายชื่อ — `apps/game-server` |
 | **3 — Realtime AV** ✅ | proximity chat + mic/cam + screen share | ✅ **3a**: server proximity, กรอบสนทนา (ring), text chat ตามระยะ · ✅ **3b**: **WebRTC P2P** mic/cam/screen (perfect-negotiation, signaling ผ่าน Colyseus, proximity สั่ง connect/disconnect) — ต้องเทสต์ AV จริงบน 2 เครื่อง |
 | **4 — Avatar & Polish** | สร้าง avatar เอง + กรอบสนทนา + UI | layered avatar, name bubble, chat UI |
