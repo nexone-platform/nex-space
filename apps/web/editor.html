@@ -72,6 +72,14 @@
       background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
     }
     .maps button.add { color: var(--accent); background: transparent; border-style: dashed; border-color: var(--border-2); }
+    /* What can be done TO the floor you are on, kept apart from the tabs by a
+       hairline so "move this one" is not mistaken for "go to that one". */
+    .maps .tools { display: flex; gap: 3px; padding-left: 7px; margin-left: 3px; border-left: 1px solid var(--border); }
+    .maps .tools button { padding: 6px 9px; background: transparent; border-color: transparent; }
+    .maps .tools button:hover:not(:disabled) { background: var(--surface-3); }
+    .maps .tools button.danger { color: var(--danger); }
+    .maps .tools button:disabled { opacity: .35; cursor: default; }
+    .maps .landing { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
     button {
       font: 600 13px var(--sans); cursor: pointer; border-radius: 9px;
       border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2);

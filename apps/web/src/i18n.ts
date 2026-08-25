@@ -516,6 +516,12 @@ const EN: Record<string, string> = {
   "กำลังไป {name}": "Heading to {name}",
 
   // ---- the map editor (editor.html) ----
+  "ย้ายมาก่อนหน้า": "Move earlier",
+  "ย้ายไปถัดไป": "Move later",
+  "ลบแผนที่นี้": "Delete this map",
+  "คนเข้ามาเจอชั้นนี้": "people land here",
+  "เรียงลำดับไม่สำเร็จ": "Could not reorder",
+  "ลบ \"{name}\" ทิ้งถาวร? ทุกอย่างที่วางไว้บนแผนที่นี้จะหายไปด้วย": "Delete \"{name}\" for good? Everything placed on this map goes with it",
   "แผนที่ใหม่": "New map",
   "ชื่อแผนที่ใหม่": "Name of the new map",
   "ชั้นใหม่": "New floor",

@@ -140,6 +140,81 @@ function paintTabs() {
   add.title = t("แผนที่ใหม่");
   add.addEventListener("click", () => void addMap());
   box.appendChild(add);
+
+  // Nothing to arrange until there are two: a lone map cannot be moved anywhere,
+  // and removing it is what "back to the stock map" already does.
+  if (maps.length < 2) return;
+
+  const at = maps.findIndex((m) => m.slug === openMap);
+  const tools = document.createElement("div");
+  tools.className = "tools";
+  const tool = (label: string, title: string, disabled: boolean, go: () => void, danger = false) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    b.title = title;
+    b.setAttribute("aria-label", title);
+    b.disabled = disabled;
+    if (danger) b.className = "danger";
+    if (!disabled) b.addEventListener("click", go);
+    tools.appendChild(b);
+  };
+  // The first map is the one people land on, so moving one is not decoration —
+  // it is how a space picks its front door.
+  tool("\u2190", t("ย้ายมาก่อนหน้า"), at <= 0, () => void moveMap(-1));
+  tool("\u2192", t("ย้ายไปถัดไป"), at < 0 || at >= maps.length - 1, () => void moveMap(1));
+  tool("\ud83d\uddd1", t("ลบแผนที่นี้"), at < 0, () => void deleteMap(), true);
+  box.appendChild(tools);
+
+  if (at === 0) {
+    const note = document.createElement("span");
+    note.className = "landing";
+    note.textContent = t("คนเข้ามาเจอชั้นนี้");
+    box.appendChild(note);
+  }
+}
+
+/** shuffle this map one place along; the first is the one people land on */
+async function moveMap(by: -1 | 1) {
+  const order = maps.map((m) => m.slug);
+  const at = order.indexOf(openMap);
+  const to = at + by;
+  if (at < 0 || to < 0 || to >= order.length) return;
+  [order[at], order[to]] = [order[to], order[at]];
+
+  const r = await fetch(`${API}/workspaces/${encodeURIComponent(WORKSPACE)}/maps/order`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", authorization: `Bearer ${authToken()}` },
+    body: JSON.stringify({ order }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { alert(`${t("เรียงลำดับไม่สำเร็จ")} (${r.status})\n${d.error || ""}`); return; }
+  maps = order.map((slug) => maps.find((m) => m.slug === slug)!);
+  paintTabs();
+}
+
+/**
+ * Remove this floor.
+ *
+ * Named in the confirmation rather than a bare yes/no: the button sits beside
+ * two that only move things, and what it destroys is somebody's afternoon.
+ */
+async function deleteMap() {
+  const me = maps.find((m) => m.slug === openMap);
+  const label = me ? t(me.label) : openMap;
+  if (!confirm(t('ลบ "{name}" ทิ้งถาวร? ทุกอย่างที่วางไว้บนแผนที่นี้จะหายไปด้วย').replace("{name}", label))) return;
+
+  const r = await fetch(`${API}/workspaces/${encodeURIComponent(WORKSPACE)}/map/${encodeURIComponent(openMap)}`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${authToken()}` },
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { alert(`${t("ลบไม่สำเร็จ")} (${r.status}) ${d.error || ""}`); return; }
+  // the document on screen no longer exists anywhere, so stop offering to save it
+  state?.markSaved();
+  location.search = d.landing
+    ? `?w=${encodeURIComponent(WORKSPACE)}&m=${encodeURIComponent(d.landing)}`
+    : `?w=${encodeURIComponent(WORKSPACE)}`;
 }
 
 /**
