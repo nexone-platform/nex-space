@@ -25,7 +25,18 @@ const STICKERS_PER_PERSON = 12;
 const API_URL = process.env.API_URL || "http://localhost:3001";
 
 type MoveMsg = { x: number; y: number; dir: string; moving: boolean };
-type ChatMsg = { text?: string };
+type ChatMsg = { text?: string; attach?: string };
+
+/**
+ * What the API says it stored.
+ *
+ * Only `attach` is read here, and only to pass it on: the room does not know
+ * what a file is, it knows that the API turned an id into something a browser
+ * can draw. Null when the write failed, which is why a file that could not be
+ * stored is a file nobody is shown — unlike a plain line, which goes out first
+ * and is stored second.
+ */
+type StoredLine = { attach?: unknown } | null;
 
 /** how long before the same person may be asked over again */
 const PING_GAP = 10_000;
@@ -348,12 +359,31 @@ export class OfficeRoom extends Room<OfficeState> {
     this.onMessage("roomchat", (client, msg: ChatMsg) => {
       const me = this.state.players.get(client.sessionId);
       const text = (msg?.text ?? "").toString().slice(0, 300).trim();
-      if (!me || !text) return;
+      // An id, not a file. The bytes went to the API before this was sent, and
+      // the room never sees them — it relays a reference and lets the API say
+      // whether it names anything, which it does when it stores the line.
+      const attach = (msg?.attach ?? "").toString().slice(0, 40).trim();
+      // A file with nothing said about it is a message; nothing at all is not.
+      if (!me || (!text && !attach)) return;
       // Sent first, stored second. The people in the room are waiting for the
       // message; the record can be a moment behind, and a database that is slow
       // or down should cost history rather than conversation.
-      this.broadcast("roomchat", { from: client.sessionId, name: me.name, text });
-      void this.remember(client, text);
+      //
+      // A file is the exception: the browser cannot draw it from an id alone, so
+      // the broadcast waits for the API to hand back what it looks like. That
+      // costs a round trip on the messages that carry one, and nothing on the
+      // rest.
+      if (!attach) {
+        this.broadcast("roomchat", { from: client.sessionId, name: me.name, text });
+        void this.remember(client, text);
+        return;
+      }
+      void this.remember(client, text, attach).then((stored) => {
+        this.broadcast("roomchat", {
+          from: client.sessionId, name: me.name, text,
+          ...(stored?.attach ? { attach: stored.attach } : {}),
+        });
+      });
     });
 
     /**
@@ -366,22 +396,35 @@ export class OfficeRoom extends Room<OfficeState> {
      * The recipient is named by account, not by session: they may be in the room
      * twice, or not at all, and the message means the same thing in every case.
      */
-    this.onMessage("dm", (client, msg: { to?: string; text?: string }) => {
+    this.onMessage("dm", (client, msg: { to?: string; text?: string; attach?: string }) => {
       const me = this.state.players.get(client.sessionId);
       const to = String(msg?.to ?? "");
       const text = (msg?.text ?? "").toString().slice(0, 300).trim();
+      const attach = (msg?.attach ?? "").toString().slice(0, 40).trim();
       const mine = (client.auth as { userId?: string } | undefined)?.userId || "";
       // a guest has no account to be answered at, so they cannot start a thread
-      if (!me || !to || !text || !mine || to === mine) return;
+      if (!me || !to || (!text && !attach) || !mine || to === mine) return;
 
-      const payload = { from: mine, to, name: me.name, text, at: new Date().toISOString() };
-      client.send("dm", payload);
-      for (const [sessionId, p] of this.state.players) {
-        if (p.userId === to && sessionId !== client.sessionId) {
-          this.clients.find((c) => c.sessionId === sessionId)?.send("dm", payload);
+      const deliver = (extra: object = {}) => {
+        const payload = { from: mine, to, name: me.name, text, at: new Date().toISOString(), ...extra };
+        client.send("dm", payload);
+        for (const [sessionId, p] of this.state.players) {
+          if (p.userId === to && sessionId !== client.sessionId) {
+            this.clients.find((c) => c.sessionId === sessionId)?.send("dm", payload);
+          }
         }
+      };
+
+      // same trade as the room: a plain line goes out first, a file waits for
+      // the API to describe it
+      if (!attach) {
+        deliver();
+        void this.rememberDm(client, to, text);
+        return;
       }
-      void this.rememberDm(client, to, text);
+      void this.rememberDm(client, to, text, attach).then((stored) => {
+        deliver(stored?.attach ? { attach: stored.attach } : {});
+      });
     });
 
     /**
@@ -762,7 +805,7 @@ export class OfficeRoom extends Room<OfficeState> {
    * though — a space whose history silently stops is worse than one that never
    * had any.
    */
-  private async remember(client: Client, text: string) {
+  private async remember(client: Client, text: string, attach?: string): Promise<StoredLine> {
     const auth = client.auth as { token?: string; guest?: string } | undefined;
     const qs = auth?.guest ? `?guest=${encodeURIComponent(auth.guest)}` : "";
     try {
@@ -774,10 +817,11 @@ export class OfficeRoom extends Room<OfficeState> {
             "content-type": "application/json",
             ...(auth?.token ? { authorization: `Bearer ${auth.token}` } : {}),
           },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, ...(attach ? { attach } : {}) }),
         },
       );
-      if (!r.ok && !this.chatStoreWarned) {
+      if (r.ok) return ((await r.json().catch(() => null)) as { message?: StoredLine } | null)?.message ?? null;
+      if (!this.chatStoreWarned) {
         // once per room, not once per message: a misconfigured space would
         // otherwise fill the log with the same line at conversation speed
         this.chatStoreWarned = true;
@@ -789,10 +833,11 @@ export class OfficeRoom extends Room<OfficeState> {
         console.warn(`[office:${this.workspace}] chat history is not being stored:`, e);
       }
     }
+    return null;
   }
 
   /** the same write as a room line, addressed to one person */
-  private async rememberDm(client: Client, to: string, text: string) {
+  private async rememberDm(client: Client, to: string, text: string, attach?: string): Promise<StoredLine> {
     const auth = client.auth as { token?: string } | undefined;
     try {
       const r = await fetch(
@@ -803,10 +848,11 @@ export class OfficeRoom extends Room<OfficeState> {
             "content-type": "application/json",
             ...(auth?.token ? { authorization: `Bearer ${auth.token}` } : {}),
           },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, ...(attach ? { attach } : {}) }),
         },
       );
-      if (!r.ok && !this.dmStoreWarned) {
+      if (r.ok) return ((await r.json().catch(() => null)) as { message?: StoredLine } | null)?.message ?? null;
+      if (!this.dmStoreWarned) {
         this.dmStoreWarned = true;
         console.warn(`[office:${this.workspace}] private messages are not being stored (API answered ${r.status})`);
       }
@@ -816,6 +862,7 @@ export class OfficeRoom extends Room<OfficeState> {
         console.warn(`[office:${this.workspace}] private messages are not being stored:`, e);
       }
     }
+    return null;
   }
 
   onLeave(client: Client) {

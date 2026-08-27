@@ -343,6 +343,62 @@
       #meet-chat-log .chat-mark { color: #6f757f; }
       #meet-chat-log .chat-mark::before, #meet-chat-log .chat-mark::after { background: #ffffff1f; }
       .chat-compose { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--border); }
+
+      /* ---- files in the chat ----
+         A picture is shown; anything else is a card that says what it is. The
+         two look different on purpose: an image is the message, a file is a
+         thing you decide whether to open. */
+      .att { display: block; margin-top: 6px; text-decoration: none; }
+      .att-img img {
+        display: block; max-width: 100%; max-height: 260px; width: auto;
+        border-radius: 10px; border: 1px solid var(--border); background: var(--surface-3);
+        object-fit: contain;
+      }
+      .att-img:hover img { border-color: var(--accent-line); }
+      .att-file {
+        display: flex; align-items: center; gap: 9px; padding: 8px 10px;
+        border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2);
+        color: inherit; max-width: 100%;
+      }
+      .att-file:hover { border-color: var(--accent-line); background: var(--surface-3); }
+      .att-ico { flex: 0 0 auto; color: var(--text-3); display: flex; }
+      .att-ico svg { width: 22px; height: 22px; }
+      .att-meta { min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+      .att-meta b {
+        font-size: 12.5px; font-weight: 600; color: var(--text);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .att-meta small { font-size: 11px; color: var(--text-3); }
+
+      /* the file that is chosen but not yet sent, above whichever composer
+         it belongs to — it is part of the message being written */
+      .att-pending {
+        display: flex; align-items: center; gap: 8px; margin: 0 10px 6px;
+        padding: 6px 8px; border: 1px dashed var(--border-2); border-radius: 9px;
+        font-size: 12px; color: var(--text-2); background: var(--surface-2);
+      }
+      .att-pending[hidden] { display: none; }
+      .att-pending .n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+      .att-pending .s { flex: 0 0 auto; color: var(--text-3); font-size: 11px; }
+      .att-pending .x {
+        flex: 0 0 auto; border: none; background: none; cursor: pointer;
+        color: var(--text-3); font-size: 14px; line-height: 1; padding: 2px 4px;
+      }
+      .att-pending .x:hover { color: var(--danger); }
+      .att-pending.busy { border-style: solid; border-color: var(--accent-line); }
+      .att-pending.err { border-color: var(--danger); color: var(--danger); }
+
+      .att-btn {
+        flex: 0 0 auto; border: none; background: none; cursor: pointer;
+        color: var(--text-3); padding: 4px; border-radius: 8px; display: flex;
+      }
+      .att-btn:hover { color: var(--accent); background: var(--surface-3); }
+      .att-btn svg { width: 18px; height: 18px; }
+      .att-btn:disabled { opacity: .5; cursor: default; }
+
+      /* a drop anywhere over the panel counts, so the target is the panel */
+      .drop-here { outline: 2px dashed var(--accent-line); outline-offset: -4px; }
+
       #room-chat-input { flex: 1; padding: 8px 12px; border: 1px solid var(--border-2); border-radius: 20px; outline: none; font-size: 13px; }
       #room-chat-send { border: none; background: var(--accent); color: #fff; border-radius: 20px; padding: 0 14px; cursor: pointer; font-weight: 600; }
       /* ---- private messages ---- */
@@ -1269,8 +1325,11 @@
           <button class="mc-x" id="meet-chat-close" title="ปิด">✕</button></div>
         <div id="meet-chat-log"><div class="mc-empty">ยังไม่มีข้อความในห้องนี้</div></div>
         <div class="mc-compose">
+          <div id="meet-chat-pending" class="att-pending" hidden></div>
           <input id="meet-chat-input" type="text" maxlength="300" autocomplete="off" placeholder="ส่งข้อความถึงทั้งห้อง…" />
           <div class="mc-row">
+            <button class="att-btn" id="meet-chat-attach" title="แนบไฟล์"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5 12.5 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L10 17.9a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg></button>
+            <input id="meet-chat-file" type="file" hidden />
             <span class="sp"></span>
             <button class="mc-send" id="meet-chat-send" title="ส่ง">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
@@ -1749,7 +1808,10 @@
             <span id="dm-with"></span>
           </div>
           <div id="dm-log"></div>
+          <div id="dm-pending" class="att-pending" hidden></div>
           <div class="chat-compose">
+            <button class="att-btn" id="dm-attach" title="แนบไฟล์"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5 12.5 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L10 17.9a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg></button>
+            <input id="dm-file" type="file" hidden />
             <input id="dm-input" type="text" maxlength="300" autocomplete="off" placeholder="ส่งข้อความส่วนตัว…" />
             <button id="dm-send">ส่ง</button>
           </div>
@@ -1767,7 +1829,10 @@
 
       <div id="view-chat" class="sb-view" hidden>
         <div id="chat-log"><div class="chat-empty">ยังไม่มีข้อความ — ทักทายทั้งห้องได้เลย 👋</div></div>
+        <div id="room-chat-pending" class="att-pending" hidden></div>
         <div class="chat-compose">
+          <button class="att-btn" id="room-chat-attach" title="แนบไฟล์"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5 12.5 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L10 17.9a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg></button>
+          <input id="room-chat-file" type="file" hidden />
           <input id="room-chat-input" type="text" maxlength="300" autocomplete="off" placeholder="ส่งข้อความถึงทั้งห้อง…" />
           <button id="room-chat-send">ส่ง</button>
         </div>

@@ -195,7 +195,16 @@ const here = () => oRoom.room.state.players.size;
   ok("  · and the room is one smaller again", here() === before - 1, `${before} → ${here()}`);
 }
 
-for (const r of open) { try { await r.leave(); } catch { /* going anyway */ } }
+// Bounded, because a leave that never resolves takes the whole gate with it.
+// Two of the sockets here have already been closed by the server — that is what
+// the last few cases were about — and awaiting a goodbye from a connection that
+// is gone is how this suite hung twice inside preflight while passing alone.
+for (const r of open) {
+  await Promise.race([
+    r.leave().catch(() => {}),
+    new Promise((done) => setTimeout(done, 1500)),
+  ]);
+}
 stop();
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

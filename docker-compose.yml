@@ -84,6 +84,14 @@ services:
       # back through, but nobody signed up to run an archive — three months is
       # the compromise. 0 keeps everything, which will grow without end.
       - CHAT_KEEP_DAYS=${CHAT_KEEP_DAYS:-90}
+      # Files people put in the chat. They live in the same data volume as the
+      # database, and they go when the messages that showed them go — so
+      # CHAT_KEEP_DAYS above is also how long a shared file is kept.
+      - UPLOAD_MAX_BYTES=${UPLOAD_MAX_BYTES:-10000000}
+      # Signs the short-lived links that open a file. Unset is fine: one is
+      # generated and kept in the volume, which survives restarts. Set it to
+      # share the same links across more than one API container.
+      - UPLOAD_SECRET=${UPLOAD_SECRET:-}
     ports:
       - "3001:3001"
     volumes:

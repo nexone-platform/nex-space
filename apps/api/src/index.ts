@@ -15,6 +15,11 @@ import {
   newRecoveryCodes, hashRecoveryCodes, countRecoveryCodes, spendRecoveryCode,
 } from "./totp";
 
+import {
+  UPLOAD_MAX_BYTES, absPathFor, accepts, allowedTypes, dropBytes, isImage,
+  linkOk, putBytes, relPathFor, safeName, signedPath,
+} from "./uploads.js";
+
 const port = Number(process.env.PORT) || 3001;
 const app = express();
 app.use(cors());
@@ -29,11 +34,19 @@ for (const method of ["get", "post", "put", "patch", "delete"] as const) {
   (app as any)[method] = (path: string, ...handlers: any[]) =>
     original(
       path,
-      ...handlers.map((h) =>
-        typeof h === "function"
-          ? (req: any, res: any, next: any) => Promise.resolve(h(req, res, next)).catch(next)
-          : h,
-      ),
+      ...handlers.map((h) => {
+        if (typeof h !== "function") return h;
+        // Express reads a handler's arity to tell an error handler from an
+        // ordinary one, so the wrapper has to keep it. Flattening every
+        // handler to three arguments turned a route-level error handler into
+        // a normal middleware that received (err, req, res) and called res as
+        // next — which is how a 413 came back as a 500.
+        if (h.length === 4) {
+          return (err: any, req: any, res: any, next: any) =>
+            Promise.resolve(h(err, req, res, next)).catch(next);
+        }
+        return (req: any, res: any, next: any) => Promise.resolve(h(req, res, next)).catch(next);
+      }),
     );
 }
 
@@ -1018,6 +1031,20 @@ async function speakerFor(req: express.Request, w: { id: string; allowGuests: bo
   return null;
 }
 
+/**
+ * The file this message says it carries, if it is really ours to carry.
+ *
+ * Checked against the space, not just the id: an attachment id from another
+ * workspace would otherwise be quotable into this one, and a file shared in a
+ * private space would leak to whoever guessed at it.
+ */
+async function attachmentFor(id: unknown, workspaceId: string) {
+  const want = String(id ?? "").trim();
+  if (!want) return null;
+  const a = await prisma.attachment.findUnique({ where: { id: want } });
+  return a && a.workspaceId === workspaceId && a.path !== "pending" ? a : null;
+}
+
 /** the newest messages, oldest first — the order they are read in */
 app.get("/workspaces/:slug/messages", async (req, res) => {
   const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
@@ -1034,10 +1061,12 @@ app.get("/workspaces/:slug/messages", async (req, res) => {
     where: { workspaceId: w.id, toUserId: null, ...(before && !isNaN(+before) ? { createdAt: { lt: before } } : {}) },
     orderBy: { createdAt: "desc" },
     take: limit,
+    include: { attach: true },
   });
   res.json({
     messages: rows.reverse().map((m) => ({
       id: m.id, name: m.authorName, text: m.body, at: m.createdAt, mine: !!who.userId && m.userId === who.userId,
+      ...(m.attach ? { attach: attachView(m.attach) } : {}),
     })),
     // there is more history behind this page if it came back full
     more: rows.length === limit,
@@ -1057,13 +1086,170 @@ app.post("/workspaces/:slug/messages", async (req, res) => {
   if (!who) return res.status(401).json({ error: "unauthorized" });
 
   const body = String((req.body ?? {}).text ?? "").slice(0, 300).trim();
-  if (!body) return res.status(400).json({ error: "empty" });
+  // A file with nothing said about it is a message. Text with nothing in it and
+  // no file is not.
+  const attach = await attachmentFor((req.body ?? {}).attach, w.id);
+  if (!body && !attach) return res.status(400).json({ error: "empty" });
 
   const m = await prisma.message.create({
-    data: { workspaceId: w.id, userId: who.userId, authorName: who.name, body, toUserId: null },
+    data: {
+      workspaceId: w.id, userId: who.userId, authorName: who.name, body,
+      toUserId: null, attachId: attach?.id ?? null,
+    },
   });
-  res.json({ message: { id: m.id, name: m.authorName, text: m.body, at: m.createdAt } });
+  res.json({
+    message: {
+      id: m.id, name: m.authorName, text: m.body, at: m.createdAt,
+      ...(attach ? { attach: attachView(attach) } : {}),
+    },
+  });
 });
+
+// ---- files in the chat ------------------------------------------------------
+
+/**
+ * One attachment, as the browser needs it.
+ *
+ * The link is minted here rather than stored, because it expires: a URL kept in
+ * a row would be a URL that stops working while nobody is looking at it.
+ */
+function attachView(a: {
+  id: string; name: string; mime: string; bytes: number; width: number | null; height: number | null;
+}) {
+  return {
+    id: a.id, name: a.name, mime: a.mime, bytes: a.bytes,
+    image: isImage(a.mime),
+    ...(a.width ? { width: a.width } : {}),
+    ...(a.height ? { height: a.height } : {}),
+    url: signedPath(a.id),
+  };
+}
+
+/**
+ * Take a file.
+ *
+ * The body is the file itself, not a multipart envelope. A browser can post a
+ * File straight down a fetch and this saves parsing a format whose whole job
+ * would be to carry one part — the name rides in a header instead.
+ *
+ * Anybody who may speak here may upload here. That includes a guest with a live
+ * pass: they can already put words on everyone's screen, and a picture is the
+ * same act with a larger surface. What bounds it is the size, the allowlist, and
+ * the fact that nothing is served back except what the list names.
+ */
+app.post(
+  "/workspaces/:slug/uploads",
+  express.raw({ type: () => true, limit: UPLOAD_MAX_BYTES + 1024 }),
+  // The parser gives up before the handler ever runs, and what it throws would
+  // otherwise reach the client as a 500 with an HTML body — which reads as "the
+  // server broke" rather than "that file is too big", and is the difference
+  // between somebody trying a smaller file and somebody giving up.
+  ((err: { type?: string; status?: number }, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (err?.type === "entity.too.large" || err?.status === 413) {
+      return res.status(413).json({ error: `file is too large (limit ${UPLOAD_MAX_BYTES} bytes)` });
+    }
+    return next(err);
+  }) as express.ErrorRequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+    if (!w) return res.status(404).json({ error: "not found" });
+    const who = await speakerFor(req, w);
+    if (!who) return res.status(401).json({ error: "unauthorized" });
+
+    const data: Buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    if (!data.length) return res.status(400).json({ error: "empty" });
+    if (data.length > UPLOAD_MAX_BYTES)
+      return res.status(413).json({ error: `file is too large (${data.length} bytes, limit ${UPLOAD_MAX_BYTES})` });
+
+    // The declared type decides what we will serve it as, so it is checked
+    // against the list rather than recorded. A type we do not serve is a file
+    // we do not keep.
+    const mime = String(req.header("content-type") || "").split(";")[0].trim().toLowerCase();
+    if (!accepts(mime))
+      return res.status(415).json({ error: "that kind of file is not accepted", allowed: allowedTypes() });
+
+    const name = safeName(decodeURIComponent(String(req.header("x-filename") || "")));
+    // a hint for layout only, and only believed within reason
+    const clamp = (v: unknown) => {
+      const n = Math.round(Number(v));
+      return Number.isFinite(n) && n > 0 && n <= 20000 ? n : null;
+    };
+    const width = isImage(mime) ? clamp(req.header("x-width")) : null;
+    const height = isImage(mime) ? clamp(req.header("x-height")) : null;
+
+    const at = new Date();
+    const row = await prisma.attachment.create({
+      data: {
+        workspaceId: w.id, userId: who.userId, name, mime, bytes: data.length,
+        width, height, path: "pending", createdAt: at,
+      },
+    });
+    // the id names the file, so the row has to exist before the bytes do
+    const rel = relPathFor(row.id, mime, at);
+    try {
+      await putBytes(rel, data);
+    } catch (e) {
+      await prisma.attachment.delete({ where: { id: row.id } }).catch(() => {});
+      console.error("[uploads] could not write the file:", e);
+      return res.status(500).json({ error: "could not store the file" });
+    }
+    const saved = await prisma.attachment.update({ where: { id: row.id }, data: { path: rel } });
+    res.json({ attachment: attachView(saved) });
+  },
+);
+
+/**
+ * Hand the file back.
+ *
+ * The signature in the link is the credential — an <img> cannot carry a header,
+ * so it has to be the URL that is the capability. It is per file and it expires,
+ * which is what keeps "shared in a private space" true.
+ *
+ * The type served is the one from the allowlist, and nosniff stops a browser
+ * from deciding otherwise. Only images are shown inline; everything else is
+ * offered as a download, because inline is where a file gets to run.
+ */
+app.get("/uploads/:id", async (req, res) => {
+  const id = String(req.params.id);
+  if (!linkOk(id, req.query.exp, req.query.sig)) return res.status(403).json({ error: "link expired" });
+
+  const a = await prisma.attachment.findUnique({ where: { id } });
+  if (!a || a.path === "pending") return res.status(404).json({ error: "not found" });
+
+  const inline = isImage(a.mime) && !req.query.dl;
+  res.setHeader("content-type", a.mime);
+  res.setHeader("x-content-type-options", "nosniff");
+  res.setHeader("content-security-policy", "default-src 'none'; sandbox");
+  res.setHeader("cache-control", "private, max-age=3600");
+  // RFC 5987, so a Thai or emoji filename survives the trip
+  res.setHeader(
+    "content-disposition",
+    `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(a.name)}`,
+  );
+  res.sendFile(absPathFor(a.path), (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: "not found" });
+  });
+});
+
+/**
+ * Files uploaded but never sent.
+ *
+ * Somebody picks a file, the upload finishes, and then they change their mind
+ * and close the tab. The row and the bytes are already there with no message
+ * pointing at them, and nothing else would ever remove them.
+ */
+async function sweepOrphanUploads() {
+  const cutoff = new Date(Date.now() - DAY_MS);
+  const stale = await prisma.attachment.findMany({
+    where: { createdAt: { lt: cutoff }, messages: { none: {} } },
+    select: { id: true, path: true },
+  });
+  for (const a of stale) await dropBytes(a.path);
+  if (stale.length) {
+    await prisma.attachment.deleteMany({ where: { id: { in: stale.map((a) => a.id) } } });
+    console.log(`[uploads] removed ${stale.length} file(s) that were never sent`);
+  }
+}
 
 // ---- private messages -------------------------------------------------------
 
@@ -1103,6 +1289,7 @@ app.get("/workspaces/:slug/dm", async (req, res) => {
     where: { workspaceId: w.id, OR: [{ userId: me.id, toUserId: { not: null } }, { toUserId: me.id }] },
     orderBy: { createdAt: "desc" },
     take: 500,
+    include: { attach: { select: { name: true } } },
   });
   const reads = await prisma.dmRead.findMany({ where: { workspaceId: w.id, userId: me.id } });
   const readAt = new Map(reads.map((r) => [r.peerId, r.readAt.getTime()]));
@@ -1113,7 +1300,10 @@ app.get("/workspaces/:slug/dm", async (req, res) => {
     const peerId = m.userId === me.id ? m.toUserId! : m.userId!;
     if (!peerId) continue;
     const seen = threads.get(peerId);
-    if (!seen) threads.set(peerId, { peerId, name: m.userId === me.id ? "" : m.authorName, text: m.body, at: m.createdAt, unread: 0 });
+    // A preview of "" reads as an empty conversation. A line that was only a
+    // file has no text, so the filename stands in for it.
+    const preview = m.body || (m.attach ? `\u{1F4CE} ${m.attach.name}` : "");
+    if (!seen) threads.set(peerId, { peerId, name: m.userId === me.id ? "" : m.authorName, text: preview, at: m.createdAt, unread: 0 });
     const th = threads.get(peerId)!;
     if (!th.name && m.userId === peerId) th.name = m.authorName;
     if (m.toUserId === me.id && m.createdAt.getTime() > (readAt.get(peerId) ?? 0)) th.unread++;
@@ -1146,6 +1336,7 @@ app.get("/workspaces/:slug/dm/:peerId", async (req, res) => {
     },
     orderBy: { createdAt: "desc" },
     take: limit,
+    include: { attach: true },
   });
 
   // Reading is what marks it read, and only when there was something to read:
@@ -1161,6 +1352,7 @@ app.get("/workspaces/:slug/dm/:peerId", async (req, res) => {
   res.json({
     messages: rows.reverse().map((m) => ({
       id: m.id, name: m.authorName, text: m.body, at: m.createdAt, mine: m.userId === me.id,
+      ...(m.attach ? { attach: attachView(m.attach) } : {}),
     })),
     more: rows.length === limit,
   });
@@ -1174,12 +1366,21 @@ app.post("/workspaces/:slug/dm/:peerId", async (req, res) => {
   if (req.params.peerId === me.id) return res.status(400).json({ error: "that is you" });
 
   const body = String((req.body ?? {}).text ?? "").slice(0, 300).trim();
-  if (!body) return res.status(400).json({ error: "empty" });
+  const attach = await attachmentFor((req.body ?? {}).attach, w.id);
+  if (!body && !attach) return res.status(400).json({ error: "empty" });
 
   const m = await prisma.message.create({
-    data: { workspaceId: w.id, userId: me.id, toUserId: req.params.peerId, authorName: me.name, body },
+    data: {
+      workspaceId: w.id, userId: me.id, toUserId: req.params.peerId,
+      authorName: me.name, body, attachId: attach?.id ?? null,
+    },
   });
-  res.json({ message: { id: m.id, name: m.authorName, text: m.body, at: m.createdAt, mine: true } });
+  res.json({
+    message: {
+      id: m.id, name: m.authorName, text: m.body, at: m.createdAt, mine: true,
+      ...(attach ? { attach: attachView(attach) } : {}),
+    },
+  });
 });
 
 /**
@@ -1190,8 +1391,21 @@ app.post("/workspaces/:slug/dm/:peerId", async (req, res) => {
 async function sweepOldMessages() {
   if (!(CHAT_KEEP_DAYS > 0)) return;              // 0 or nonsense: keep everything
   const cutoff = new Date(Date.now() - CHAT_KEEP_DAYS * DAY_MS);
+
+  // The files go with the lines that showed them, in that order. Deleting the
+  // messages first would leave attachments no message points at, which the
+  // orphan sweep would then take a day to notice — and until it did, the disk
+  // would be holding files nothing in the product can reach.
+  const doomed = await prisma.attachment.findMany({
+    where: { messages: { some: { createdAt: { lt: cutoff } } } },
+    select: { id: true, path: true },
+  });
+  for (const a of doomed) await dropBytes(a.path);
+
   const { count } = await prisma.message.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  if (doomed.length) await prisma.attachment.deleteMany({ where: { id: { in: doomed.map((a) => a.id) } } });
   if (count) console.log(`[chat] removed ${count} message(s) older than ${CHAT_KEEP_DAYS} days`);
+  if (doomed.length) console.log(`[uploads] removed ${doomed.length} file(s) with them`);
 }
 
 // ---- the map a space loads ----
@@ -1587,13 +1801,21 @@ app.put("/maps/:id", requireAuth, async (req: AuthedRequest, res) => {
 // bad request can't take the API down for everyone else.
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error("[api] request failed:", err);
-  if (!res.headersSent) res.status(500).json({ error: "internal error" });
+  if (res.headersSent) return;
+  // A parser that refuses a body already knows why and says so with a status.
+  // Answering 500 to all of them tells the caller the server broke when what
+  // happened is that they sent something we do not take.
+  const status = Number(err?.status ?? err?.statusCode);
+  if (status >= 400 && status < 500) return res.status(status).json({ error: err?.type || "bad request" });
+  res.status(500).json({ error: "internal error" });
 });
 
 void sweepOldMessages().catch((e) => console.error("[chat] sweep failed:", e));
 setInterval(() => void sweepOldMessages().catch((e) => console.error("[chat] sweep failed:", e)), DAY_MS).unref();
 void sweepOldVisits().catch((e) => console.error("[stats] sweep failed:", e));
 setInterval(() => void sweepOldVisits().catch((e) => console.error("[stats] sweep failed:", e)), DAY_MS).unref();
+void sweepOrphanUploads().catch((e) => console.error("[uploads] sweep failed:", e));
+setInterval(() => void sweepOrphanUploads().catch((e) => console.error("[uploads] sweep failed:", e)), DAY_MS).unref();
 
 if (!turnEnabled) console.warn("[ice] no TURN relay configured — calls will fail for anyone behind a strict firewall (set TURN_SECRET and TURN_HOST)");
 app.listen(port, () => console.log(`[api] NexSpace API on http://localhost:${port}  (db: ${process.env.DATABASE_URL})`));

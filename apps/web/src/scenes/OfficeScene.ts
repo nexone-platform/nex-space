@@ -10,6 +10,7 @@ import { WORKSPACE, IS_DEFAULT_WORKSPACE, workspaceLabel, inviteLink, wsKey,
          GUEST_CODE, ARRIVE_AT, gotoMap } from "../workspace";
 import { API as AUTH_API } from "../api";
 import { t, onLangChange, locale } from "../i18n";
+import { ACCEPT, type Attach, attachNode, humanSize, upload } from "../net/attach";
 import { setupPrefsModal } from "../prefsModal";
 import { roleLabel } from "../memberPanel";
 import { propPath, type Interactive } from "./mapThemes";
@@ -802,7 +803,8 @@ export class OfficeScene extends Phaser.Scene {
         this.toast(t("สิทธิ์ผู้เยี่ยมชมจองโต๊ะไม่ได้ — ขอให้ผู้ดูแลตั้งคุณเป็นสมาชิก"), "warn");
       });
       room.onMessage("chat", (msg: { from: string; text: string }) => this.showBubble(msg.from, msg.text));
-      room.onMessage("roomchat", (msg: { from: string; name: string; text: string }) => this.appendChatLog(msg.from, msg.name, msg.text));
+      room.onMessage("roomchat", (msg: { from: string; name: string; text: string; attach?: Attach }) =>
+        this.appendChatLog(msg.from, msg.name, msg.text, msg.attach));
       room.onMessage("dm", (msg: { from: string; to: string; name: string; text: string }) => this.onDm(msg));
       room.onMessage("ping", (msg: { from: string; name: string; x: number; y: number }) => this.onPing(msg));
       room.onMessage("wave", (msg: { from: string; name: string }) => this.onWave(msg));
@@ -1108,11 +1110,16 @@ export class OfficeScene extends Phaser.Scene {
 
     document.getElementById("dm-back")?.addEventListener("click", () => this.showDmList());
     const dmInput = document.getElementById("dm-input") as HTMLInputElement | null;
+    const dmFile = this.wireAttach({
+      btn: "dm-attach", file: "dm-file", strip: "dm-pending", drop: "dm-thread",
+    });
     const sendDm = () => {
       const text = dmInput?.value.trim() ?? "";
-      if (!text || !this.dmOpen || !this.room) return;
-      this.room.send("dm", { to: this.dmOpen, text });
+      const attach = dmFile.held();
+      if ((!text && !attach) || !this.dmOpen || !this.room) return;
+      this.room.send("dm", { to: this.dmOpen, text, ...(attach ? { attach: attach.id } : {}) });
       if (dmInput) dmInput.value = "";
+      dmFile.clear();
     };
     document.getElementById("dm-send")?.addEventListener("click", sendDm);
     dmInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") sendDm(); });
@@ -1177,20 +1184,35 @@ export class OfficeScene extends Phaser.Scene {
 
     // room-wide chat
     const input = document.getElementById("room-chat-input") as HTMLInputElement | null;
+    const roomFile = this.wireAttach({
+      btn: "room-chat-attach", file: "room-chat-file",
+      strip: "room-chat-pending", drop: "view-chat",
+    });
     const send = () => {
-      const text = input?.value.trim();
-      if (text && this.room) this.room.send("roomchat", { text });
+      const text = input?.value.trim() ?? "";
+      const attach = roomFile.held();
+      // a file on its own is a message; an empty box with no file is not
+      if ((!text && !attach) || !this.room) return;
+      this.room.send("roomchat", { text, ...(attach ? { attach: attach.id } : {}) });
       if (input) input.value = "";
+      roomFile.clear();
     };
     document.getElementById("room-chat-send")?.addEventListener("click", send);
     input?.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") send(); });
 
     // the same conversation, from the meeting view's own composer
     const meetInput = document.getElementById("meet-chat-input") as HTMLInputElement | null;
+    const meetFile = this.wireAttach({
+      btn: "meet-chat-attach", file: "meet-chat-file",
+      strip: "meet-chat-pending", drop: "meet-chat",
+    });
     const meetSend = () => {
-      const text = meetInput?.value.trim();
-      if (text && this.room) this.room.send("roomchat", { text });
+      const text = meetInput?.value.trim() ?? "";
+      const attach = meetFile.held();
+      if ((!text && !attach) || !this.room) return;
+      this.room.send("roomchat", { text, ...(attach ? { attach: attach.id } : {}) });
       if (meetInput) meetInput.value = "";
+      meetFile.clear();
     };
     document.getElementById("meet-chat-send")?.addEventListener("click", meetSend);
     // stopPropagation so WASD in a message does not walk the avatar across the room
@@ -1271,12 +1293,108 @@ export class OfficeScene extends Phaser.Scene {
     this.refreshUnread();
   }
 
-  private appendChatLog(from: string, name: string, text: string) {
+/**
+   * The file half of a composer.
+   *
+   * Three composers want the same behaviour — the room, the meeting, and a
+   * private thread — and the behaviour is fiddlier than it looks: a file can
+   * arrive from a button, a paste, or a drop, it has to be visible before it is
+   * sent so that it can be taken back, and the send has to know whether one is
+   * waiting. So it is written once and handed the three ids.
+   *
+   * The upload happens on choosing, not on sending. By the time somebody has
+   * finished typing a sentence about a screenshot, the screenshot is already
+   * up, and pressing send is instant instead of a pause of unknown length.
+   */
+  private wireAttach(ids: { btn: string; file: string; strip: string; drop: string }) {
+    const btn = document.getElementById(ids.btn) as HTMLButtonElement | null;
+    const file = document.getElementById(ids.file) as HTMLInputElement | null;
+    const strip = document.getElementById(ids.strip) as HTMLElement | null;
+    const drop = document.getElementById(ids.drop) as HTMLElement | null;
+    if (!btn || !file || !strip) return { held: () => undefined as Attach | undefined, clear: () => {} };
+
+    file.accept = ACCEPT;
+    let held: Attach | undefined;
+    let busy = false;
+
+    const clear = () => {
+      held = undefined;
+      strip.hidden = true;
+      strip.className = "att-pending";
+      strip.innerHTML = "";
+      file.value = "";
+    };
+
+    const show = (name: string, size: string, kind: "" | "busy" | "err", onX?: () => void) => {
+      strip.hidden = false;
+      strip.className = "att-pending" + (kind ? " " + kind : "");
+      strip.innerHTML = "";
+      const n = document.createElement("span"); n.className = "n"; n.textContent = name;
+      const sz = document.createElement("span"); sz.className = "s"; sz.textContent = size;
+      strip.append(n, sz);
+      if (onX) {
+        const x = document.createElement("button");
+        x.className = "x"; x.type = "button"; x.textContent = "✕";
+        x.title = t("เอาไฟล์ออก");
+        x.onclick = onX;
+        strip.appendChild(x);
+      }
+    };
+
+    const take = async (f: File | null | undefined) => {
+      if (!f || busy) return;
+      busy = true;
+      btn.disabled = true;
+      show(f.name, t("กำลังส่ง…"), "busy");
+      try {
+        held = await upload(f, {
+          api: AUTH_API, workspace: WORKSPACE,
+          token: localStorage.getItem("nexspace-token") ?? undefined,
+          guest: GUEST_CODE || undefined,
+        });
+        show(held.name, humanSize(held.bytes), "", clear);
+      } catch (e) {
+        // Said in the strip rather than as a toast: the file is part of the
+        // message being written, so the complaint belongs where the message is.
+        show(f.name, (e as Error).message, "err", clear);
+        held = undefined;
+      } finally {
+        busy = false;
+        btn.disabled = false;
+      }
+    };
+
+    btn.addEventListener("click", () => file.click());
+    file.addEventListener("change", () => void take(file.files?.[0]));
+
+    if (drop) {
+      // A paste is how a screenshot actually gets into a chat. It only counts
+      // while this panel is the one being typed in, or a copied image would
+      // land in whichever composer was wired first.
+      drop.addEventListener("paste", (e: ClipboardEvent) => {
+        const items = Array.from(e.clipboardData?.items ?? []);
+        const f = items.filter((i) => i.kind === "file").map((i) => i.getAsFile())[0];
+        if (f) { e.preventDefault(); void take(f); }
+      });
+      const stop = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); };
+      drop.addEventListener("dragover", (e) => { stop(e); drop.classList.add("drop-here"); });
+      drop.addEventListener("dragleave", (e) => { stop(e); drop.classList.remove("drop-here"); });
+      drop.addEventListener("drop", (e) => {
+        stop(e);
+        drop.classList.remove("drop-here");
+        void take(e.dataTransfer?.files?.[0]);
+      });
+    }
+
+    return { held: () => held, clear };
+  }
+
+  private appendChatLog(from: string, name: string, text: string, attach?: Attach) {
     for (const id of ["chat-log", "meet-chat-log"]) {
       const log = document.getElementById(id);
       if (!log) continue;
       log.querySelector(".chat-empty, .mc-empty")?.remove();
-      log.appendChild(this.chatLine(from === this.mySessionId, name, text));
+      log.appendChild(this.chatLine(from === this.mySessionId, name, text, attach));
       log.scrollTop = log.scrollHeight;
     }
     if (from !== this.mySessionId && !this.chatIsVisible()) {
@@ -1285,13 +1403,19 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  private chatLine(mine: boolean, name: string, text: string) {
+  private chatLine(mine: boolean, name: string, text: string, attach?: Attach) {
     const div = document.createElement("div"); div.className = "msg";
     const who = document.createElement("span");
     who.className = "who" + (mine ? " me" : "");
     who.textContent = (mine ? t("คุณ") : name) + ":";
-    const txt = document.createElement("span"); txt.className = "txt"; txt.textContent = " " + text;
-    div.append(who, txt);
+    div.append(who);
+    // A file sent without a word is common, and " :" followed by nothing reads
+    // as a message that failed to arrive.
+    if (text) {
+      const txt = document.createElement("span"); txt.className = "txt"; txt.textContent = " " + text;
+      div.append(txt);
+    }
+    if (attach) div.append(attachNode(attach, AUTH_API));
     return div;
   }
 
@@ -1316,7 +1440,9 @@ export class OfficeScene extends Phaser.Scene {
         { headers: token ? { authorization: `Bearer ${token}` } : {} },
       );
       if (!r.ok) return;
-      const d = (await r.json()) as { messages?: { name: string; text: string; at: string; mine: boolean }[] };
+      const d = (await r.json()) as {
+        messages?: { name: string; text: string; at: string; mine: boolean; attach?: Attach }[];
+      };
       const rows = d.messages ?? [];
       if (!rows.length) return;
 
@@ -1325,7 +1451,7 @@ export class OfficeScene extends Phaser.Scene {
         if (!log) continue;
         log.querySelector(".chat-empty, .mc-empty")?.remove();
         const frag = document.createDocumentFragment();
-        for (const m of rows) frag.appendChild(this.chatLine(m.mine, m.name, m.text));
+        for (const m of rows) frag.appendChild(this.chatLine(m.mine, m.name, m.text, m.attach));
         // a line the reader can stop at, so old and new are not one blur
         const mark = document.createElement("div");
         mark.className = "chat-mark";
@@ -1553,8 +1679,10 @@ export class OfficeScene extends Phaser.Scene {
     if (withWho) withWho.textContent = name;
     log.innerHTML = "";
 
-    const d = await this.dmFetch<{ messages?: { name: string; text: string; mine: boolean }[] }>(`/${encodeURIComponent(peerId)}`);
-    for (const m of d?.messages ?? []) log.appendChild(this.chatLine(m.mine, m.name, m.text));
+    const d = await this.dmFetch<{
+      messages?: { name: string; text: string; mine: boolean; attach?: Attach }[];
+    }>(`/${encodeURIComponent(peerId)}`);
+    for (const m of d?.messages ?? []) log.appendChild(this.chatLine(m.mine, m.name, m.text, m.attach));
     if (!(d?.messages ?? []).length) {
       const empty = document.createElement("div");
       empty.className = "chat-empty";
@@ -1568,14 +1696,14 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   /** a line arriving while we are looking somewhere else */
-  private onDm(msg: { from: string; to: string; name: string; text: string }) {
+  private onDm(msg: { from: string; to: string; name: string; text: string; attach?: Attach }) {
     const mine = msg.from === this.myUserId;
     const peer = mine ? msg.to : msg.from;
     if (this.dmOpen === peer) {
       const log = document.getElementById("dm-log");
       if (log) {
         log.querySelector(".chat-empty")?.remove();
-        log.appendChild(this.chatLine(mine, msg.name, msg.text));
+        log.appendChild(this.chatLine(mine, msg.name, msg.text, msg.attach));
         log.scrollTop = log.scrollHeight;
       }
       // reading it as it lands still counts as reading it
@@ -1585,7 +1713,9 @@ export class OfficeScene extends Phaser.Scene {
     if (!mine) {
       this.dmUnread++;
       this.refreshDmBadge();
-      this.notify("✉", t("ข้อความจาก {name}").replace("{name}", msg.name), msg.text, () => {
+      // a file with no words still has to say something in the bell
+      const said = msg.text || (msg.attach ? "\u{1F4CE} " + msg.attach.name : "");
+      this.notify("✉", t("ข้อความจาก {name}").replace("{name}", msg.name), said, () => {
         this.showView?.("dm");
         void this.openDmThread(msg.from, msg.name);
       });

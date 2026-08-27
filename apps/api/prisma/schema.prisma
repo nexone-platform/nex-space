@@ -62,6 +62,7 @@ model Workspace {
   members     Membership[]
   guests      GuestPass[]
   messages    Message[]
+  attachments Attachment[]
   maps        WorkspaceMap[]
   visits      Visit[]
   createdAt   DateTime       @default(now())
@@ -181,12 +182,50 @@ model Message {
   to          User?     @relation("MessagesReceived", fields: [toUserId], references: [id], onDelete: Cascade)
   authorName  String
   body        String
+  // A message can be a file with nothing said about it, which is why body is
+  // allowed to be empty when this is set. One file per line, not many: a list
+  // of files is a conversation about several things, and threading it to a
+  // single line makes the reply ambiguous.
+  attachId    String?
+  attach      Attachment? @relation(fields: [attachId], references: [id], onDelete: SetNull)
   createdAt   DateTime  @default(now())
 
   // the room reads "the newest N here", a thread reads "the newest N between
   // these two" — different questions, so different indexes
   @@index([workspaceId, createdAt])
   @@index([workspaceId, toUserId, createdAt])
+}
+
+// A file somebody put in the chat.
+//
+// The bytes live on disk, not in this row. SQLite would hold them happily and
+// then every listing that touches a message would drag the file through Prisma
+// to render a filename — the row is the catalogue card, the volume is the shelf.
+//
+// It is deliberately not deleted when the message that showed it is: the sweep
+// that trims old chat removes both, together, so that "the file is gone but the
+// line still mentions it" is not a state this can be in.
+model Attachment {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  // who uploaded it. Null for a guest, who has no account to attribute it to,
+  // and null again once an account is deleted — the file stays because the
+  // conversation it belongs to does.
+  userId      String?
+  name        String    // as they named it, minus anything that is a path
+  mime        String    // what we will serve it as, from the allowlist only
+  bytes       Int
+  // Only ever a layout hint, and only for images: it reserves the right space
+  // before the file has loaded. Sent by the browser that uploaded it, so it is
+  // clamped rather than trusted.
+  width       Int?
+  height      Int?
+  path        String    // relative to the uploads root, so the root can move
+  createdAt   DateTime  @default(now())
+  messages    Message[]
+
+  @@index([workspaceId, createdAt])
 }
 
 // How far one person has read another's private messages.

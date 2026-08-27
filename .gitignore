@@ -24,6 +24,10 @@ Thumbs.db
 # raw PixelLab asset library (curation source, not deployed/committed)
 apps/web/asset-library/
 
+# uploaded files and the key that signs their links — user data and a secret,
+# created automatically by apps/api and mounted from a volume in production
+apps/api/data/
+
 # local dev sqlite db (created automatically by apps/api)
 apps/api/prisma/dev.db
 apps/api/prisma/*.db-journal
