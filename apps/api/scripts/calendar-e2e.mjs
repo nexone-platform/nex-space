@@ -304,6 +304,36 @@ let feed;
   ok("a plain member cannot rotate it out from under everybody", r.status === 403, `status ${r.status}`);
 }
 
+// ---- one meeting, for somebody who does not want the whole feed ----------------
+
+{
+  // The signature is computed from a server key the browser does not hold, so
+  // this link has to arrive with the booking. Until it did, the route existed
+  // with no possible caller.
+  const list = await get(`/workspaces/${ws.slug}/bookings`, owner.token);
+  const one = (list.bookings ?? []).find((b) => b.id === first.id);
+  ok("a booking arrives with a link to itself as a calendar file",
+    typeof one?.ics === "string" && one.ics.includes("sig="), JSON.stringify(one?.ics));
+
+  const r = await fetch(API + one.ics);
+  const text = await r.text();
+  ok("  · which opens", r.status === 200, `status ${r.status}`);
+  ok("  · as a calendar", (r.headers.get("content-type") || "").startsWith("text/calendar"),
+    r.headers.get("content-type"));
+  ok("  · holding exactly that one meeting",
+    (text.match(/BEGIN:VEVENT/g) || []).length === 1 && text.includes("SUMMARY:ประชุมทีม"),
+    String((text.match(/BEGIN:VEVENT/g) || []).length));
+  ok("  · offered as a download, since it is meant for a calendar app",
+    (r.headers.get("content-disposition") || "").startsWith("attachment"),
+    r.headers.get("content-disposition"));
+
+  const tampered = await fetch(API + one.ics.replace(/sig=./, "sig=A"));
+  ok("  · and a changed signature opens nothing", tampered.status === 403, `status ${tampered.status}`);
+
+  const feedKeyReused = await fetch(API + one.ics.replace(/sig=.*/, "sig="));
+  ok("  · nor an empty one", feedKeyReused.status === 403, `status ${feedKeyReused.status}`);
+}
+
 stop();
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

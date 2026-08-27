@@ -19,6 +19,12 @@ build
 **/*.db
 **/*.db-journal
 
+# Uploaded files and the key that signs their links. The volume mounts over this
+# path at runtime so a copy inside an image is never read — but it would still be
+# a signing secret sitting in an artifact that gets pushed to a registry and
+# handed around, which is not a thing to be relaxed about.
+apps/api/data
+
 # raw PixelLab source library (curation input, not shipped)
 apps/web/asset-library
 

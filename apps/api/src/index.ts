@@ -27,7 +27,22 @@ import {
 const port = Number(process.env.PORT) || 3001;
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "8mb" })); // maps can be large
+/**
+ * JSON bodies — everywhere except an upload.
+ *
+ * A file is posted as its own body with its own content-type, and one of the
+ * types on the allowlist is `application/json`. Mounted globally this parser
+ * reaches that request first, turns the file into an object, and leaves the
+ * route holding something that is not a Buffer — so uploading a .json file
+ * failed with "empty" while every other type worked.
+ */
+const jsonBody = express.json({ limit: "8mb" }); // maps can be large
+const UPLOAD_PATH = /^\/workspaces\/[^/]+\/uploads$/;
+app.use((req, res, next) =>
+  // The exact route, not "ends with /uploads": a space is free to be called
+  // "uploads", and a suffix test would then skip JSON parsing for every
+  // settings request that space ever makes.
+  req.method === "POST" && UPLOAD_PATH.test(req.path) ? next() : jsonBody(req, res, next));
 
 // Express 4 does not catch rejections thrown inside async handlers: a single
 // failing query would take the whole process down, and every request would 502
@@ -1120,11 +1135,14 @@ type BookingRow = {
   going?: { userId: string }[];
 };
 
-function bookingView(b: BookingRow, meId?: string | null) {
+function bookingView(b: BookingRow, meId: string | null | undefined, slug: string) {
   return {
     id: b.id, mapSlug: b.mapSlug, roomId: b.roomId, room: b.roomLabel,
     title: b.title, host: b.hostName, hostId: b.userId,
     startsAt: b.startsAt, endsAt: b.endsAt,
+    // "add this one to my calendar". Signed here because the browser cannot
+    // compute it — without this the .ics route below had no caller at all.
+    ics: `/workspaces/${encodeURIComponent(slug)}/bookings/${b.id}.ics?sig=${eventSig(serverKey(), b.id)}`,
     going: (b.going ?? []).length,
     // whether I said I am coming, and whether this is mine to cancel — both
     // questions the browser would otherwise answer by guessing
@@ -1178,7 +1196,7 @@ app.get("/workspaces/:slug/bookings", async (req, res) => {
     take: 500,
     include: { going: { select: { userId: true } } },
   });
-  res.json({ bookings: rows.map((b) => bookingView(b, who.userId)) });
+  res.json({ bookings: rows.map((b) => bookingView(b, who.userId, w.slug)) });
 });
 
 /** hold a room */
@@ -1226,7 +1244,7 @@ app.post("/workspaces/:slug/bookings", async (req, res) => {
     },
     include: { going: { select: { userId: true } } },
   });
-  res.json({ booking: bookingView(b, can.me.id) });
+  res.json({ booking: bookingView(b, can.me.id, w.slug) });
 });
 
 /** "I am coming" / "I am not" */
@@ -1251,7 +1269,7 @@ app.post("/workspaces/:slug/bookings/:id/going", async (req, res) => {
   const after = await prisma.booking.findUnique({
     where: { id: b.id }, include: { going: { select: { userId: true } } },
   });
-  res.json({ booking: bookingView(after as BookingRow, can.me.id) });
+  res.json({ booking: bookingView(after as BookingRow, can.me.id, w.slug) });
 });
 
 /**

@@ -262,9 +262,16 @@ ICE_ROUTE='out=$(wget -S -O /dev/null http://127.0.0.1/ice 2>&1 || true); case "
 # is said out loud on every deploy.
 ICE_RELAY='fetch("http://127.0.0.1:3001/ice").then(r => { if (r.status !== 401) { console.error("expected 401 for an anonymous request, got " + r.status); process.exit(1); } process.stdout.write(process.env.TURN_SECRET && process.env.TURN_HOST ? "relay at " + process.env.TURN_HOST : "STUN only - no relay configured, calls fail behind a strict firewall"); }).catch(e => { console.error(String(e && e.cause || e)); process.exit(1); })'
 
+# Files in the chat are written to the data volume, and the key that signs their
+# links is kept beside them. A volume that is missing or read-only does not stop
+# the API from starting: uploads fail one at a time, at whatever hour somebody
+# first drags a screenshot in, and the link secret quietly becomes per-restart.
+UPLOADS_WRITABLE='const { writeFileSync, unlinkSync, mkdirSync } = require("fs"); const d = process.env.UPLOAD_DIR || "/app/apps/api/data/uploads"; mkdirSync(d, { recursive: true }); const f = d + "/.deploy-probe"; writeFileSync(f, "x"); unlinkSync(f); process.stdout.write(d)'
+
 say "Verifying (a service still starting gets up to ${READY_WINDOW}s to answer)"
 check "API answers /health"                     $DC exec -T nexspace-api  node -e "$API_HEALTH"
 check "Prisma client matches schema.prisma"     $DC exec -T nexspace-api  node -e "$SCHEMA_MATCH"
+check "uploads directory is writable"           $DC exec -T nexspace-api  node -e "$UPLOADS_WRITABLE"
 check "game server is listening"                $DC exec -T nexspace-game node -e "$GAME_UP"
 check "nginx proxies /guest-pass to the API"    $DC exec -T nexspace-web  sh -c "$GUEST_ROUTE"
 check "nginx reaches the API from the app host" $DC exec -T nexspace-web  sh -c "$API_VIA_NGINX"

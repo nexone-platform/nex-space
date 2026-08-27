@@ -409,6 +409,7 @@ const EN: Record<string, string> = {
   "ยกเลิกแล้ว": "Cancelled",
   "ยกเลิกไม่สำเร็จ": "Could not cancel it",
   "ซิงก์เข้าปฏิทินของคุณ": "Sync to your own calendar",
+  "เพิ่มลงปฏิทินของคุณ": "Add to your calendar",
   "ขอที่อยู่ปฏิทินไม่สำเร็จ": "Could not fetch the calendar address",
   "วางที่อยู่นี้ใน Google Calendar › เพิ่มปฏิทิน › จาก URL": "Paste this into Google Calendar › Add calendar › From URL",
   "คัดลอกแล้ว ✓": "Copied ✓",

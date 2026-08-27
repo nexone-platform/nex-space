@@ -340,6 +340,79 @@ everything else, so it is included in whatever backs that file up — and it is 
 part of the database that grows on its own, which makes it the first reason this
 deployment will eventually want Postgres.
 
+## Files in the chat
+
+People can attach a picture or a document to any message — room chat, the
+meeting composer, or a private thread — by the paperclip, by pasting, or by
+dragging one in.
+
+```dotenv
+UPLOAD_MAX_BYTES=10000000   # 10 MB per file
+UPLOAD_SECRET=              # blank is fine; see below
+```
+
+**The bytes live in the same volume as the database**, under
+`apps/api/data/uploads`, filed by month. They are therefore included in whatever
+backs that volume up — and they are the fastest-growing thing in it. A file is
+removed when the message that showed it is swept, so `CHAT_KEEP_DAYS` above is
+also how long a shared file is kept; anything uploaded but never sent is swept
+after a day.
+
+**There is no per-person quota.** Anybody who may talk in a space may upload, and
+nothing stops one account from doing it repeatedly. On a private company
+deployment that is a housekeeping matter rather than an attack, but it is the
+reason to watch the volume rather than assume it:
+
+```bash
+docker compose exec nexspace-api du -sh /app/apps/api/data/uploads
+```
+
+**`UPLOAD_SECRET` signs the links that open a file.** Left blank, one is
+generated on first use and kept in the volume, which survives restarts — that is
+the right answer for a single API container. Set it explicitly if you ever run
+more than one, or every container would sign links the others reject.
+
+**nginx has its own body limit** and it must stay above `UPLOAD_MAX_BYTES`, or it
+refuses the upload with its own HTML error page, which the browser cannot read
+and reports as a generic failure. It is set in `apps/web/nginx.conf`:
+
+```nginx
+client_max_body_size 12m;
+```
+
+**What may be uploaded is a list, not a filter.** Pictures, PDF, plain text, CSV,
+JSON, ZIP and the Office formats. **SVG and HTML are refused on purpose**: both
+run script in a browser, and serving one from your own domain hands the person
+who uploaded it the session of everyone who clicks it. A type that is not on the
+list is refused rather than served as a download.
+
+## Room bookings and the calendar feed
+
+Meeting rooms can be held for a stretch of time from the calendar in the sidebar.
+Two bookings cannot overlap in one room; the rule is enforced by the API, not by
+the browser.
+
+```dotenv
+BOOKING_MAX_MINUTES=480   # the longest one booking may be
+BOOKING_MAX_DAYS=90       # how far ahead anybody may reach
+BOOKING_KEEP_DAYS=120     # then old bookings are swept
+```
+
+**The .ics feed address is a credential.** Each space has its own key, separate
+from the invite code, so a calendar can be handed to somebody without handing
+them the door. It is minted the first time a member opens "ซิงก์เข้าปฏิทินของคุณ",
+and anybody holding the address can read that space's bookings without signing
+in — which is what makes it work in Google Calendar, and what makes it worth
+rotating if it leaks. An owner or admin rotates it by posting to
+`/workspaces/<slug>/calendar-url`, which stops every existing subscriber.
+
+**Google Calendar is read-only, by subscription.** Writing into somebody's Google
+calendar needs the `calendar` scope, which Google treats as sensitive and will
+not grant to an app that has not been through its verification review — a
+process with a privacy policy and a demo video attached, and one only the
+operator of a deployment can run. The feed needs none of it and is read by
+Outlook and Apple Calendar too.
+
 ## Attendance and the dashboard
 
 Owners and admins see who used the space at `/admin.html?w=<slug>`, reachable

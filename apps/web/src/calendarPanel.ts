@@ -24,6 +24,8 @@ export type Booking = {
   going: number;
   imGoing: boolean;
   mine: boolean;
+  /** a signed link to this one meeting as a .ics file */
+  ics: string;
 };
 
 export type Room = { id: string; label: string };
@@ -268,6 +270,17 @@ export function mountCalendarPanel(o: CalendarOptions) {
 
     const acts = document.createElement("div");
     acts.className = "cal-acts";
+    if (!over && b.ics) {
+      // One meeting, for somebody who does not want the whole feed — which is
+      // most people, most of the time.
+      const one = document.createElement("a");
+      one.className = "cal-ics";
+      one.href = o.api + b.ics;
+      one.download = "meeting.ics";
+      one.title = t("เพิ่มลงปฏิทินของคุณ");
+      one.textContent = "📅";
+      acts.appendChild(one);
+    }
     if (!over) {
       const going = document.createElement("button");
       going.className = "cal-going" + (b.imGoing ? " on" : "");

@@ -169,6 +169,19 @@ let png;
   ok("a type we cannot name is refused rather than guessed at", r.status === 415, `status ${r.status}`);
 }
 {
+  // The allowlist accepts application/json, and the app also mounts a JSON body
+  // parser. Mounted globally, that parser reached this request first and turned
+  // the file into an object, so the route saw no Buffer and answered "empty" —
+  // every other type on the list worked, which is why nothing noticed.
+  const doc = Buffer.from('{"team":"ออกแบบ","seats":4}\n', "utf8");
+  const r = await send(ws.slug, doc, "application/json", "config.json", { token: owner.token });
+  ok("a .json file uploads, rather than being eaten by the body parser",
+    r.status === 200 && !!r.attachment?.id, `status ${r.status} ${JSON.stringify(r.attachment ?? r)}`);
+  const back = await fetch(API + r.attachment.url);
+  const bytes = Buffer.from(await back.arrayBuffer());
+  ok("  · byte for byte, not re-serialised", bytes.equals(doc), JSON.stringify(bytes.toString("utf8")));
+}
+{
   const big = Buffer.alloc(250_000, 7);          // over the 200k this run allows
   const r = await send(ws.slug, big, "image/png", "big.png", { token: owner.token });
   ok("a file over the limit is refused", r.status === 413, `status ${r.status}`);
@@ -183,6 +196,26 @@ let png;
     r.status === 200 && r.attachment?.name === "escape.txt", JSON.stringify(r.attachment?.name));
   ok("  · and nothing was written outside the uploads directory",
     !existsSync(join(SCRATCH, "../escape.txt")) && !existsSync(join(SCRATCH, "../../escape.txt")));
+}
+
+{
+  // The fix above skips the JSON body parser for the upload route. Written as
+  // "the path ends with /uploads" it would also skip it for a space whose slug
+  // IS "uploads" — every settings request that space made would arrive with no
+  // parsed body.
+  //
+  // Only one space can ever hold that slug, so this can only be tested on a
+  // database that does not have one yet. It says so rather than passing, because
+  // an assertion that quietly stops testing anything is worse than no assertion:
+  // the second run of this suite gets "uploads-2" and would go green either way.
+  const odd = (await post("/workspaces", { name: "uploads" }, owner.token)).workspace;
+  if (odd?.slug !== "uploads") {
+    console.log(`  skip  the slug "uploads" is already taken (got ${odd?.slug}) — needs a fresh database`);
+  } else {
+    const r = await call("PATCH", `/workspaces/${odd.slug}`, { body: { name: "renamed" }, token: owner.token });
+    ok('a space that is itself called "uploads" still reads its own settings',
+      r.status === 200 && r.workspace?.name === "renamed", `${r.status} ${JSON.stringify(r.workspace?.name)}`);
+  }
 }
 
 // ---- the link ----------------------------------------------------------------
