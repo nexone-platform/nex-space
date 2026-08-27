@@ -108,6 +108,15 @@ function loadSecret(): Buffer {
 
 const SECRET = loadSecret();
 
+/**
+ * The same key, for the other thing that signs a URL.
+ *
+ * The calendar feed and the single-event download need one too, and a second
+ * generated-and-kept secret would be a second file to lose. It lives here
+ * because this is where the keeping-it-on-disk problem was already solved.
+ */
+export const serverKey = () => SECRET;
+
 const mac = (id: string, exp: number) =>
   createHmac("sha256", SECRET).update(`${id}.${exp}`).digest("base64url");
 

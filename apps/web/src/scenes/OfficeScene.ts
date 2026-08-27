@@ -11,6 +11,7 @@ import { WORKSPACE, IS_DEFAULT_WORKSPACE, workspaceLabel, inviteLink, wsKey,
 import { API as AUTH_API } from "../api";
 import { t, onLangChange, locale } from "../i18n";
 import { ACCEPT, type Attach, attachNode, humanSize, upload } from "../net/attach";
+import { type Booking, clock, mountCalendarPanel } from "../calendarPanel";
 import { setupPrefsModal } from "../prefsModal";
 import { roleLabel } from "../memberPanel";
 import { propPath, type Interactive } from "./mapThemes";
@@ -144,6 +145,14 @@ const STICKER_SET = ["❤️", "👍", "🎉", "⭐", "❗", "❓", "💡", "�
 const PRIVATE_AREAS = THEME.areas;
 /** which map of the space this tab is on; "" on one of the built-in layouts */
 const MAP = currentMapSlug();
+/**
+ * The same thing, as the calendar names it.
+ *
+ * A booking has to say which map its room is on, and "" is not a name — a stock
+ * layout would store every space's bookings under the empty string and read
+ * them back fine, right up until a space added a second map.
+ */
+const MAP_KEY = MAP || "main";
 
 interface MeetingPerson { id: string; name: string; self: boolean; status: string; mic: boolean; hand: boolean }
 
@@ -205,6 +214,13 @@ export class OfficeScene extends Phaser.Scene {
    * person is not shown a button that will be refused.
    */
   private myRole = "member";
+  /** every booking the calendar panel last saw, for the plates and the reminders */
+  private bookings: Booking[] = [];
+  /** bookings already reminded about, so a poll every two minutes reminds once */
+  private reminded = new Set<string>();
+  private calPanel?: { refresh: () => Promise<void>; bookRoom: (roomId: string) => void };
+  /** every area label on this map, so a booking can be written over its door */
+  private areaLabels = new Map<string, Phaser.GameObjects.Text>();
   /** locked rooms this visit has been let into, by area id */
   private admitted = new Set<string>();
   /** the sticker the next click on the floor will leave, if any */
@@ -293,9 +309,11 @@ export class OfficeScene extends Phaser.Scene {
       const g = this.add.graphics().setDepth(-950);
       g.fillStyle(tint, a.locked ? 0.1 : 0.07).fillRect(px, py, w, h);
       g.lineStyle(a.locked ? 1.5 : 1, tint, a.locked ? 0.6 : 0.35).strokeRect(px + 0.5, py + 0.5, w - 1, h - 1);
-      this.add.text(px + 5, py + 3, (a.locked ? "🔐 " : "🔒 ") + t(a.label), {
+      const plate = this.add.text(px + 5, py + 3, (a.locked ? "🔐 " : "🔒 ") + t(a.label), {
         fontFamily: "monospace", fontSize: "9px", color: a.locked ? "#a83c36" : "#2bb3a3",
       }).setAlpha(0.85).setDepth(-949).setResolution(3);
+      // kept, because what the room is booked for gets written into it
+      this.areaLabels.set(a.id, plate);
     }
 
     // --- walls: perimeter + partitions, defined by the theme ---
@@ -1068,8 +1086,13 @@ export class OfficeScene extends Phaser.Scene {
 
   private setupSidebar() {
     const sidebar = document.getElementById("sidebar");
-    const views: Record<string, string> = { people: "view-people", dm: "view-dm", notif: "view-notif", chat: "view-chat" };
-    const titles: Record<string, string> = { people: "NexSpace", dm: t("ข้อความส่วนตัว"), notif: t("การแจ้งเตือน"), chat: t("แชตห้องรวม") };
+    const views: Record<string, string> = {
+      people: "view-people", dm: "view-dm", notif: "view-notif", chat: "view-chat", cal: "view-cal",
+    };
+    const titles: Record<string, string> = {
+      people: "NexSpace", dm: t("ข้อความส่วนตัว"), notif: t("การแจ้งเตือน"),
+      chat: t("แชตห้องรวม"), cal: t("ปฏิทินห้องประชุม"),
+    };
     const showView = (v: string) => {
       sidebar?.classList.remove("closed");
       for (const [k, id] of Object.entries(views)) {
@@ -1083,6 +1106,7 @@ export class OfficeScene extends Phaser.Scene {
     document.getElementById("rail-people")?.addEventListener("click", () => showView("people"));
     document.getElementById("rail-chat")?.addEventListener("click", () => { showView("chat"); this.markChatSeen(); });
     document.getElementById("rail-dm")?.addEventListener("click", () => { showView("dm"); this.showDmList(); });
+    document.getElementById("rail-cal")?.addEventListener("click", () => showView("cal"));
     document.getElementById("rail-notif")?.addEventListener("click", () => { showView("notif"); this.renderNotifs(true); });
     document.getElementById("nf-clear")?.addEventListener("click", () => { this.notifs = []; this.renderNotifs(true); });
     document.getElementById("nf-sound")?.addEventListener("click", () => {
@@ -1123,6 +1147,8 @@ export class OfficeScene extends Phaser.Scene {
     };
     document.getElementById("dm-send")?.addEventListener("click", sendDm);
     dmInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") sendDm(); });
+    this.mountCalendar();
+
     // the gear opens the preferences dialog (members, space settings)
     void this.buildMapSwitcher();
     const prefs = setupPrefsModal(WORKSPACE, IS_DEFAULT_WORKSPACE, () => {
@@ -1306,6 +1332,125 @@ export class OfficeScene extends Phaser.Scene {
    * finished typing a sentence about a screenshot, the screenshot is already
    * up, and pressing send is instant instead of a pause of unknown length.
    */
+/**
+   * The room calendar, and the two things it feeds.
+   *
+   * The panel owns the list; the scene borrows it for the plates on the map and
+   * for the reminder. Keeping one copy means a booking cancelled in the sidebar
+   * stops appearing over the door without any second fetch.
+   */
+  private mountCalendar() {
+    const host = document.getElementById("view-cal");
+    if (!host) return;
+    this.calPanel = mountCalendarPanel({
+      host,
+      api: AUTH_API,
+      workspace: WORKSPACE,
+      mapSlug: MAP_KEY,
+      token: localStorage.getItem("nexspace-token") ?? undefined,
+      guest: GUEST_CODE || undefined,
+      // Only the rooms on the map being looked at. Booking a room on another
+      // floor from here would be booking something you cannot see.
+      rooms: () => PRIVATE_AREAS.map((a) => ({ id: a.id, label: t(a.label) })),
+      canManage: () => this.myRole === "owner" || this.myRole === "admin",
+      canBook: () => this.myRole !== "guest",
+      onChange: (all) => {
+        this.bookings = all;
+        this.refreshRoomPlates();
+        this.checkReminders();
+      },
+    });
+  }
+
+  /** the booking happening in a room right now, if any */
+  private bookingNow(roomId: string, at = Date.now()) {
+    return this.bookings.find((b) =>
+      b.mapSlug === MAP_KEY && b.roomId === roomId
+      && +new Date(b.startsAt) <= at && at < +new Date(b.endsAt));
+  }
+
+  /** the next one after that */
+  private bookingNext(roomId: string, at = Date.now()) {
+    return this.bookings
+      .filter((b) => b.mapSlug === MAP_KEY && b.roomId === roomId && +new Date(b.startsAt) > at)
+      .sort((a, b) => +new Date(a.startsAt) - +new Date(b.startsAt))[0];
+  }
+
+  /**
+   * What each room is doing, written over its door.
+   *
+   * The point of a booking is that somebody walking up to the room can see it
+   * without opening a calendar. Drawn into the same label the area already has,
+   * rather than as a new object, so it moves and hides with the room.
+   */
+  private refreshRoomPlates() {
+    const now = Date.now();
+    for (const [id, label] of this.areaLabels) {
+      const area = PRIVATE_AREAS.find((a) => a.id === id);
+      if (!area) continue;
+      const on = this.bookingNow(id, now);
+      const soon = on ? undefined : this.bookingNext(id, now);
+      // Only the next hour counts as "soon". Anything further away is not news
+      // to somebody standing at the door.
+      const near = soon && +new Date(soon.startsAt) - now < 60 * 60 * 1000 ? soon : undefined;
+      label.setText(
+        on ? `${t(area.label)} — ${on.title}`
+          : near ? `${t(area.label)} — ${clock(near.startsAt)}`
+          : t(area.label),
+      );
+      label.setColor(on ? "#ffd9a8" : "#ffffff");
+    }
+  }
+
+  /**
+   * Say something before it starts.
+   *
+   * Only to people who said they are coming, and only once each. The check runs
+   * on the same poll the panel already does, so a meeting booked on another
+   * machine still reminds this one.
+   */
+  private checkReminders() {
+    const now = Date.now();
+    const AHEAD = 5 * 60 * 1000;
+    for (const b of this.bookings) {
+      if (!b.imGoing || this.reminded.has(b.id)) continue;
+      const inMs = +new Date(b.startsAt) - now;
+      // A window, not a moment: the poll is every two minutes, so "exactly five
+      // minutes before" would be missed more often than hit. Past the start is
+      // excluded — a reminder for a meeting already running is not a reminder.
+      if (inMs > AHEAD || inMs < -60_000) continue;
+      this.reminded.add(b.id);
+      const mins = Math.max(0, Math.round(inMs / 60_000));
+      const line = mins > 0
+        ? t("{title} เริ่มในอีก {n} นาที").replace("{title}", b.title).replace("{n}", String(mins))
+        : t("{title} เริ่มแล้ว").replace("{title}", b.title);
+      this.toast(line, "info");
+      this.notify("📅", line, `${b.room} · ${clock(b.startsAt)}`, () => {
+        this.showView?.("cal");
+        // and walk them there, which is the actual next thing they wanted
+        const area = PRIVATE_AREAS.find((a) => a.id === b.roomId);
+        if (area) {
+          const cx = ((area.x0 + area.x1) / 2) * TILE + TILE / 2;
+          const cy = ((area.y0 + area.y1) / 2) * TILE + TILE / 2;
+          this.walkOrJump(cx, cy);
+        }
+      });
+    }
+    this.refreshCalBadge();
+  }
+
+  /** how many of my meetings are still to come today */
+  private refreshCalBadge() {
+    const badge = document.getElementById("cal-soon");
+    if (!badge) return;
+    const now = Date.now();
+    const endOfDay = new Date(); endOfDay.setHours(23, 59, 59, 999);
+    const mine = this.bookings.filter((b) =>
+      b.imGoing && +new Date(b.endsAt) > now && +new Date(b.startsAt) <= +endOfDay).length;
+    badge.textContent = String(mine);
+    badge.hidden = mine === 0;
+  }
+
   private wireAttach(ids: { btn: string; file: string; strip: string; drop: string }) {
     const btn = document.getElementById(ids.btn) as HTMLButtonElement | null;
     const file = document.getElementById(ids.file) as HTMLInputElement | null;
@@ -2982,6 +3127,19 @@ export class OfficeScene extends Phaser.Scene {
       chip.hidden = !now;
       const label = document.getElementById("area-name");
       if (label && now) label.textContent = t(now.label);
+
+      // Standing in a room is when somebody decides they want it, so the offer
+      // follows them into it rather than waiting in a panel they would have to
+      // think to open.
+      const book = document.getElementById("area-book") as HTMLButtonElement | null;
+      if (book) {
+        book.hidden = !now || this.myRole === "guest";
+        book.onclick = () => {
+          if (!now) return;
+          this.showView?.("cal");
+          this.calPanel?.bookRoom(now.id);
+        };
+      }
     }
     if (now) this.toast(t("เข้า {area} — คุยกันเฉพาะคนในโซนนี้").replace("{area}", t(now.label)), "info");
   }

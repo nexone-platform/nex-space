@@ -40,6 +40,8 @@ model User {
   owned         Workspace[]  @relation("OwnedWorkspaces")
   memberships   Membership[]
   sent          Message[]    @relation("MessagesSent")
+  booked        Booking[]    @relation("BookingsHosted")
+  goingTo       BookingGoing[]
   received      Message[]    @relation("MessagesReceived")
   dmReads       DmRead[]
   visits        Visit[]
@@ -57,12 +59,18 @@ model Workspace {
   // different maps would put people inside each other's walls.
   theme       String         @default("classic")
   useCase     String? // onboarding: how the team plans to use this space
+  // Opens this space's .ics feed, and nothing else. Its own secret rather than
+  // the invite code, so a space can hand a calendar to a contractor without
+  // handing them the door — and can take it back by rotating this alone.
+  // Made on first use: a space that never opens a calendar never has one.
+  calendarKey String?
   ownerId     String
   owner       User           @relation("OwnedWorkspaces", fields: [ownerId], references: [id], onDelete: Cascade)
   members     Membership[]
   guests      GuestPass[]
   messages    Message[]
   attachments Attachment[]
+  bookings    Booking[]
   maps        WorkspaceMap[]
   visits      Visit[]
   createdAt   DateTime       @default(now())
@@ -194,6 +202,56 @@ model Message {
   // these two" — different questions, so different indexes
   @@index([workspaceId, createdAt])
   @@index([workspaceId, toUserId, createdAt])
+}
+
+// A room, held for a while.
+//
+// The room is named by (mapSlug, roomId) rather than by a row of its own,
+// because rooms are drawn on maps and a map can be redrawn. Deleting a room
+// from a map should not orphan a foreign key; it should leave a booking for a
+// room that is no longer there, which reads correctly and clears itself when
+// the time passes.
+//
+// roomLabel is a snapshot for the same reason. Renaming "ห้องประชุม" to
+// "ห้องประชุมเล็ก" should not rewrite what last month's meetings say they were
+// in.
+model Booking {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  mapSlug     String    @default("main")
+  roomId      String
+  roomLabel   String
+  title       String
+  // The person who booked it. Null once their account is gone — the meeting
+  // still happened, and hostName is what anybody reading it needs.
+  userId      String?
+  host        User?     @relation("BookingsHosted", fields: [userId], references: [id], onDelete: SetNull)
+  hostName    String
+  startsAt    DateTime
+  endsAt      DateTime
+  createdAt   DateTime  @default(now())
+  going       BookingGoing[]
+
+  // "what is on today" and "is this room free then" are different questions
+  @@index([workspaceId, startsAt])
+  @@index([workspaceId, mapSlug, roomId, startsAt])
+}
+
+// Somebody who said they are coming.
+//
+// Not an invitation — nobody is added by anybody else. It exists so a reminder
+// has somewhere to go: without it the only person a meeting could remind is the
+// one who booked it, who is the least likely to have forgotten.
+model BookingGoing {
+  bookingId String
+  userId    String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  at        DateTime @default(now())
+
+  @@id([bookingId, userId])
+  @@index([userId])
 }
 
 // A file somebody put in the chat.

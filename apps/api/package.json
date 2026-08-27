@@ -23,7 +23,8 @@
     "test:stats": "node scripts/stats-e2e.mjs",
     "test:emote": "node scripts/emote-e2e.mjs",
     "test:roles2": "node scripts/roles2-e2e.mjs",
-    "test:files": "node scripts/files-e2e.mjs"
+    "test:files": "node scripts/files-e2e.mjs",
+    "test:calendar": "node scripts/calendar-e2e.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

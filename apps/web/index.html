@@ -344,10 +344,98 @@
       #meet-chat-log .chat-mark::before, #meet-chat-log .chat-mark::after { background: #ffffff1f; }
       .chat-compose { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--border); }
 
+
+      /* ---- the room calendar ----
+         A day at a time in a narrow column. Everything here is sized for 320px,
+         because that is what the sidebar actually is. */
+      .cal { display: flex; flex-direction: column; gap: 8px; min-height: 0; padding: 10px; }
+      .cal-bar { display: flex; align-items: center; gap: 6px; }
+      .cal-nav {
+        flex: 0 0 auto; width: 26px; height: 26px; border: 1px solid var(--border-2);
+        background: var(--surface); color: var(--text-2); border-radius: 8px; cursor: pointer;
+        font-size: 15px; line-height: 1;
+      }
+      .cal-nav:hover { border-color: var(--accent-line); color: var(--accent); }
+      .cal-day { flex: 1; font-size: 13.5px; font-weight: 600; text-align: center; }
+      .cal-add {
+        flex: 0 0 auto; border: none; background: var(--accent); color: #fff;
+        border-radius: 9px; padding: 6px 10px; font-size: 12px; font-weight: 600; cursor: pointer;
+      }
+      .cal-add:hover { background: var(--accent-hover); }
+
+      .cal-msg { min-height: 15px; font-size: 12px; color: var(--teal-ink); }
+      .cal-msg.err { color: var(--danger); }
+
+      .cal-form { display: flex; flex-direction: column; gap: 7px; padding: 10px;
+        border: 1px solid var(--border); border-radius: 11px; background: var(--surface-2); }
+      .cal-form[hidden] { display: none; }
+      .cal-row { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--text-3); }
+      .cal-row input, .cal-row select {
+        padding: 7px 9px; border: 1px solid var(--border-2); border-radius: 8px;
+        background: var(--surface); color: var(--text); font: 13px "Segoe UI", sans-serif; outline: none;
+      }
+      .cal-row input:focus, .cal-row select:focus { border-color: var(--teal); }
+      .cal-actions { display: flex; gap: 7px; justify-content: flex-end; margin-top: 2px; }
+      .cal-save, .cal-cancel {
+        border-radius: 8px; padding: 7px 13px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+      }
+      .cal-save { border: none; background: var(--teal); color: #fff; }
+      .cal-cancel { border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2); }
+
+      .cal-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+      .cal-empty { padding: 20px 12px; text-align: center; font-size: 12.5px; color: var(--faint); }
+      .cal-card {
+        display: flex; align-items: flex-start; gap: 9px; padding: 9px 10px;
+        border: 1px solid var(--border); border-left: 3px solid var(--border-2);
+        border-radius: 10px; background: var(--surface);
+      }
+      /* on now: the one thing somebody scanning this list is looking for */
+      .cal-card.live { border-left-color: var(--teal); background: var(--surface-2); }
+      .cal-card.over { opacity: .55; }
+      .cal-when { flex: 0 0 auto; font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; padding-top: 1px; }
+      .cal-body { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+      .cal-body b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .cal-body small { font-size: 11px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .cal-acts { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
+      .cal-going {
+        border: 1px solid var(--border-2); background: var(--surface); color: var(--text-3);
+        border-radius: 7px; padding: 4px 7px; font-size: 11px; cursor: pointer; white-space: nowrap;
+      }
+      .cal-going.on { border-color: var(--teal); background: var(--accent-soft); color: var(--teal-ink); }
+      .cal-drop {
+        border: none; background: none; color: var(--text-3); cursor: pointer;
+        font-size: 13px; padding: 3px 4px; border-radius: 6px;
+      }
+      .cal-drop:hover { color: var(--danger); background: var(--surface-3); }
+
+      .cal-foot { border-top: 1px solid var(--border); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+      .cal-sub {
+        border: 1px dashed var(--border-2); background: none; color: var(--text-2);
+        border-radius: 9px; padding: 7px; font-size: 12px; cursor: pointer;
+      }
+      .cal-sub:hover { border-color: var(--accent-line); color: var(--accent); }
+      .cal-foot small { font-size: 11px; color: var(--text-3); line-height: 1.4; }
+      .cal-foot small.cal-warn { color: var(--text-3); opacity: .85; }
+      .cal-foot input {
+        width: 100%; padding: 6px 8px; border: 1px solid var(--border-2); border-radius: 8px;
+        background: var(--surface-3); color: var(--text-2); font: 11px monospace; outline: none;
+      }
+      .cal-copy {
+        border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2);
+        border-radius: 8px; padding: 6px; font-size: 12px; cursor: pointer;
+      }
+
       /* ---- files in the chat ----
          A picture is shown; anything else is a card that says what it is. The
          two look different on purpose: an image is the message, a file is a
          thing you decide whether to open. */
+      #area-chip #area-book {
+        margin-left: 6px; border: 1px solid var(--border-2); background: var(--surface);
+        color: var(--text-2); border-radius: 7px; padding: 3px 8px; font-size: 11px; cursor: pointer;
+      }
+      #area-chip #area-book:hover { border-color: var(--accent-line); color: var(--accent); }
+      #area-chip #area-book[hidden] { display: none; }
+
       .att { display: block; margin-top: 6px; text-decoration: none; }
       .att-img img {
         display: block; max-width: 100%; max-height: 260px; width: auto;
@@ -1737,6 +1825,9 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
       <b id="area-name"></b>
       <small>เฉพาะคนในโซนนี้</small>
+      <!-- Standing in the room is when somebody wants it, so the offer is here
+           rather than only in the sidebar. Hidden for a guest, who cannot. -->
+      <button id="area-book" title="จองห้องนี้" hidden>จองห้องนี้</button>
     </div>
     <div id="toast"><span class="t-ico"></span><span class="t-msg"></span></div>
     <div id="modal">
@@ -1756,6 +1847,10 @@
       </button>
       <button id="rail-chat" title="แชตห้อง">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z"/></svg>
+      </button>
+      <button id="rail-cal" title="ปฏิทินห้องประชุม">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4M16 3v4"/></svg>
+        <span id="cal-soon" class="rail-badge" hidden>0</span>
       </button>
       <span class="spacer"></span>
       <button id="rail-notif" title="การแจ้งเตือน">
@@ -1817,6 +1912,8 @@
           </div>
         </div>
       </div>
+
+      <div id="view-cal" class="sb-view" hidden></div>
 
       <div id="view-notif" class="sb-view" hidden>
         <div class="nf-head">

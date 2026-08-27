@@ -18,7 +18,11 @@ import {
 import {
   UPLOAD_MAX_BYTES, absPathFor, accepts, allowedTypes, dropBytes, isImage,
   linkOk, putBytes, relPathFor, safeName, signedPath,
+  serverKey,
 } from "./uploads.js";
+import {
+  checkWhen, eventSig, ics, newCalendarKey, overlaps,
+} from "./calendar.js";
 
 const port = Number(process.env.PORT) || 3001;
 const app = express();
@@ -1105,6 +1109,268 @@ app.post("/workspaces/:slug/messages", async (req, res) => {
   });
 });
 
+// ---- rooms, held for a while --------------------------------------------------
+
+/** how far a listing may reach in one request */
+const CAL_WINDOW_DAYS = Number(process.env.BOOKING_WINDOW_DAYS || 60);
+
+type BookingRow = {
+  id: string; mapSlug: string; roomId: string; roomLabel: string; title: string;
+  userId: string | null; hostName: string; startsAt: Date; endsAt: Date; createdAt: Date;
+  going?: { userId: string }[];
+};
+
+function bookingView(b: BookingRow, meId?: string | null) {
+  return {
+    id: b.id, mapSlug: b.mapSlug, roomId: b.roomId, room: b.roomLabel,
+    title: b.title, host: b.hostName, hostId: b.userId,
+    startsAt: b.startsAt, endsAt: b.endsAt,
+    going: (b.going ?? []).length,
+    // whether I said I am coming, and whether this is mine to cancel — both
+    // questions the browser would otherwise answer by guessing
+    imGoing: !!meId && (b.going ?? []).some((g) => g.userId === meId),
+    mine: !!meId && b.userId === meId,
+  };
+}
+
+/**
+ * Who may book, as opposed to who may look.
+ *
+ * Looking is for anybody who may be in the space, guests included — walking up
+ * to a meeting room and being told it is taken is the whole point. Booking is
+ * for accounts: a room held by somebody whose pass expires tonight is a room
+ * nobody can give back.
+ */
+async function booker(req: express.Request, w: { id: string }) {
+  const token = req.header("authorization")?.replace(/^Bearer\s+/i, "") || String(req.query.token || "");
+  const me = await userFromToken(token || undefined);
+  if (!me) return null;
+  const m = await prisma.membership.findUnique({
+    where: { userId_workspaceId: { userId: me.id, workspaceId: w.id } },
+  });
+  return m && m.role !== "guest" ? { me, role: m.role } : null;
+}
+
+/** what is on, between two moments */
+app.get("/workspaces/:slug/bookings", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const who = await speakerFor(req, w);
+  if (!who) return res.status(401).json({ error: "unauthorized" });
+
+  const from = req.query.from ? new Date(String(req.query.from)) : new Date();
+  const to = req.query.to ? new Date(String(req.query.to)) : new Date(+from + CAL_WINDOW_DAYS * DAY_MS);
+  if (isNaN(+from) || isNaN(+to) || +to <= +from) return res.status(400).json({ error: "bad range" });
+  // A listing is a page, not a database dump: without a ceiling, "from 1970 to
+  // 3000" is a request that reads every row this space has ever written.
+  const end = new Date(Math.min(+to, +from + CAL_WINDOW_DAYS * DAY_MS));
+
+  const rows = await prisma.booking.findMany({
+    where: {
+      workspaceId: w.id,
+      ...(req.query.map ? { mapSlug: String(req.query.map) } : {}),
+      // anything overlapping the window, not merely starting inside it — a
+      // meeting that began before the window is still on
+      startsAt: { lt: end },
+      endsAt: { gt: from },
+    },
+    orderBy: { startsAt: "asc" },
+    take: 500,
+    include: { going: { select: { userId: true } } },
+  });
+  res.json({ bookings: rows.map((b) => bookingView(b, who.userId)) });
+});
+
+/** hold a room */
+app.post("/workspaces/:slug/bookings", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can) return res.status(403).json({ error: "forbidden" });
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const title = String(body.title ?? "").trim().slice(0, 120);
+  const roomId = String(body.roomId ?? "").trim().slice(0, 60);
+  const roomLabel = String(body.roomLabel ?? "").trim().slice(0, 80) || roomId;
+  const mapSlug = String(body.mapSlug ?? "main").trim().slice(0, 60) || "main";
+  if (!title) return res.status(400).json({ error: "a meeting needs a name" });
+  if (!roomId) return res.status(400).json({ error: "which room?" });
+
+  const startsAt = new Date(String(body.startsAt ?? ""));
+  const endsAt = new Date(String(body.endsAt ?? ""));
+  const wrong = checkWhen(startsAt, endsAt);
+  if (wrong) return res.status(400).json({ error: wrong });
+
+  // Everything already in this room that could touch the new span. Read and
+  // checked here rather than left to a unique constraint, because "overlapping"
+  // is not something a database index can express.
+  const near = await prisma.booking.findMany({
+    where: { workspaceId: w.id, mapSlug, roomId, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } },
+    orderBy: { startsAt: "asc" },
+  });
+  const clash = near.find((b) => overlaps(b, { startsAt, endsAt }));
+  if (clash) {
+    return res.status(409).json({
+      error: "that room is taken then",
+      clash: { title: clash.title, host: clash.hostName, startsAt: clash.startsAt, endsAt: clash.endsAt },
+    });
+  }
+
+  const b = await prisma.booking.create({
+    data: {
+      workspaceId: w.id, mapSlug, roomId, roomLabel, title,
+      userId: can.me.id, hostName: can.me.name, startsAt, endsAt,
+      // Booking it is saying you will be there. Anything else would mean the
+      // person who called the meeting is the one person it does not remind.
+      going: { create: { userId: can.me.id } },
+    },
+    include: { going: { select: { userId: true } } },
+  });
+  res.json({ booking: bookingView(b, can.me.id) });
+});
+
+/** "I am coming" / "I am not" */
+app.post("/workspaces/:slug/bookings/:id/going", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can) return res.status(403).json({ error: "forbidden" });
+
+  const b = await prisma.booking.findUnique({ where: { id: req.params.id } });
+  if (!b || b.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
+
+  const coming = (req.body ?? {}).going !== false;
+  if (coming) {
+    await prisma.bookingGoing.upsert({
+      where: { bookingId_userId: { bookingId: b.id, userId: can.me.id } },
+      update: {}, create: { bookingId: b.id, userId: can.me.id },
+    });
+  } else {
+    await prisma.bookingGoing.deleteMany({ where: { bookingId: b.id, userId: can.me.id } });
+  }
+  const after = await prisma.booking.findUnique({
+    where: { id: b.id }, include: { going: { select: { userId: true } } },
+  });
+  res.json({ booking: bookingView(after as BookingRow, can.me.id) });
+});
+
+/**
+ * Give the room back.
+ *
+ * The host, or somebody who runs the space. An admin needs it because the
+ * person who booked the room every Tuesday has left, and the room should not
+ * be theirs forever.
+ */
+app.delete("/workspaces/:slug/bookings/:id", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can) return res.status(403).json({ error: "forbidden" });
+
+  const b = await prisma.booking.findUnique({ where: { id: req.params.id } });
+  if (!b || b.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
+
+  const staff = can.role === "owner" || can.role === "admin";
+  if (b.userId !== can.me.id && !staff) return res.status(403).json({ error: "not yours to cancel" });
+
+  await prisma.booking.delete({ where: { id: b.id } });
+  res.json({ ok: true });
+});
+
+// ---- getting it into a real calendar ------------------------------------------
+
+/**
+ * The address of this space's feed.
+ *
+ * Handed out to members only, and made on first ask. Posting to it again mints
+ * a new one, which is how a leaked address is taken back — every subscriber
+ * stops updating, which is the point rather than a side effect.
+ */
+async function calendarUrl(req: express.Request, w: { slug: string; calendarKey: string | null; id: string }) {
+  let key = w.calendarKey;
+  if (!key) {
+    key = newCalendarKey();
+    await prisma.workspace.update({ where: { id: w.id }, data: { calendarKey: key } });
+  }
+  const origin = `${req.header("x-forwarded-proto") || req.protocol}://${req.header("x-forwarded-host") || req.get("host")}`;
+  return `${origin}/workspaces/${encodeURIComponent(w.slug)}/calendar.ics?key=${key}`;
+}
+
+app.get("/workspaces/:slug/calendar-url", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can) return res.status(403).json({ error: "forbidden" });
+  res.json({ url: await calendarUrl(req, w) });
+});
+
+app.post("/workspaces/:slug/calendar-url", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can || (can.role !== "owner" && can.role !== "admin"))
+    return res.status(403).json({ error: "forbidden" });
+  await prisma.workspace.update({ where: { id: w.id }, data: { calendarKey: newCalendarKey() } });
+  const fresh = await prisma.workspace.findUnique({ where: { id: w.id } });
+  res.json({ url: await calendarUrl(req, fresh!) });
+});
+
+/**
+ * The feed itself.
+ *
+ * No session — a calendar app subscribing to this has no way to hold one. The
+ * key in the URL is the whole credential, which is why it is its own secret and
+ * why it can be rotated.
+ */
+app.get("/workspaces/:slug/calendar.ics", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  const key = String(req.query.key || "");
+  if (!w || !w.calendarKey || !key || key !== w.calendarKey) {
+    return res.status(403).type("text/plain").send("no");
+  }
+  // A subscription is a standing request, so it gets a window rather than
+  // everything: a year back would grow forever and nobody scrolls to it.
+  const from = new Date(Date.now() - 30 * DAY_MS);
+  const rows = await prisma.booking.findMany({
+    where: { workspaceId: w.id, endsAt: { gt: from } },
+    orderBy: { startsAt: "asc" },
+    take: 1000,
+  });
+  res.setHeader("content-type", "text/calendar; charset=utf-8");
+  res.setHeader("cache-control", "private, max-age=300");
+  res.setHeader("content-disposition", `inline; filename="${w.slug}.ics"`);
+  res.send(ics(w.name, rows));
+});
+
+/** one event, for "add this to my calendar" */
+app.get("/workspaces/:slug/bookings/:id.ics", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).type("text/plain").send("no");
+  const id = String(req.params.id);
+  if (String(req.query.sig || "") !== eventSig(serverKey(), id)) {
+    return res.status(403).type("text/plain").send("no");
+  }
+  const b = await prisma.booking.findUnique({ where: { id } });
+  if (!b || b.workspaceId !== w.id) return res.status(404).type("text/plain").send("no");
+
+  res.setHeader("content-type", "text/calendar; charset=utf-8");
+  res.setHeader("content-disposition", `attachment; filename="meeting.ics"`);
+  res.send(ics(w.name, [b]));
+});
+
+/**
+ * Bookings nobody will look at again.
+ *
+ * A room held last spring is not history anybody reads — it is a row that makes
+ * every listing slower. Kept for a season so "what did we do in Q3" is still
+ * answerable, then dropped.
+ */
+async function sweepOldBookings() {
+  const cutoff = new Date(Date.now() - Number(process.env.BOOKING_KEEP_DAYS || 120) * DAY_MS);
+  const { count } = await prisma.booking.deleteMany({ where: { endsAt: { lt: cutoff } } });
+  if (count) console.log(`[calendar] removed ${count} booking(s) older than the keep window`);
+}
+
 // ---- files in the chat ------------------------------------------------------
 
 /**
@@ -1814,6 +2080,8 @@ void sweepOldMessages().catch((e) => console.error("[chat] sweep failed:", e));
 setInterval(() => void sweepOldMessages().catch((e) => console.error("[chat] sweep failed:", e)), DAY_MS).unref();
 void sweepOldVisits().catch((e) => console.error("[stats] sweep failed:", e));
 setInterval(() => void sweepOldVisits().catch((e) => console.error("[stats] sweep failed:", e)), DAY_MS).unref();
+void sweepOldBookings().catch((e) => console.error("[calendar] sweep failed:", e));
+setInterval(() => void sweepOldBookings().catch((e) => console.error("[calendar] sweep failed:", e)), DAY_MS).unref();
 void sweepOrphanUploads().catch((e) => console.error("[uploads] sweep failed:", e));
 setInterval(() => void sweepOrphanUploads().catch((e) => console.error("[uploads] sweep failed:", e)), DAY_MS).unref();
 
