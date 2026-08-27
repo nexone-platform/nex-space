@@ -114,7 +114,13 @@ export function mountMemberPanel(o: MemberPanelOptions): MemberPanel {
     const add = document.createElement("button");
     add.className = "mp-invite";
     add.title = t("เชิญคนเข้า workspace");
-    add.textContent = "＋";
+    // A plus on its own says "add something"; this button adds a PERSON, which
+    // is the one thing worth knowing before pressing it. The guest panel's
+    // button carries the same glyph with the plus at the shoulder — here it
+    // sits by the head, so the two are not mistaken for each other.
+    add.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"'
+      + ' stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="8.5" r="3.4"/>'
+      + '<path d="M3.5 20a6.5 6.5 0 0 1 13 0"/><path d="M18.5 4v5M16 6.5h5"/></svg>';
     add.onclick = () => o.onInvite!();
     tools.appendChild(add);
   }
