@@ -369,6 +369,8 @@ const EN: Record<string, string> = {
   "กำลังตามดู {name} — เดินเมื่อไหร่กล้องกลับมาเอง": "Watching {name} — the camera returns the moment you move",
   "เรียก {name} มาแล้ว": "Asked {name} to come over",
   "{name} เรียกให้ไปหา": "{name} would like you to come over",
+  "เพิ่งเรียก {name} ไปเมื่อครู่ — รออีก {n} วิ":
+    "You just asked {name} over — {n}s to go",
   "ข้อความส่วนตัว": "Direct messages",
   "ส่งข้อความส่วนตัว": "Send a direct message",
   "ส่งข้อความส่วนตัว…": "Send a direct message…",

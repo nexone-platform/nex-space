@@ -861,6 +861,11 @@ export class OfficeScene extends Phaser.Scene {
         this.toast(t("{name} กำลังห้ามรบกวน — ลองส่งข้อความแทน").replace("{name}", msg.name), "warn"));
       room.onMessage("pingSent", (msg: { name: string }) =>
         this.toast(t("เรียก {name} มาแล้ว").replace("{name}", msg.name), "info"));
+      // The room refuses a second ask too soon after the first. Pressing twice
+      // used to produce silence, which reads as a broken button.
+      room.onMessage("pingTooSoon", (msg: { name: string; wait: number }) =>
+        this.toast(t("เพิ่งเรียก {name} ไปเมื่อครู่ — รออีก {n} วิ")
+          .replace("{name}", msg.name).replace("{n}", String(msg.wait)), "warn"));
       room.onMessage("sit", (m: { from: string; on: boolean; dir: string }) => {
         const r = this.remotes.get(m.from);
         if (!r) return;
@@ -3257,7 +3262,9 @@ export class OfficeScene extends Phaser.Scene {
     const ico = el?.querySelector<HTMLElement>(".t-ico");
     const txt = el?.querySelector<HTMLElement>(".t-msg");
     if (!el || !ico || !txt) return;
-    ico.textContent = kind === "success" ? "✓" : kind === "warn" ? "!" : "🪑";
+    // "info" was a chair back when the only thing worth saying was about a desk.
+    // Seven of the nine info toasts have nothing to do with furniture.
+    ico.textContent = kind === "success" ? "✓" : kind === "warn" ? "!" : "i";
     txt.textContent = msg;
     el.className = kind;          // resets .show so the enter animation replays
     el.style.display = "flex";

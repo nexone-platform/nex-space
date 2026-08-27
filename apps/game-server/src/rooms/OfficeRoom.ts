@@ -27,6 +27,9 @@ const API_URL = process.env.API_URL || "http://localhost:3001";
 type MoveMsg = { x: number; y: number; dir: string; moving: boolean };
 type ChatMsg = { text?: string };
 
+/** how long before the same person may be asked over again */
+const PING_GAP = 10_000;
+
 export class OfficeRoom extends Room<OfficeState> {
   maxClients = 50;
   autoDispose = false; // keep a single persistent office so everyone joinOrCreate's the SAME room
@@ -408,7 +411,14 @@ export class OfficeRoom extends Room<OfficeState> {
 
       const key = `${client.sessionId}->${to}`;
       const now = Date.now();
-      if (now - (this.pingedAt.get(key) ?? 0) < 10_000) return;
+      const since = now - (this.pingedAt.get(key) ?? 0);
+      if (since < PING_GAP) {
+        // Say so rather than dropping it. A button that does nothing on the
+        // second press is indistinguishable from a broken one, and the person
+        // pressing it has no way to tell which they are looking at.
+        client.send("pingTooSoon", { to, name: target.name, wait: Math.ceil((PING_GAP - since) / 1000) });
+        return;
+      }
       this.pingedAt.set(key, now);
 
       this.clients.find((c) => c.sessionId === to)?.send("ping", {

@@ -96,8 +96,17 @@ ok("both are in the room", !!bobId && !!aliceId, `${aliceId} / ${bobId}`);
 
 {
   const second = awaited(bobRoom, "ping", 1500);
+  const told = awaited(aliceRoom, "pingTooSoon", 1500);
   aliceRoom.send("ping", { to: bobId });
-  ok("asking again straight away is dropped", (await second) === null);
+  ok("asking again straight away does not reach them", (await second) === null);
+
+  // Dropping it silently is what made the button look broken: press it twice
+  // and the second press produced nothing at all — no card, no toast, no error.
+  const why = await told;
+  ok("  · but the asker is told why", !!why, why ? "" : "nothing came back");
+  ok("  · by name", why?.name === "bob", why?.name);
+  ok("  · with how long is left", typeof why?.wait === "number" && why.wait > 0 && why.wait <= 10,
+    String(why?.wait));
 }
 
 // ---- do not disturb ---------------------------------------------------------
