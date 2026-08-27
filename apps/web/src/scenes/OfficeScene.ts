@@ -166,7 +166,6 @@ export class OfficeScene extends Phaser.Scene {
   private notifs: { icon: string; title: string; body: string; at: number; seen: boolean; go?: () => void }[] = [];
   private cardFor = "";                         // sessionId the open person card belongs to
   private cardTimer?: number;                   // pending open (hover) or close (leave)
-  private nudgeTimer?: number;                  // how long an unanswered nudge stays
   private following = "";                       // sessionId the camera is trailing, "" for me
   private dnd = false;                          // hearing nobody, on purpose                       // sessionId the camera is trailing, "" for me
   private panning = false;                      // a drag is moving the camera right now
@@ -1094,9 +1093,10 @@ export class OfficeScene extends Phaser.Scene {
 
     document.getElementById("btn-dnd")?.addEventListener("click", () => this.setDnd(!this.dnd));
     document.getElementById("nudge-x")?.addEventListener("click", () => this.closeNudge());
-    const nudge = document.getElementById("nudge");
-    nudge?.addEventListener("mouseenter", () => window.clearTimeout(this.nudgeTimer));
-    nudge?.addEventListener("mouseleave", () => this.armNudgeTimer());
+    // Escape closes it too. A panel that waits indefinitely needs a way out that
+    // is not a small ✕ in a corner, and Escape is the key that dismisses
+    // everything else in this room.
+    this.input.keyboard!.on("keydown-ESC", () => this.closeNudge());
 
     const card = document.getElementById("person-card");
     // moving from the person onto the card must not count as leaving
@@ -2284,16 +2284,18 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     el.hidden = false;
-    this.armNudgeTimer();
   }
 
-  private armNudgeTimer() {
-    window.clearTimeout(this.nudgeTimer);
-    this.nudgeTimer = window.setTimeout(() => this.closeNudge(), 20_000);
-  }
-
+  /**
+   * It waits.
+   *
+   * This used to close itself after twenty seconds, which is fine for something
+   * you were already looking at and useless for anything else: somebody asked to
+   * come over while you were reading, and by the time you looked up the ask was
+   * gone. It now stays until answered, closed, or replaced by the next one —
+   * and every one of them is in the bell regardless.
+   */
   private closeNudge() {
-    window.clearTimeout(this.nudgeTimer);
     const el = document.getElementById("nudge") as HTMLElement | null;
     if (el) el.hidden = true;
   }
