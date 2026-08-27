@@ -221,6 +221,18 @@ export class OfficeScene extends Phaser.Scene {
   private calPanel?: { refresh: () => Promise<void>; bookRoom: (roomId: string) => void };
   /** every area label on this map, so a booking can be written over its door */
   private areaLabels = new Map<string, Phaser.GameObjects.Text>();
+  /**
+   * The tiles of the people you are currently talking to.
+   *
+   * Kept between frames rather than rebuilt, because a tile holds a playing
+   * <video> and replacing the element restarts the stream — a conversation
+   * would flicker sixty times a second.
+   */
+  private convoTiles = new Map<string, HTMLElement>();
+  /** what the panel last drew, so an unchanged frame touches no DOM at all */
+  private convoSig = "";
+  /** one ring around the whole group, rather than one around each person */
+  private convoRing?: Phaser.GameObjects.Graphics;
   /** locked rooms this visit has been let into, by area id */
   private admitted = new Set<string>();
   /** the sticker the next click on the floor will leave, if any */
@@ -1339,6 +1351,167 @@ export class OfficeScene extends Phaser.Scene {
    * for the reminder. Keeping one copy means a booking cancelled in the sidebar
    * stops appearing over the door without any second fetch.
    */
+/**
+   * Who you are talking to, drawn while you are talking to them.
+   *
+   * This is the panel that answers "am I in this conversation" without anybody
+   * having to test it by speaking. It appears when somebody comes into earshot
+   * and goes when they leave, which is the same rule the audio already uses —
+   * `canHear`, not a second idea of nearness that could disagree with it.
+   *
+   * Called every frame, so the first thing it does is work out whether anything
+   * changed. Everything after the signature check is skipped on almost every
+   * frame.
+   */
+  private refreshConvo(nearIds: string[]) {
+    const panel = document.getElementById("convo");
+    const tiles = document.getElementById("convo-tiles");
+    if (!panel || !tiles) return;
+
+    // Alone is not a conversation. One tile of yourself hovering over the map
+    // is a mirror, and people turn those off.
+    if (!nearIds.length) {
+      if (!panel.hidden) {
+        panel.hidden = true;
+        tiles.innerHTML = "";
+        this.convoTiles.clear();
+        this.convoSig = "";
+      }
+      return;
+    }
+
+    // Me first: a conversation is people, and leaving yourself out of the
+    // picture makes it read as a list of other people instead.
+    const ids = [this.mySessionId, ...nearIds];
+    const mic = (id: string) => (id === this.mySessionId
+      ? this.myMicOn
+      : !!(this.room?.state.players.get(id) as { micOn?: boolean } | undefined)?.micOn);
+    const cam = (id: string) => !!(id === this.mySessionId
+      ? this.webrtc?.cameraStream
+      : this.webrtc?.getPeerStream(id)?.getVideoTracks().length);
+
+    const sig = ids.map((id) => `${id}:${mic(id) ? 1 : 0}${cam(id) ? "v" : ""}`).join("|");
+    if (sig === this.convoSig && !panel.hidden) return;
+    this.convoSig = sig;
+    panel.hidden = false;
+
+    // Drop whoever walked away.
+    for (const [id, el] of this.convoTiles) {
+      if (!ids.includes(id)) { el.remove(); this.convoTiles.delete(id); }
+    }
+
+    for (const id of ids) {
+      let tile = this.convoTiles.get(id);
+      if (!tile) {
+        tile = document.createElement("div");
+        tile.className = "cv-tile" + (id === this.mySessionId ? " me" : "");
+        this.convoTiles.set(id, tile);
+      }
+      this.paintConvoTile(tile, id, mic(id));
+      tiles.appendChild(tile);            // appendChild also reorders, which is the order we want
+    }
+  }
+
+  /** one tile: the picture, the name, and whether they are muted */
+  private paintConvoTile(tile: HTMLElement, id: string, micOn: boolean) {
+    const me = id === this.mySessionId;
+    const p = this.room?.state.players.get(id) as
+      { name?: string; avatar?: string; dir?: string } | undefined;
+    const name = me ? this.myName : (this.remotes.get(id)?.name || p?.name || "?");
+    const stream = me ? this.webrtc?.cameraStream : this.webrtc?.getPeerStream(id);
+    const hasVideo = !!stream?.getVideoTracks().length;
+
+    // The <video> is reused when it is already showing this stream. Setting
+    // srcObject again restarts playback, and a tile that blinks every time
+    // somebody toggles their microphone is worse than no tile.
+    let vid = tile.querySelector("video") as HTMLVideoElement | null;
+    if (hasVideo) {
+      if (!vid) {
+        vid = document.createElement("video");
+        vid.autoplay = true; vid.playsInline = true; vid.muted = true;   // audio comes from the spatial mix
+        tile.prepend(vid);
+      }
+      if (vid.srcObject !== stream) vid.srcObject = stream ?? null;
+      tile.querySelector(".cv-face, .cv-initial")?.remove();
+    } else {
+      vid?.remove();
+      if (!tile.querySelector(".cv-face, .cv-initial")) {
+        const png = this.portraitOf(p?.avatar || "1", p?.dir || "down");
+        if (png) {
+          const img = document.createElement("img");
+          img.className = "cv-face"; img.src = png; img.alt = name;
+          tile.prepend(img);
+        } else {
+          const { initial, color } = this.chipParts(name);
+          const dot = document.createElement("div");
+          dot.className = "cv-initial";
+          dot.style.background = color;
+          dot.textContent = initial;
+          tile.prepend(dot);
+        }
+      }
+    }
+
+    let tag = tile.querySelector(".cv-name") as HTMLElement | null;
+    if (!tag) {
+      tag = document.createElement("span");
+      tag.className = "cv-name";
+      tile.appendChild(tag);
+    }
+    tag.innerHTML = "";
+    if (!micOn) {
+      // A crossed microphone, because "no icon" is indistinguishable from
+      // "nothing has loaded yet".
+      const off = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      off.setAttribute("viewBox", "0 0 24 24");
+      off.setAttribute("fill", "none");
+      off.setAttribute("stroke", "currentColor");
+      off.setAttribute("stroke-width", "2.2");
+      off.setAttribute("stroke-linecap", "round");
+      off.innerHTML = '<path d="M3 3l18 18"/><path d="M9 9v3a3 3 0 0 0 4.5 2.6"/>'
+        + '<path d="M15 11V6a3 3 0 0 0-5.9-.7"/><path d="M18 12a6 6 0 0 1-.5 2.4M6 12a6 6 0 0 0 9 5.2"/>'
+        + '<path d="M12 19v3"/>';
+      tag.appendChild(off);
+    }
+    const b = document.createElement("b");
+    b.textContent = me ? `${name} ${t("(คุณ)")}` : name;
+    tag.appendChild(b);
+  }
+
+  /**
+   * One ring around the group, not one around each person.
+   *
+   * A ring per head says "this person can hear you" five times; a ring around
+   * the group says "this is the conversation" once, which is the thing somebody
+   * glancing at the map wants to know. Drawn as dashes so it reads as a soft
+   * boundary rather than a wall — the edge really is soft, since anybody can
+   * step into it.
+   */
+  private drawConvoRing(points: { x: number; y: number }[]) {
+    if (!this.convoRing) this.convoRing = this.add.graphics().setDepth(0);
+    const g = this.convoRing;
+    g.clear();
+    if (points.length < 2) return;
+
+    let cx = 0, cy = 0;
+    for (const pt of points) { cx += pt.x; cy += pt.y; }
+    cx /= points.length; cy /= points.length;
+    let r = 0;
+    for (const pt of points) r = Math.max(r, Math.hypot(pt.x - cx, pt.y - cy));
+    r += 26;
+
+    g.lineStyle(2, 0x2bb3a3, 0.85);
+    // Phaser has no dashed stroke, so the dashes are short arcs. 14 of them
+    // reads as a dashed circle at every radius this can take.
+    const DASHES = 14;
+    const step = (Math.PI * 2) / DASHES;
+    for (let i = 0; i < DASHES; i++) {
+      g.beginPath();
+      g.arc(cx, cy + 12, r, i * step, i * step + step * 0.55);
+      g.strokePath();
+    }
+  }
+
   private mountCalendar() {
     const host = document.getElementById("view-cal");
     if (!host) return;
@@ -3791,6 +3964,11 @@ export class OfficeScene extends Phaser.Scene {
     const mine = this.myArea;
     let anyNear = false;
     const nearbyIds = new Set<string>();
+    // The same people the audio rule picked, kept in order, for the panel and
+    // the ring. Deriving them a second time is how the two would come to
+    // disagree about who is in the conversation.
+    const talking: string[] = [];
+    const heads: { x: number; y: number }[] = [{ x: this.player.x, y: this.player.y }];
     for (const [id, r] of this.remotes) {
       r.sprite.x = Phaser.Math.Linear(r.sprite.x, r.tx, 0.25);
       r.sprite.y = Phaser.Math.Linear(r.sprite.y, r.ty, 0.25);
@@ -3810,7 +3988,11 @@ export class OfficeScene extends Phaser.Scene {
       // Inside an area, distance stops counting in both directions. Outside, it
       // is the radius — and anyone standing in an area is out of earshot of it.
       const near = canHear(mine, theirs, d2 <= near2);
-      if (near) { anyNear = true; }
+      if (near) {
+        anyNear = true;
+        talking.push(id);
+        heads.push({ x: r.sprite.x, y: r.sprite.y });
+      }
       // Whoever cannot hear you is drawn faded, so "who is in this conversation"
       // is answered by looking rather than by trying and getting no reply.
       const dim = !!mine && theirs?.id !== mine.id ? 0.4 : 1;
@@ -3830,8 +4012,10 @@ export class OfficeScene extends Phaser.Scene {
       // to wind down.
       const onFloor = !mine && !theirs;
       if (near || (onFloor && d2 <= keep2 && !!this.webrtc?.hasPeer(id))) nearbyIds.add(id);
-      if (near && !r.ring) r.ring = this.add.circle(0, 0, 15).setStrokeStyle(2, 0x2bb3a3, 0.9).setDepth(1);
-      if (r.ring) r.ring.setVisible(near).setPosition(r.sprite.x, r.sprite.y + 18);
+      // The ring used to be one per head, which said "this person can hear you"
+      // once for every person. drawConvoRing draws one around the group instead,
+      // which is the thing somebody glancing at the map wants to know.
+      if (r.ring) { r.ring.destroy(); r.ring = undefined; }
 
       // Spatial audio: loudest close by, fading to silence at the proximity edge.
       // Applied to anyone we hold a connection to, not only those inside the
@@ -3851,7 +4035,12 @@ export class OfficeScene extends Phaser.Scene {
         this.webrtc?.setPeerVolume(id, Math.max(0, Math.min(1, vol)));
       }
     }
+    // My own ring stays: it is the one that says "you are audible", which is
+    // true even standing alone in a locked room.
     this.localRing.setVisible(anyNear).setPosition(this.player.x, this.player.y + 18);
+    // and one dashed ring around everybody in it, which is the conversation
+    this.drawConvoRing(anyNear ? heads : []);
+    this.refreshConvo(talking);
 
     // connect/disconnect P2P media by proximity, PLUS a room-wide set for screen
     // sharing: if I'm presenting, connect to everyone; also connect to any presenter.

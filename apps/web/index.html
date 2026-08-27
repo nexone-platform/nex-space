@@ -345,6 +345,55 @@
       .chat-compose { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--border); }
 
 
+
+      /* ---- the conversation you are standing in ----
+         Tiles over the top of the map. Dark whatever the theme is: these hold
+         video, and a light frame around a dark camera feed reads as a bug. */
+      #convo {
+        position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+        z-index: 26; display: flex; flex-direction: column; align-items: center;
+        gap: 4px; pointer-events: none;
+      }
+      #convo[hidden] { display: none; }
+      #convo-tiles {
+        display: flex; gap: 6px; padding: 6px;
+        background: #14121a; border: 1px solid #2c2836; border-radius: 14px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+        max-width: min(92vw, 720px); overflow-x: auto; pointer-events: auto;
+      }
+      .cv-tile {
+        position: relative; flex: 0 0 auto; width: 148px; height: 108px;
+        border-radius: 10px; overflow: hidden; background: #0d0b12;
+        display: flex; align-items: center; justify-content: center;
+      }
+      /* the speaker, when the browser can tell us — a border rather than a glow,
+         so it does not compete with the map underneath */
+      .cv-tile.me { outline: 1px solid #3a3550; outline-offset: -1px; }
+      .cv-tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
+      /* No camera: the same pixel-art face that is walking around the map, so
+         the tile and the avatar are recognisably the same person. */
+      .cv-tile img.cv-face {
+        width: 56px; height: 56px; object-fit: contain; image-rendering: pixelated;
+      }
+      .cv-tile .cv-initial {
+        width: 46px; height: 46px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font: 600 18px "Segoe UI", sans-serif; color: #2a2330;
+      }
+      .cv-name {
+        position: absolute; left: 6px; bottom: 6px; max-width: calc(100% - 12px);
+        display: flex; align-items: center; gap: 4px;
+        padding: 2px 7px; border-radius: 7px;
+        background: rgba(10, 8, 14, .78); color: #f2eef7;
+        font-size: 11px; line-height: 1.5;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .cv-name svg { width: 12px; height: 12px; flex: 0 0 auto; color: #ff7a70; }
+      .cv-name b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+      @media (max-width: 760px) {
+        .cv-tile { width: 108px; height: 80px; }
+      }
+
       /* ---- the room calendar ----
          A day at a time in a narrow column. Everything here is sized for 320px,
          because that is what the sidebar actually is. */
@@ -1821,6 +1870,13 @@
     </div>
 
     <!-- standing in a private area: who can hear you, said out loud -->
+    <!-- Who you are talking to, while you are talking to them. Sits over the
+         map rather than in the sidebar because it is about where you are
+         standing, and it goes away when you walk off. -->
+    <div id="convo" hidden>
+      <div id="convo-tiles"></div>
+    </div>
+
     <div id="area-chip" hidden>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
       <b id="area-name"></b>
