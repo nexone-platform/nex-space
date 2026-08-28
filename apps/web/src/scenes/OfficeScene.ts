@@ -1368,9 +1368,14 @@ export class OfficeScene extends Phaser.Scene {
     const tiles = document.getElementById("convo-tiles");
     if (!panel || !tiles) return;
 
-    // Alone is not a conversation. One tile of yourself hovering over the map
-    // is a mirror, and people turn those off.
-    if (!nearIds.length) {
+    // Not in the meeting view. That view already draws a tile per person, at a
+    // size meant for looking at; this panel over the top of it is the same
+    // people twice, and it sits on the shared screen while it does it. This
+    // panel is for the map, where there is nothing else saying who can hear you.
+    //
+    // Alone is not a conversation either. One tile of yourself hovering over the
+    // map is a mirror, and people turn those off.
+    if (this.viewMode === "call" || !nearIds.length) {
       if (!panel.hidden) {
         panel.hidden = true;
         tiles.innerHTML = "";
