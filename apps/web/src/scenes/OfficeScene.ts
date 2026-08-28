@@ -233,6 +233,10 @@ export class OfficeScene extends Phaser.Scene {
   private convoSig = "";
   /** one ring around the whole group, rather than one around each person */
   private convoRing?: Phaser.GameObjects.Graphics;
+  /** which page of meeting tiles is showing, when there are more than fit */
+  private meetPage = 0;
+  /** a shared screen opened to full size, and the tile it came from */
+  private meetFocused = false;
   /** locked rooms this visit has been let into, by area id */
   private admitted = new Set<string>();
   /** the sticker the next click on the floor will leave, if any */
@@ -952,8 +956,7 @@ export class OfficeScene extends Phaser.Scene {
               this.updateCallStageUI();
             }
           }
-          this.refreshCallSidebarTiles();
-        };
+              };
         // browser "Stop sharing" bar -> pure cleanup (the track already ended; do NOT re-call getDisplayMedia)
         this.webrtc.onScreenEnd = () => {
           const id = this.myScreenId;
@@ -1118,6 +1121,22 @@ export class OfficeScene extends Phaser.Scene {
     document.getElementById("rail-people")?.addEventListener("click", () => showView("people"));
     document.getElementById("rail-chat")?.addEventListener("click", () => { showView("chat"); this.markChatSeen(); });
     document.getElementById("rail-dm")?.addEventListener("click", () => { showView("dm"); this.showDmList(); });
+    // paging through a room bigger than the window
+    const turn = (by: number) => {
+      this.meetPage = Math.max(0, this.meetPage + by);
+      this.meetGridKey = "";
+      this.refreshMeetingGrid();
+    };
+    document.getElementById("call-prev")?.addEventListener("click", () => turn(-1));
+    document.getElementById("call-next")?.addEventListener("click", () => turn(1));
+    // and the way back out of a screen opened to full size
+    document.getElementById("call-main-stage")?.addEventListener("click", () => {
+      if (!this.meetFocused) return;
+      this.meetFocused = false;
+      this.meetGridKey = "";
+      this.refreshMeetingGrid();
+    });
+
     document.getElementById("rail-cal")?.addEventListener("click", () => showView("cal"));
     document.getElementById("rail-notif")?.addEventListener("click", () => { showView("notif"); this.renderNotifs(true); });
     document.getElementById("nf-clear")?.addEventListener("click", () => { this.notifs = []; this.renderNotifs(true); });
@@ -3016,38 +3035,12 @@ export class OfficeScene extends Phaser.Scene {
     if (noStreamEl) noStreamEl.style.display = hasStream ? "none" : "flex";
     if (presenterTag) {
       presenterTag.style.display = hasStream ? "block" : "none";
-      presenterTag.textContent = `${this.activePresenterName}'s Screenshare`;
+      presenterTag.textContent = t("หน้าจอของ {name}").replace("{name}", this.activePresenterName);
     }
-    this.refreshCallSidebarTiles();
+    // the grid holds a tile for the screen too now, so it has to be rebuilt
+    // when the share starts or stops
+    this.meetGridKey = "";
     this.refreshMeetingGrid();
-  }
-
-  private refreshCallSidebarTiles() {
-    const selfLabel = document.getElementById("call-self-label");
-    if (selfLabel) selfLabel.textContent = this.myName + " " + t("(คุณ)");
-    const container = document.getElementById("call-peers-container");
-    if (!container) return;
-    container.innerHTML = "";
-    for (const [id, r] of this.remotes) {
-      const card = document.createElement("div");
-      card.className = "peer-card";
-      const lbl = document.createElement("span");
-      lbl.className = "peer-label";
-      lbl.textContent = r.name || id;
-      const avatar = document.createElement("div");
-      avatar.className = "peer-avatar-fallback";
-      avatar.textContent = "👤";
-      card.append(avatar, lbl);
-      const peerStream = this.webrtc?.getPeerStream(id);
-      if (peerStream) {
-        const vid = document.createElement("video");
-        vid.autoplay = true; vid.playsInline = true;
-        vid.srcObject = peerStream;
-        avatar.style.display = "none";
-        card.appendChild(vid);
-      }
-      container.appendChild(card);
-    }
   }
 
   /** pick the right stream (mine or the remote presenter's) and (re)render it on the object */
@@ -3368,73 +3361,216 @@ export class OfficeScene extends Phaser.Scene {
    * move to the sidebar beside it, which is what the existing call layout does —
    * so this grid is only for when nobody is presenting.
    */
+  /**
+   * Everybody in the room, and whatever is being shared, in one row.
+   *
+   * The old layout gave a shared screen the whole stage and stacked the people
+   * beside it as tall empty rectangles — most of the window spent on somebody's
+   * initial. A screen is a participant here: same width as everyone else, its
+   * own shape, in line with them.
+   *
+   * A tile that carries video can be opened to full size, because no tile this
+   * size can be read, and losing that would be a worse layout rather than a
+   * tidier one.
+   */
   private refreshMeetingGrid() {
     const grid = document.getElementById("call-grid");
     const overlay = document.getElementById("call-view-overlay");
     if (!grid || !overlay) return;
-    const presenting = !!this.activeScreenStream;
-    overlay.classList.toggle("grid-only", !presenting);
-    if (presenting) return;
+    overlay.classList.toggle("focused", this.meetFocused && !!this.activeScreenStream);
+    if (this.meetFocused && this.activeScreenStream) return;
 
     const here = this.peopleInMeeting();
-    const key = here.map((h) => `${h.id}:${h.name}:${h.status}:${h.mic}:${h.hand}`).join("|");
+    const screen = this.activeScreenStream ? this.activePresenterName || t("หน้าจอที่แชร์") : "";
+    // Everything the tile shows goes in the key, or the grid keeps a stale face
+    // after somebody turns their camera on.
+    const key = [
+      here.map((h) => `${h.id}:${h.name}:${h.status}:${h.mic}:${h.hand}:${this.hasCam(h)}`).join("|"),
+      screen, this.meetPage,
+    ].join("~");
     if (key === this.meetGridKey) return;
     this.meetGridKey = key;
 
-    // squarish: two across for a pair, three for up to nine, and so on
-    const cols = Math.max(1, Math.ceil(Math.sqrt(here.length || 1)));
-    grid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, min(46vw, 760px)))`;
     grid.innerHTML = "";
-    if (!here.length) {
+    if (!here.length && !screen) {
       const empty = document.createElement("div");
       empty.className = "mt-empty";
       empty.textContent = t("ยังไม่มีใครอยู่ในห้องประชุม");
       grid.appendChild(empty);
+      this.showPager(1, 1);
       return;
     }
 
-    for (const h of here) {
-      const tile = document.createElement("div");
-      tile.className = "mt-tile" + (h.self ? " self" : "");
+    // The screen goes first: it is what people came to look at.
+    type Cell = { screen: true } | { screen: false; who: MeetingPerson };
+    const cells: Cell[] = [
+      ...(screen ? [{ screen: true } as Cell] : []),
+      ...here.map((who) => ({ screen: false, who }) as Cell),
+    ];
 
-      const video = document.createElement("video");
-      video.autoplay = true; video.playsInline = true;
-      video.muted = true;                      // the audio already plays through the mesh
-      const stream = h.self ? this.webrtc?.cameraStream : this.webrtc?.getPeerStream(h.id);
-      if (stream && stream.getVideoTracks().some((track: MediaStreamTrack) => track.readyState === "live" && !track.muted)) {
-        video.srcObject = stream;
-        tile.classList.add("has-video");
-        video.play().catch(() => {});
-      }
+    // Tiles shrink to fit rather than the page turning early: everybody who can
+    // be shown at a readable size is shown. Sizing off the height alone put two
+    // people on a laptop screen and sent the other four to page two.
+    const box = grid.getBoundingClientRect();
+    const W = box.width || 900, H = box.height || 480;
+    const perPage = this.fitCount(cells.length, W, H);
+    grid.style.setProperty("--tile", this.fitSize(Math.min(cells.length, perPage), W, H) + "px");
+    const pages = Math.max(1, Math.ceil(cells.length / perPage));
+    this.meetPage = Math.min(this.meetPage, pages - 1);
+    this.showPager(this.meetPage + 1, pages);
 
-      const { initial, color } = this.chipParts(h.name);
-      const face = document.createElement("div");
-      face.className = "mt-face";
-      face.style.background = color;
-      face.textContent = initial;
-
-      const name = document.createElement("div");
-      name.className = "mt-name";
-      if (!h.mic) {
-        name.insertAdjacentHTML("beforeend",
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
-          + ' stroke-linecap="round"><path d="M9 5a3 3 0 0 1 6 0v5"/><path d="M5 11a7 7 0 0 0 10.5 6"/>'
-          + '<path d="M19 11a7 7 0 0 1-.6 2.8"/><path d="M12 19v3"/><path d="M3 3l18 18"/></svg>');
-      }
-      const label = document.createElement("span");
-      label.textContent = h.name + (h.self ? " " + t("(คุณ)") : "");
-      name.appendChild(label);
-
-      if (h.hand) {
-        const hand = document.createElement("div");
-        hand.className = "mt-hand";
-        hand.textContent = "✋";
-        hand.title = t("ยกมือ");
-        tile.appendChild(hand);
-      }
-      tile.append(video, face, name);
-      grid.appendChild(tile);
+    for (const cell of cells.slice(this.meetPage * perPage, (this.meetPage + 1) * perPage)) {
+      grid.appendChild(cell.screen ? this.screenTile(screen) : this.personTile(cell.who));
     }
+  }
+
+  /** the biggest square that fits n of them in this box, within reason */
+  private fitSize(n: number, W: number, H: number): number {
+    const GAP = 12, MIN = 116, MAX = 340;
+    let best = 0;
+    // try every number of columns and keep the arrangement that leaves the
+    // tiles largest — the same thing a person does by eye
+    for (let cols = 1; cols <= Math.max(1, n); cols++) {
+      const rows = Math.ceil(n / cols);
+      const w = (W - GAP * (cols - 1)) / cols;
+      const h = (H - GAP * (rows - 1)) / rows;
+      best = Math.max(best, Math.min(w, h));
+    }
+    return Math.max(MIN, Math.min(MAX, Math.floor(best)));
+  }
+
+  /** how many fit before they would be too small to be anybody */
+  private fitCount(n: number, W: number, H: number): number {
+    const MIN = 116;
+    for (let k = n; k > 1; k--) {
+      if (this.fitSize(k, W, H) > MIN) return k;
+    }
+    return Math.max(1, n);
+  }
+
+  /** does this person have a camera actually sending? */
+  private hasCam(h: MeetingPerson): boolean {
+    const stream = h.self ? this.webrtc?.cameraStream : this.webrtc?.getPeerStream(h.id);
+    return !!stream?.getVideoTracks().some((tr: MediaStreamTrack) => tr.readyState === "live" && !tr.muted);
+  }
+
+  /** the shared screen, as one more tile in the row */
+  private screenTile(presenter: string): HTMLElement {
+    const tile = document.createElement("div");
+    tile.className = "mt-tile screen has-video";
+    tile.title = t("กดเพื่อดูเต็มจอ");
+
+    const video = document.createElement("video");
+    video.autoplay = true; video.playsInline = true; video.muted = true;
+    video.srcObject = this.activeScreenStream;
+    video.play().catch(() => {});
+
+    const name = document.createElement("div");
+    name.className = "mt-name";
+    const label = document.createElement("span");
+    label.textContent = t("หน้าจอของ {name}").replace("{name}", presenter);
+    name.appendChild(label);
+
+    const mark = document.createElement("i");
+    mark.className = "mt-dot";
+    mark.style.background = "#5b8cff";
+
+    // A tile is too small to read a screen in. Opening it is the whole reason
+    // the old full-stage layout is still in the page.
+    tile.onclick = () => {
+      this.meetFocused = true;
+      this.meetGridKey = "";
+      this.refreshMeetingGrid();
+    };
+    tile.append(video, name, mark);
+    return tile;
+  }
+
+  /** one person */
+  private personTile(h: MeetingPerson): HTMLElement {
+    const tile = document.createElement("div");
+    tile.className = "mt-tile" + (h.self ? " self" : "");
+
+    const video = document.createElement("video");
+    video.autoplay = true; video.playsInline = true;
+    video.muted = true;                      // the audio already plays through the mesh
+    const stream = h.self ? this.webrtc?.cameraStream : this.webrtc?.getPeerStream(h.id);
+    if (this.hasCam(h)) {
+      video.srcObject = stream ?? null;
+      tile.classList.add("has-video");
+      video.play().catch(() => {});
+    }
+
+    const { initial, color } = this.chipParts(h.name);
+    const face = document.createElement("div");
+    face.className = "mt-face";
+    face.style.background = color;
+    // The avatar rather than a letter: a room of initials reads as a room of
+    // placeholders, and these people are already drawn.
+    const p = this.room?.state.players.get(h.id) as { avatar?: string; dir?: string } | undefined;
+    const png = this.portraitOf(p?.avatar || "1", "down");
+    if (png) {
+      const img = document.createElement("img");
+      img.src = png; img.alt = h.name;
+      face.appendChild(img);
+    } else {
+      face.textContent = initial;
+    }
+
+    const name = document.createElement("div");
+    name.className = "mt-name";
+    const label = document.createElement("span");
+    label.textContent = h.name + (h.self ? " " + t("(คุณ)") : "");
+    name.appendChild(label);
+
+    // muted and camera-off as corner badges, the way the reference has them
+    const badges = document.createElement("div");
+    badges.className = "mt-badges";
+    if (!h.mic) badges.appendChild(this.meetBadge("mic"));
+    if (!this.hasCam(h)) badges.appendChild(this.meetBadge("cam"));
+
+    const dot = document.createElement("i");
+    dot.className = "mt-dot";
+    dot.style.background = statusMeta(h.status).css;
+    dot.title = t(statusMeta(h.status).label);
+
+    if (h.hand) {
+      const hand = document.createElement("div");
+      hand.className = "mt-hand";
+      hand.textContent = "✋";
+      hand.title = t("ยกมือ");
+      tile.appendChild(hand);
+    }
+    tile.append(video, face, name, dot);
+    if (badges.children.length) tile.appendChild(badges);
+    return tile;
+  }
+
+  /** a crossed microphone or camera, in a red circle */
+  private meetBadge(kind: "mic" | "cam"): HTMLElement {
+    const i = document.createElement("i");
+    i.title = kind === "mic" ? t("ปิดไมค์อยู่") : t("ปิดกล้องอยู่");
+    i.innerHTML = kind === "mic"
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"'
+        + ' stroke-linecap="round"><path d="M9 5a3 3 0 0 1 6 0v5"/><path d="M5 11a7 7 0 0 0 10.5 6"/>'
+        + '<path d="M12 19v3"/><path d="M3 3l18 18"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"'
+        + ' stroke-linecap="round"><path d="M16 8.5V7a1 1 0 0 0-1-1H8"/><path d="M4 7v10a1 1 0 0 0 1 1h10"/>'
+        + '<path d="M22 8.5v7l-6-3.5"/><path d="M3 3l18 18"/></svg>';
+    return i;
+  }
+
+  /** ‹ 1 / 2 › — hidden when everybody fits */
+  private showPager(page: number, pages: number) {
+    const bar = document.getElementById("call-pager");
+    const label = document.getElementById("call-page");
+    const prev = document.getElementById("call-prev") as HTMLButtonElement | null;
+    const next = document.getElementById("call-next") as HTMLButtonElement | null;
+    if (!bar || !label || !prev || !next) return;
+    bar.classList.toggle("on", pages > 1);
+    label.textContent = `${page} / ${pages}`;
+    prev.disabled = page <= 1;
+    next.disabled = page >= pages;
   }
 
   private refreshMeetingPanel() {

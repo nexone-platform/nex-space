@@ -375,6 +375,15 @@ const EN: Record<string, string> = {
   "ส่งข้อความส่วนตัว": "Send a direct message",
   "ส่งข้อความส่วนตัว…": "Send a direct message…",
   "ยังไม่มีข้อความส่วนตัว — เริ่มได้จากรายชื่อคน": "No direct messages yet — start one from the people list",
+  // ---- the meeting, as one row of tiles ----
+  "หน้าจอที่แชร์": "Shared screen",
+  "กดเพื่อดูเต็มจอ": "Click to open it full size",
+  "หน้าจอของ {name}": "{name}'s screen",
+  "ปิดไมค์อยู่": "Microphone off",
+  "ปิดกล้องอยู่": "Camera off",
+  "ก่อนหน้า": "Previous",
+  "ถัดไป": "Next",
+
   // ---- rooms held for a while ----
   "ปฏิทินห้องประชุม": "Room calendar",
   "วันนี้": "Today",
