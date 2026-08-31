@@ -1489,6 +1489,18 @@
          only while someone is presenting */
       body.in-meeting #top-nav-bar { display: flex; }
       body.in-meeting #rail, body.in-meeting #sidebar { top: 46px; height: calc(100vh - 46px); height: calc(100dvh - 46px); }
+
+      /* ---- everything else pinned to the top of the window ----
+         The bar above is 46px of fixed, opaque chrome at z-index 35, and it
+         appears whenever somebody is presenting or you are standing in the
+         meeting room. Every other overlay anchored to the top sits below that
+         z-index, so each of them spends its first 46px hidden underneath — the
+         conversation panel loses the top of its tiles, and the rail and sidebar
+         already had this line for the same reason. */
+      body.has-screenshare #convo,     body.in-meeting #convo     { top: 58px; }
+      body.has-screenshare #nudge,     body.in-meeting #nudge     { top: 60px; }
+      body.has-screenshare #tiles,     body.in-meeting #tiles     { top: 58px; }
+      body.has-screenshare #meet-panel, body.in-meeting #meet-panel { top: 60px; }
     </style>
   </head>
   <body>
