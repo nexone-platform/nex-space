@@ -3,7 +3,7 @@
 // localStorage and hands {name, avatar, desk} to the game.
 import { openAvatarEditor } from "./avatar/avatarEditor";
 import { encodeAvatar, buildFrameCanvas, defaultDressedConfig, type LpcConfig } from "./avatar/avatarCompose";
-import { WORKSPACE, HAS_WORKSPACE_PARAM, gotoWorkspace, wsKey, wsKeyFor, rememberTheme,
+import { WORKSPACE, HAS_WORKSPACE_PARAM, JOIN_CODE, gotoWorkspace, wsKey, wsKeyFor, rememberTheme,
          GUEST_CODE } from "./workspace";
 import { API, TOKEN_KEY, authToken as token, authHeaders } from "./api";
 import { mountMemberPanel, roleLabel, type PanelMember } from "./memberPanel";
@@ -292,8 +292,36 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
   };
   $("totp-cancel")!.onclick = () => { pendingTotp = ""; showStep("auth-step"); };
 
+  /**
+   * Accept the invitation the link is carrying.
+   *
+   * This is the only thing that creates a membership, and until now nothing on
+   * the invite path called it: the link was the slug alone, so somebody who
+   * opened it walked in as a visitor and the member count never moved.
+   *
+   * Failure is quiet on purpose. The join is a nicety on top of getting in; a
+   * space that is briefly unreachable should cost somebody a row in a list, not
+   * the door.
+   */
+  const redeemInvite = async () => {
+    if (!JOIN_CODE || !user) return;
+    try {
+      await fetch(`${API}/workspaces/join`, {
+        method: "POST", headers: authHeaders(), body: JSON.stringify({ code: JOIN_CODE }),
+      });
+    } catch { /* still let them in */ }
+    // and take the code out of the address bar. It is the space's key, and it
+    // would otherwise sit in history, in a bookmark, and in every screenshot.
+    const url = new URL(location.href);
+    url.searchParams.delete("join");
+    history.replaceState(null, "", url.toString());
+  };
+
   /** after a successful sign-in: invite links go straight in, otherwise pick a space */
-  const afterSignIn = () => { if (HAS_WORKSPACE_PARAM) toChar(user); else void showSpaces(); };
+  const afterSignIn = async () => {
+    await redeemInvite();
+    if (HAS_WORKSPACE_PARAM) toChar(user); else void showSpaces();
+  };
 
   // ------------------------------------------------------- spaces dashboard
   const renderSpaces = () => {
@@ -920,7 +948,7 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
       const r = await fetch(`${API}/me`, { headers: authHeaders() });
       if (!r.ok) { localStorage.removeItem(TOKEN_KEY); return showStep("auth-step"); }
       user = (await r.json()).user;
-      afterSignIn();
+      await afterSignIn();
     } catch { showStep("auth-step"); } // offline -> let them sign in / go guest
   })();
 }

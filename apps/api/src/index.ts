@@ -975,8 +975,15 @@ app.get("/workspaces/:slug/access", async (req, res) => {
   // userId travels with the answer so the room can address one person: private
   // messages need a name that outlives the socket, and the session id does not.
   if (m) return res.json({ allowed: true, reason: "member", role: m.role, name: w.name, userId: user.id });
-  // logged in but not a member yet — treat like a guest visit
-  res.json({ allowed: w.allowGuests, reason: w.allowGuests ? "guest" : "members-only", name: w.name });
+  // Logged in but not a member yet — a guest visit, and named as one. Leaving
+  // the role out let the client fall back to "member", so somebody who had done
+  // nothing but open a link was treated inside the room as though they belonged
+  // to the space.
+  res.json({
+    allowed: w.allowGuests, reason: w.allowGuests ? "guest" : "members-only",
+    ...(w.allowGuests ? { role: "guest", userId: user.id } : {}),
+    name: w.name,
+  });
 });
 
 /**

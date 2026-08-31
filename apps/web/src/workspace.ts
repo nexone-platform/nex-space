@@ -29,9 +29,26 @@ export const gotoWorkspace = (slug: string) => {
   location.href = `${location.origin}${location.pathname}?w=${encodeURIComponent(normalizeSlug(slug))}`;
 };
 
-/** shareable invite URL for the current workspace */
-export const inviteLink = () =>
-  `${location.origin}${location.pathname}?w=${encodeURIComponent(WORKSPACE)}`;
+/**
+ * The invite code an invite link is carrying, as ?join=<code>.
+ *
+ * Read from the URL and never cached — the code is what an owner replaces to
+ * revoke an old link, and a copy kept in this browser would outlive that.
+ */
+export const JOIN_CODE = new URLSearchParams(location.search).get("join") ?? "";
+
+/**
+ * A shareable invite URL.
+ *
+ * Without the code this is only a link to the front door: whoever opens it is
+ * let in as a visitor if the space allows guests, refused outright if it does
+ * not, and in neither case do they become a member — which is what the button
+ * offering it says it does. The code is the invitation; the slug is only the
+ * address.
+ */
+export const inviteLink = (code?: string) =>
+  `${location.origin}${location.pathname}?w=${encodeURIComponent(WORKSPACE)}`
+  + (code ? `&join=${encodeURIComponent(code)}` : "");
 
 /**
  * A guest pass carried as ?g=<code>. Deliberately read from the URL only and

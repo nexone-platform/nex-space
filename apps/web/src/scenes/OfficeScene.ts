@@ -213,7 +213,9 @@ export class OfficeScene extends Phaser.Scene {
    * again by the server, which is the copy that matters — this one exists so a
    * person is not shown a button that will be refused.
    */
-  private myRole = "member";
+  private myRole = "guest";
+  /** this space's invite code, when this account is allowed to hand it out */
+  private inviteCode = "";
   /** every booking the calendar panel last saw, for the plates and the reminders */
   private bookings: Booking[] = [];
   /** bookings already reminded about, so a poll every two minutes reminds once */
@@ -1223,12 +1225,23 @@ export class OfficeScene extends Phaser.Scene {
         || workspaceLabel();
       nameTheComposer(title.textContent);
       if (!IS_DEFAULT_WORKSPACE) {
-        fetch(`${AUTH_API}/workspaces/${encodeURIComponent(WORKSPACE)}`)
+        // Signed, because this answer carries who you are here. Asked without
+        // the header it comes back with no role and no invite code, so every
+        // account looked like a plain member: the owner never saw the button to
+        // show somebody the door, an admin could not cancel anybody's booking,
+        // and the invite link had no code to carry.
+        fetch(`${AUTH_API}/workspaces/${encodeURIComponent(WORKSPACE)}`, {
+          headers: ((tok) => (tok ? { authorization: `Bearer ${tok}` } : {}))(
+            localStorage.getItem("nexspace-token")) as Record<string, string>,
+        })
           .then((r) => (r.ok ? r.json() : null))
           .then((d) => {
             if (!d?.workspace) return;
             // what this account may do here, used only to decide what to offer
-            this.myRole = String(d.workspace.role || "member");
+            this.myRole = String(d.workspace.role || "guest");
+            // owner and admin get the code; everyone else gets undefined, and
+            // the button then copies a link that only points at the door
+            this.inviteCode = d.workspace.inviteCode || "";
             if (d.workspace.name) {
               title.textContent = d.workspace.name;
               nameTheComposer(d.workspace.name);
@@ -1244,7 +1257,7 @@ export class OfficeScene extends Phaser.Scene {
     // invite: copy the room link
     document.getElementById("btn-invite")?.addEventListener("click", async () => {
       const btn = document.getElementById("btn-invite") as HTMLButtonElement;
-      const link = inviteLink();
+      const link = inviteLink(this.inviteCode);
       try { await navigator.clipboard.writeText(link); btn.textContent = t("✓ คัดลอกลิงก์แล้ว!"); }
       catch { btn.textContent = link; }
       setTimeout(() => (btn.textContent = t("＋ เชิญ / คัดลอกลิงก์")), 2000);

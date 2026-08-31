@@ -299,7 +299,7 @@ export function setupPrefsModal(
       if (edit) edit.href = `/editor.html?w=${encodeURIComponent(slug)}`;
       const dash = $<HTMLAnchorElement>("pf-dashboard");
       if (dash) dash.href = `/admin.html?w=${encodeURIComponent(slug)}`;
-      $<HTMLInputElement>("pf-invite")!.value = inviteCode ? inviteLink() : "—";
+      $<HTMLInputElement>("pf-invite")!.value = inviteCode ? inviteLink(inviteCode) : "—";
       applyRole();
       if (themeOverride()) say(t('กำลังดูตัวอย่างธีม "{theme}" จาก URL — ไม่ใช่ธีมที่ Space นี้ใช้จริง', { theme: themeOverride() }));
     } catch { say(t("โหลดการตั้งค่าไม่ได้"), "err"); }
