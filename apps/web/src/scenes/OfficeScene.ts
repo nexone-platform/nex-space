@@ -235,8 +235,18 @@ export class OfficeScene extends Phaser.Scene {
   private convoRing?: Phaser.GameObjects.Graphics;
   /** which page of meeting tiles is showing, when there are more than fit */
   private meetPage = 0;
-  /** a shared screen opened to full size, and the tile it came from */
-  private meetFocused = false;
+  /** what the strip beside a shared screen last drew */
+  private meetStripKey = "";
+  /** was somebody sharing last time we looked? */
+  private wasSharing = false;
+  /**
+   * Whether a shared screen has the room to itself.
+   *
+   * True by default, because that is what somebody sharing a screen means to
+   * happen. Clicking the screen drops back to the everyone-the-same-size grid
+   * for a look at the room, and clicking the screen's tile there returns.
+   */
+  private meetFocused = true;
   /** locked rooms this visit has been let into, by area id */
   private admitted = new Set<string>();
   /** the sticker the next click on the floor will leave, if any */
@@ -1132,6 +1142,7 @@ export class OfficeScene extends Phaser.Scene {
     // and the way back out of a screen opened to full size
     document.getElementById("call-main-stage")?.addEventListener("click", () => {
       if (!this.meetFocused) return;
+      // a look at the room, without giving up the share
       this.meetFocused = false;
       this.meetGridKey = "";
       this.refreshMeetingGrid();
@@ -3037,9 +3048,15 @@ export class OfficeScene extends Phaser.Scene {
       presenterTag.style.display = hasStream ? "block" : "none";
       presenterTag.textContent = t("หน้าจอของ {name}").replace("{name}", this.activePresenterName);
     }
-    // the grid holds a tile for the screen too now, so it has to be rebuilt
-    // when the share starts or stops
+    // A share that has just started opens to full size: whoever pressed the
+    // button meant for people to look at it, and somebody who shrank the last
+    // one an hour ago did not mean that to stick.
+    if (hasStream && !this.wasSharing) this.meetFocused = true;
+    this.wasSharing = hasStream;
+    // both the grid and the strip hold the screen or the people, so both are
+    // stale the moment a share starts or stops
     this.meetGridKey = "";
+    this.meetStripKey = "";
     this.refreshMeetingGrid();
   }
 
@@ -3377,8 +3394,9 @@ export class OfficeScene extends Phaser.Scene {
     const grid = document.getElementById("call-grid");
     const overlay = document.getElementById("call-view-overlay");
     if (!grid || !overlay) return;
-    overlay.classList.toggle("focused", this.meetFocused && !!this.activeScreenStream);
-    if (this.meetFocused && this.activeScreenStream) return;
+    const sharing = this.meetFocused && !!this.activeScreenStream;
+    overlay.classList.toggle("sharing", sharing);
+    if (sharing) { this.refreshCallStrip(); return; }
 
     const here = this.peopleInMeeting();
     const screen = this.activeScreenStream ? this.activePresenterName || t("หน้าจอที่แชร์") : "";
@@ -3422,6 +3440,25 @@ export class OfficeScene extends Phaser.Scene {
     for (const cell of cells.slice(this.meetPage * perPage, (this.meetPage + 1) * perPage)) {
       grid.appendChild(cell.screen ? this.screenTile(screen) : this.personTile(cell.who));
     }
+  }
+
+  /**
+   * The people, while the screen has the room.
+   *
+   * Built from the same tile as the grid rather than a second kind of card —
+   * the strip that used to live here was its own markup with its own fallback,
+   * and it showed a grey silhouette where the grid showed a face.
+   */
+  private refreshCallStrip() {
+    const strip = document.getElementById("call-strip");
+    if (!strip) return;
+    const here = this.peopleInMeeting();
+    const key = "strip~" + here.map((h) =>
+      `${h.id}:${h.name}:${h.status}:${h.mic}:${h.hand}:${this.hasCam(h)}`).join("|");
+    if (key === this.meetStripKey) return;
+    this.meetStripKey = key;
+    strip.innerHTML = "";
+    for (const h of here) strip.appendChild(this.personTile(h));
   }
 
   /** the biggest square that fits n of them in this box, within reason */
