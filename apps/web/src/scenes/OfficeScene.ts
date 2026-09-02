@@ -120,10 +120,16 @@ const DECOR = THEME.decor;
 const DESKS = THEME.desks;
 const INTERACTIVES = THEME.interactives;
 
-// presence: green available, amber away, red mic muted, grey busy/in a meeting
+// presence: green active, amber idle, red mic muted, grey busy/in a meeting
+//
+// The amber one is the only one anybody has to be careful naming. All it knows
+// is that nothing has been typed or clicked for AFK_MS — the person is still
+// standing in the room, and may well be reading it. "ไม่อยู่" claimed they had
+// left, which is the one thing this cannot tell. It is the same phrase as the
+// green one with the negation added, so the pair reads as one axis.
 const STATUS_META: Record<string, { color: number; css: string; label: string }> = {
   online:  { color: 0x39d353, css: "#39d353", label: "กำลังใช้งาน" },
-  afk:     { color: 0xf0b429, css: "#f0b429", label: "ไม่อยู่" },
+  afk:     { color: 0xf0b429, css: "#f0b429", label: "ไม่ได้ใช้งาน" },
   muted:   { color: 0xe5484d, css: "#e5484d", label: "ปิดไมค์" },
   meeting: { color: 0x8b949e, css: "#8b949e", label: "อยู่ในประชุม" },
   busy:    { color: 0xb86bd1, css: "#b86bd1", label: "ห้ามรบกวน" },

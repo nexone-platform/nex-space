@@ -713,7 +713,7 @@ const EN: Record<string, string> = {
   "ซูมเข้า": "Zoom in",
   "ซูมออก": "Zoom out",
   "ซูมออกสุด (M)": "Fit the whole map (M)",
-  "ไม่อยู่": "Away",
+  "ไม่ได้ใช้งาน": "Idle",
   "ปิดไมค์": "Muted",
   "อยู่ในประชุม": "In a meeting",
   "ยังมีแค่คุณในห้องนี้ — ชวนเพื่อนร่วมงานเข้ามาได้เลย": "Just you in here so far — invite a colleague in",
