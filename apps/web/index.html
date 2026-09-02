@@ -399,9 +399,26 @@
          Beside the member list, and shaped like it: the two answer halves of
          one question, so they should not look like different products. */
       .iv { display: flex; flex-direction: column; gap: 9px; }
-      .iv-tools { display: flex; gap: 7px; }
+      /* Three controls on one row need about 400px. The settings dialog is often
+         narrower than that, and an address field squeezed to 24px is a field
+         nobody can see, let alone type in — so the row wraps and the email keeps
+         a floor of its own. */
+      .iv-tools { display: flex; flex-wrap: wrap; gap: 7px; }
+      /* The dialog sets `#prefs-modal input, #prefs-modal select { width: 100% }`
+         for its stacked settings forms, and an id selector beats any class rule
+         here — which is why the address field, the role and the button each took
+         a row of their own. The space settings pane above works around the same
+         rule the same way. */
+      #prefs-modal .iv-tools input { width: auto; flex: 1 1 190px; min-width: 150px; }
+      #prefs-modal .iv-tools select { width: auto; flex: 0 0 auto; min-width: 104px; }
       .iv-tools input {
-        flex: 1; min-width: 0; padding: 8px 11px; border: 1px solid var(--border-2);
+        /* border-box or the padding is added on top of the flex basis, the field
+           outgrows its own row, and everything after it wraps onto its own line
+           — which is what put the address field, the role and the button on
+           three separate rows in a 619px dialog. The member list's field beside
+           this one has always said border-box. */
+        flex: 1 1 190px; min-width: 0; box-sizing: border-box;
+        padding: 8px 11px; border: 1px solid var(--border-2);
         border-radius: 9px; background: var(--surface); color: var(--text);
         font: 13px "Segoe UI", sans-serif; outline: none;
       }
@@ -1135,6 +1152,11 @@
       .cr-card a:hover { text-decoration: underline; }
 
       .mp { display: flex; flex-direction: column; min-height: 0; font-family: "Segoe UI", sans-serif; }
+      /* Both panels set their own display, which beats the browser's own rule for
+         [hidden] — so `el.hidden = true` left them on screen, stacked on top of
+         each other. The attribute has to be said again, with enough specificity
+         to win. */
+      .mp[hidden], .iv[hidden] { display: none; }
       .mp-tools { display: flex; gap: 8px; margin: 6px 0; }
       .mp-tools input { flex: 1; min-width: 0; box-sizing: border-box; padding: 8px 11px;
         border: 1px solid var(--border-2); border-radius: 9px; font-size: 13px; outline: none; background: var(--surface); }
