@@ -340,6 +340,75 @@ everything else, so it is included in whatever backs that file up — and it is 
 part of the database that grows on its own, which makes it the first reason this
 deployment will eventually want Postgres.
 
+## Invitations by email
+
+An owner or admin puts an address into the "คำเชิญ" tab beside the member list.
+The invitation is addressed to that one address, is single use, and expires.
+
+```dotenv
+INVITE_DAYS=14          # how long an emailed invitation stays good
+INVITE_KEEP_DAYS=90     # then the record is swept
+```
+
+**The invitation works whether or not email does.** With no SMTP configured it
+is still created, the row says `อีเมลยังไม่ได้ส่ง`, and it offers the link to
+copy and pass on by hand. That is the difference between a feature that is
+half-configured and one that silently does nothing.
+
+**It is bound to the address it was sent to.** Somebody who receives a forward
+cannot spend it — the API refuses and says which address it was for. Without
+that, an invitation addressed to one person would be the workspace's shared
+invite code again wearing somebody's name, and the pending list would be telling
+a story that is not true.
+
+### Which domain the mail is sent as — the part that decides whether it arrives
+
+This matters more than which provider you pick. What was checked on this
+deployment, and what follows from it:
+
+| | |
+|---|---|
+| `techbizconvergence.co.th` | Microsoft 365 (`mail.protection.outlook.com`), SPF ends `-all` |
+| `nexspace.xy789.click` | no MX, no SPF, no DKIM, no DMARC · DNS on Cloudflare |
+| the server's reverse DNS | `203-151-66-51.inet.co.th` — a generic ISP name |
+
+Three things are therefore ruled out:
+
+- **Sending straight from this server.** Generic reverse DNS, no DKIM, and most
+  hosts block outbound port 25 anyway. It goes to spam.
+- **Sending as `@techbizconvergence.co.th` from here.** Its SPF ends in `-all`,
+  which tells every receiver to reject anything not coming out of Microsoft.
+- **Sending as a bare `@nexspace.xy789.click` with no records.** No SPF, no DKIM,
+  no reputation.
+
+What to do instead: pick a transactional provider, and set up **its** SPF and
+DKIM records on a subdomain you control. `xy789.click` is on Cloudflare, so the
+records can be added there. Then:
+
+```dotenv
+SMTP_HOST=<the provider's smtp host>
+SMTP_PORT=587
+SMTP_USER=<from the provider>
+SMTP_PASS=<from the provider>
+SMTP_FROM=NexSpace <no-reply@mail.xy789.click>
+APP_URL=https://nexspace.xy789.click
+```
+
+`APP_URL` is not optional once mail is on. The links in these emails are read
+somewhere else entirely, and without it they are built from whichever host the
+request arrived on — which is the API, not the app.
+
+**Be honest about the ceiling.** A `.click` subdomain with correct SPF, DKIM and
+DMARC does deliver, but it will never be trusted the way a `.co.th` corporate
+domain is, and an invitation from one sitting next to real company mail reads as
+suspicious. Moving to a company subdomain later is a DNS change and one line of
+`.env` — no code — so nothing here locks that choice in.
+
+**Do not send this mail through Microsoft 365 even though it is the incumbent.**
+It needs a licensed mailbox, SMTP AUTH is off by default and Basic Auth is being
+withdrawn, there are per-minute limits, and there is no bounce webhook — so
+"did it arrive" stays unanswerable.
+
 ## Files in the chat
 
 People can attach a picture or a document to any message — room chat, the

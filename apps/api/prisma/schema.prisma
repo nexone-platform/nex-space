@@ -41,6 +41,7 @@ model User {
   memberships   Membership[]
   sent          Message[]    @relation("MessagesSent")
   booked        Booking[]    @relation("BookingsHosted")
+  invitesSent   Invite[]     @relation("InvitesSent")
   goingTo       BookingGoing[]
   received      Message[]    @relation("MessagesReceived")
   dmReads       DmRead[]
@@ -71,6 +72,7 @@ model Workspace {
   messages    Message[]
   attachments Attachment[]
   bookings    Booking[]
+  invites     Invite[]
   maps        WorkspaceMap[]
   visits      Visit[]
   createdAt   DateTime       @default(now())
@@ -202,6 +204,42 @@ model Message {
   // these two" — different questions, so different indexes
   @@index([workspaceId, createdAt])
   @@index([workspaceId, toUserId, createdAt])
+}
+
+// Somebody asked to join, by name, who has not arrived yet.
+//
+// Different from the workspace's invite code in one way that matters: that code
+// is a door anybody holding it can walk through, and it says nothing about who
+// was expected. This is addressed to one email, single use, and it expires — so
+// "who have we asked, and who has not answered" is a question with an answer.
+//
+// The token is what the emailed link carries. Redeeming it requires being
+// signed in as that email: an invitation addressed to one person that anybody
+// forwarded could use would be the invite code again, wearing a name.
+model Invite {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  email       String
+  // The role they get on arrival. An admin may invite an admin; the API applies
+  // the same ceiling it applies to changing somebody's role.
+  role        String    @default("member")
+  token       String    @unique
+  // who asked, kept as a name as well: the row outlives the account
+  invitedById String?
+  invitedBy   User?     @relation("InvitesSent", fields: [invitedById], references: [id], onDelete: SetNull)
+  invitedByName String
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  // when the email actually went. Null means it was never sent — no SMTP
+  // configured — and the link has to be handed over some other way.
+  sentAt      DateTime?
+
+  // one live invitation per address per space; a second ask reuses the row
+  @@unique([workspaceId, email])
+  @@index([workspaceId, createdAt])
 }
 
 // A room, held for a while.

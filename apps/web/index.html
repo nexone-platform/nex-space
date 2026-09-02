@@ -394,6 +394,62 @@
         .cv-tile { width: 108px; height: 80px; }
       }
 
+
+      /* ---- invitations, addressed to one person ----
+         Beside the member list, and shaped like it: the two answer halves of
+         one question, so they should not look like different products. */
+      .iv { display: flex; flex-direction: column; gap: 9px; }
+      .iv-tools { display: flex; gap: 7px; }
+      .iv-tools input {
+        flex: 1; min-width: 0; padding: 8px 11px; border: 1px solid var(--border-2);
+        border-radius: 9px; background: var(--surface); color: var(--text);
+        font: 13px "Segoe UI", sans-serif; outline: none;
+      }
+      .iv-tools input:focus { border-color: var(--teal); }
+      .iv-tools select {
+        flex: 0 0 auto; border: 1px solid var(--border-2); border-radius: 9px; padding: 0 7px;
+        background: var(--surface); color: var(--text-2); font: 13px "Segoe UI", sans-serif; outline: none;
+      }
+      .iv-send {
+        flex: 0 0 auto; border: none; background: var(--accent); color: #fff;
+        border-radius: 9px; padding: 8px 13px; font: 600 12.5px "Segoe UI", sans-serif; cursor: pointer;
+      }
+      .iv-send:hover { background: var(--accent-hover); }
+      .iv-send:disabled { opacity: .6; cursor: default; }
+      .iv-msg { min-height: 15px; font-size: 12px; color: var(--teal-ink); }
+      .iv-msg.err { color: var(--danger); }
+      .iv-list { display: flex; flex-direction: column; gap: 6px; }
+      .iv-empty { padding: 22px 12px; text-align: center; font-size: 12.5px; color: var(--faint); }
+      .iv-row {
+        display: flex; align-items: center; gap: 9px; padding: 9px 11px;
+        border: 1px solid var(--border); border-left: 3px solid var(--border-2);
+        border-radius: 10px; background: var(--surface);
+      }
+      /* the only state anybody has to act on */
+      .iv-row.pending { border-left-color: var(--accent); }
+      .iv-row.accepted { border-left-color: var(--teal); opacity: .7; }
+      .iv-row.revoked, .iv-row.expired { opacity: .55; }
+      .iv-body { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
+      .iv-body b {
+        font-size: 13px; font-weight: 600;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .iv-body small {
+        font-size: 11px; color: var(--text-3);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .iv-acts { flex: 0 0 auto; display: flex; align-items: center; gap: 5px; }
+      .iv-copy {
+        border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2);
+        border-radius: 7px; padding: 4px 8px; font-size: 11px; cursor: pointer; white-space: nowrap;
+      }
+      .iv-copy:hover { border-color: var(--accent-line); color: var(--accent); }
+      .iv-drop {
+        border: none; background: none; color: var(--text-3); cursor: pointer;
+        font-size: 13px; padding: 3px 5px; border-radius: 6px;
+      }
+      .iv-drop:hover { color: var(--danger); background: var(--surface-3); }
+
       /* ---- the room calendar ----
          A day at a time in a narrow column. Everything here is sized for 320px,
          because that is what the sidebar actually is. */
@@ -1810,9 +1866,10 @@
             <div class="pf-pane" id="pane-members">
               <div class="pf-tabs">
                 <button class="active" id="pf-tab-members">รายชื่อสมาชิก (<span id="pf-count">0</span>)</button>
-                <button disabled title="คำเชิญที่รอตอบรับ — เร็ว ๆ นี้">คำเชิญ (0)</button>
+                <button id="pf-tab-invites">คำเชิญ (<span id="pf-invite-count">0</span>)</button>
               </div>
               <div id="pf-members"></div>
+              <div id="pf-invites" hidden></div>
             </div>
 
             <div class="pf-pane" id="pane-guests" hidden>

@@ -38,6 +38,16 @@ export const gotoWorkspace = (slug: string) => {
 export const JOIN_CODE = new URLSearchParams(location.search).get("join") ?? "";
 
 /**
+ * An emailed invitation, as ?invite=<token>.
+ *
+ * Different from JOIN_CODE above in the way that matters to the person holding
+ * it: this one was addressed to their email and only works for that address, so
+ * the sign-in screen can say who asked and which space before they commit to
+ * anything.
+ */
+export const INVITE_TOKEN = new URLSearchParams(location.search).get("invite") ?? "";
+
+/**
  * A shareable invite URL.
  *
  * Without the code this is only a link to the front door: whoever opens it is

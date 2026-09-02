@@ -25,7 +25,8 @@
     "test:roles2": "node scripts/roles2-e2e.mjs",
     "test:files": "node scripts/files-e2e.mjs",
     "test:calendar": "node scripts/calendar-e2e.mjs",
-    "test:invite": "node scripts/invite-e2e.mjs"
+    "test:invite": "node scripts/invite-e2e.mjs",
+    "test:invited": "node scripts/invited-e2e.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

@@ -3,7 +3,7 @@
 // localStorage and hands {name, avatar, desk} to the game.
 import { openAvatarEditor } from "./avatar/avatarEditor";
 import { encodeAvatar, buildFrameCanvas, defaultDressedConfig, type LpcConfig } from "./avatar/avatarCompose";
-import { WORKSPACE, HAS_WORKSPACE_PARAM, JOIN_CODE, gotoWorkspace, wsKey, wsKeyFor, rememberTheme,
+import { WORKSPACE, HAS_WORKSPACE_PARAM, JOIN_CODE, INVITE_TOKEN, gotoWorkspace, wsKey, wsKeyFor, rememberTheme,
          GUEST_CODE } from "./workspace";
 import { API, TOKEN_KEY, authToken as token, authHeaders } from "./api";
 import { mountMemberPanel, roleLabel, type PanelMember } from "./memberPanel";
@@ -303,23 +303,55 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
    * space that is briefly unreachable should cost somebody a row in a list, not
    * the door.
    */
+  /** why an emailed invitation could not be spent, if it could not */
+  let inviteTrouble = "";
+
   const redeemInvite = async () => {
-    if (!JOIN_CODE || !user) return;
-    try {
-      await fetch(`${API}/workspaces/join`, {
-        method: "POST", headers: authHeaders(), body: JSON.stringify({ code: JOIN_CODE }),
-      });
-    } catch { /* still let them in */ }
-    // and take the code out of the address bar. It is the space's key, and it
+    if (!user) return;
+    if (JOIN_CODE) {
+      try {
+        await fetch(`${API}/workspaces/join`, {
+          method: "POST", headers: authHeaders(), body: JSON.stringify({ code: JOIN_CODE }),
+        });
+      } catch { /* still let them in */ }
+    }
+    if (INVITE_TOKEN) {
+      // Addressed to one email, so this can legitimately be refused: signed in
+      // as somebody else, already spent, taken back, or too old. Each of those
+      // is worth saying rather than dropping them on a space they cannot see.
+      try {
+        const r = await fetch(`${API}/invites/${encodeURIComponent(INVITE_TOKEN)}/accept`, {
+          method: "POST", headers: authHeaders(),
+        });
+        if (!r.ok) {
+          const d = await r.json().catch(() => ({}));
+          inviteTrouble = d.email
+            ? t("คำเชิญนี้ส่งไปที่ {email} — เข้าสู่ระบบด้วยอีเมลนั้นเพื่อเข้าร่วม", { email: d.email })
+            : d.error === "accepted" ? t("คำเชิญนี้ถูกใช้ไปแล้ว")
+            : d.error === "revoked" ? t("คำเชิญนี้ถูกยกเลิกแล้ว")
+            : d.error === "expired" ? t("คำเชิญนี้หมดอายุแล้ว — ขอลิงก์ใหม่จากผู้เชิญ")
+            : t("ใช้คำเชิญนี้ไม่ได้");
+        }
+      } catch { /* offline: they can still look around */ }
+    }
+    // and take the credentials out of the address bar. Both are keys, and both
     // would otherwise sit in history, in a bookmark, and in every screenshot.
     const url = new URL(location.href);
     url.searchParams.delete("join");
+    url.searchParams.delete("invite");
     history.replaceState(null, "", url.toString());
   };
 
   /** after a successful sign-in: invite links go straight in, otherwise pick a space */
   const afterSignIn = async () => {
     await redeemInvite();
+    // An invitation that could not be spent must not drop somebody into a space
+    // they are not in — they would see a stranger's office and no way to ask why.
+    if (inviteTrouble) {
+      showStep("auth-step");
+      setErr("a-err", inviteTrouble);
+      return;
+    }
     if (HAS_WORKSPACE_PARAM) toChar(user); else void showSpaces();
   };
 

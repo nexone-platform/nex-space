@@ -6,6 +6,7 @@
 // member never sees controls their write would be refused.
 import { API, authHeaders, authToken } from "./api";
 import { mountMemberPanel, type MemberPanel } from "./memberPanel";
+import { mountInvitePanel } from "./invitePanel";
 import { mountGuestPanel, type GuestPanel } from "./guestPanel";
 import { inviteLink, themeOverride } from "./workspace";
 import { colorMode, setColorMode, micClean, setMicClean, type ColorMode } from "./appearance";
@@ -62,7 +63,7 @@ export function setupPrefsModal(
     modal.querySelectorAll<HTMLElement>(".pf-item").forEach((b) =>
       b.classList.toggle("active", b.dataset.pane === pane));
     $("pf-title")!.textContent = t(TITLES[pane] ?? "ตั้งค่า");
-    if (pane === "members") mountMembers();
+    if (pane === "members") { mountMembers(); showTab("members"); }
     if (pane === "guests") mountGuests();
     if (pane === "general") void loadGeneral();
     if (pane === "credits") drawCredits();
@@ -162,6 +163,42 @@ export function setupPrefsModal(
       onMyRole: (role) => { myRole = role; applyRole(); },
       onSelfRemoved: () => { location.href = location.pathname; },
     });
+  };
+
+  /**
+   * The other half of the member list: who was asked and has not arrived.
+   *
+   * Only staff can read it, and the panel says so itself rather than the tab
+   * disappearing — an owner who cannot see the list would wonder where the
+   * feature went, and a member who can see the tab learns the rule by reading
+   * one sentence instead of by nothing happening.
+   */
+  let invites: { refresh: () => Promise<void> } | undefined;
+  const mountInvites = () => {
+    const host = $("pf-invites");
+    if (!host || isPublic) return;
+    if (invites) return void invites.refresh();
+    invites = mountInvitePanel({
+      host,
+      api: API,
+      workspace: slug,
+      token: authToken() ?? undefined,
+      canInviteAdmin: () => myRole === "owner",
+      onCount: (n) => { const c = $("pf-invite-count"); if (c) c.textContent = String(n); },
+    });
+  };
+
+  /** the two tabs over one question: who is here, and who was asked */
+  const showTab = (which: "members" | "invites") => {
+    for (const [name, ids] of Object.entries({
+      members: ["pf-tab-members", "pf-members"],
+      invites: ["pf-tab-invites", "pf-invites"],
+    })) {
+      $(ids[0])?.classList.toggle("active", name === which);
+      const pane = $(ids[1]);
+      if (pane) pane.hidden = name !== which;
+    }
+    if (which === "invites") mountInvites();
   };
 
   /**
@@ -310,6 +347,12 @@ export function setupPrefsModal(
     (b.onclick = () => showPane(b.dataset.pane || "members")));
 
   const close = () => { modal.style.display = "none"; };
+  // the two tabs over the member pane
+  const tabMembers = $("pf-tab-members");
+  if (tabMembers) tabMembers.onclick = () => showTab("members");
+  const tabInvites = $("pf-tab-invites");
+  if (tabInvites) tabInvites.onclick = () => showTab("invites");
+
   $("pf-close")!.onclick = close;
   modal.onclick = (e) => { if (e.target === modal) close(); };
   document.addEventListener("keydown", (e) => {

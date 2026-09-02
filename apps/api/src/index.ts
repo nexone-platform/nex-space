@@ -7,7 +7,7 @@ import {
   hashPassword, verifyPassword, createSession, activateSession, sessionFromToken,
   requireAuth, userFromToken, type AuthedRequest,
 } from "./auth";
-import { sendLoginCode, mailEnabled } from "./mailer";
+import { sendLoginCode, mailEnabled, sendInvite } from "./mailer";
 import { iceConfig, turnEnabled } from "./ice";
 import { mapDocProblem } from "./mapValidate";
 import {
@@ -576,6 +576,22 @@ const MAP_MAX_BYTES = Number(process.env.MAP_MAX_BYTES || 2_000_000);
 // more capability, and every map is another thing to keep consistent.
 const MAPS_PER_SPACE = Number(process.env.MAPS_PER_SPACE || 12);
 
+/**
+ * Where the app lives, from the request that arrived.
+ *
+ * In production nginx serves the app and proxies this API on one host, so
+ * the host a request came in on IS the app. Used for the links that go into
+ * email and into a calendar client, both of which are read somewhere else
+ * entirely, where a relative path is no use.
+ */
+const appOriginOf = (req: express.Request) =>
+  // APP_URL first. Deriving it from the request is right in production, where
+  // nginx serves the app and proxies this API on one host — and wrong the moment
+  // they are two hosts, which in development they always are: the invite link
+  // came out pointing at the API's own port, where there is no app to open it.
+  process.env.APP_URL
+  || `${req.header("x-forwarded-proto") || req.protocol}://${req.header("x-forwarded-host") || req.get("host")}`;
+
 const wsView = (w: any, role?: string) => ({
   slug: w.slug, name: w.name, allowGuests: w.allowGuests,
   theme: w.theme ?? "classic",
@@ -1131,6 +1147,229 @@ app.post("/workspaces/:slug/messages", async (req, res) => {
   });
 });
 
+// ---- invitations, addressed to one person -------------------------------------
+
+/** how long an emailed invitation stays good */
+const INVITE_DAYS = Number(process.env.INVITE_DAYS || 14);
+
+type InviteState = "pending" | "accepted" | "revoked" | "expired";
+
+function inviteState(i: { acceptedAt: Date | null; revokedAt: Date | null; expiresAt: Date }): InviteState {
+  if (i.acceptedAt) return "accepted";
+  if (i.revokedAt) return "revoked";
+  if (+i.expiresAt <= Date.now()) return "expired";
+  return "pending";
+}
+
+/**
+ * One invitation, as the panel needs it.
+ *
+ * The token is the link, so it is only handed to somebody who could send the
+ * invitation in the first place — and even then only while it is still worth
+ * copying. A spent or revoked invitation is a record, not a way in.
+ */
+function inviteView(
+  i: {
+    id: string; email: string; role: string; token: string; invitedByName: string;
+    createdAt: Date; expiresAt: Date; acceptedAt: Date | null; revokedAt: Date | null; sentAt: Date | null;
+  },
+  req: express.Request,
+  slug: string,
+  staff: boolean,
+) {
+  const state = inviteState(i);
+  return {
+    id: i.id, email: i.email, role: i.role, state,
+    invitedBy: i.invitedByName, createdAt: i.createdAt, expiresAt: i.expiresAt,
+    // Whether the email actually left. Nobody can tell from the list otherwise,
+    // and "invited" that never sent looks the same as "invited and ignored".
+    emailed: !!i.sentAt,
+    ...(staff && state === "pending" ? { link: inviteLinkFor(req, slug, i.token) } : {}),
+  };
+}
+
+/** the address in the email, and the one an admin copies by hand when SMTP is off */
+function inviteLinkFor(req: express.Request, slug: string, token: string) {
+  const origin = appOriginOf(req);
+  return `${origin}/?w=${encodeURIComponent(slug)}&invite=${encodeURIComponent(token)}`;
+}
+
+/** owner/admin of this space, or null — invitations are staff work */
+async function inviteStaff(req: express.Request, w: { id: string }) {
+  const token = req.header("authorization")?.replace(/^Bearer\s+/i, "") || String(req.query.token || "");
+  const me = await userFromToken(token || undefined);
+  if (!me) return null;
+  const m = await prisma.membership.findUnique({
+    where: { userId_workspaceId: { userId: me.id, workspaceId: w.id } },
+  });
+  if (!m || (m.role !== "owner" && m.role !== "admin")) return null;
+  return { me, role: m.role };
+}
+
+/** who has been asked, and who has not answered */
+app.get("/workspaces/:slug/invites", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const staff = await inviteStaff(req, w);
+  if (!staff) return res.status(403).json({ error: "forbidden" });
+
+  const rows = await prisma.invite.findMany({
+    where: { workspaceId: w.id },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+  });
+  res.json({ invites: rows.map((i) => inviteView(i, req, w.slug, true)) });
+});
+
+/**
+ * Ask somebody to join.
+ *
+ * Sending the email is allowed to fail. The invitation still exists and still
+ * carries a link an admin can hand over by hand — which is the whole reason
+ * `emailed` is in the answer. A deployment with no SMTP is a deployment where
+ * inviting people still works, slightly manually.
+ */
+app.post("/workspaces/:slug/invites", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const staff = await inviteStaff(req, w);
+  if (!staff) return res.status(403).json({ error: "forbidden" });
+
+  const email = String((req.body ?? {}).email ?? "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+    return res.status(400).json({ error: "that is not an email address" });
+  }
+  const want = String((req.body ?? {}).role ?? "member");
+  if (!["member", "admin"].includes(want)) return res.status(400).json({ error: "bad role" });
+  // The same ceiling as changing somebody's role: an admin cannot mint another
+  // admin, or one admin could fill the space with people able to remove them.
+  if (want === "admin" && staff.role !== "owner") {
+    return res.status(403).json({ error: "only the owner can invite an admin" });
+  }
+
+  // Already here? Then this is not an invitation, and saying so is more use
+  // than sending them a link that does nothing.
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    const m = await prisma.membership.findUnique({
+      where: { userId_workspaceId: { userId: existing.id, workspaceId: w.id } },
+    });
+    if (m) return res.status(409).json({ error: "they are already in this space", role: m.role });
+  }
+
+  const token = randomBytes(24).toString("base64url");
+  const expiresAt = new Date(Date.now() + INVITE_DAYS * DAY_MS);
+  // A second ask replaces the first rather than stacking: the newest link is
+  // the one that works, and two live invitations to one address is a way to
+  // confuse everybody including the person invited.
+  const row = await prisma.invite.upsert({
+    where: { workspaceId_email: { workspaceId: w.id, email } },
+    create: {
+      workspaceId: w.id, email, role: want, token, expiresAt,
+      invitedById: staff.me.id, invitedByName: staff.me.name,
+    },
+    update: {
+      role: want, token, expiresAt, acceptedAt: null, revokedAt: null, sentAt: null,
+      invitedById: staff.me.id, invitedByName: staff.me.name,
+    },
+  });
+
+  let emailed = false;
+  try {
+    emailed = await sendInvite({
+      to: email, space: w.name, invitedBy: staff.me.name,
+      link: inviteLinkFor(req, w.slug, token), days: INVITE_DAYS,
+    });
+  } catch (e) {
+    // Said out loud, once, and not fatal. The row exists and the link is in the
+    // answer, so the invitation is not lost because a mail server was.
+    console.warn("[invite] could not send the email:", e);
+  }
+  if (emailed) await prisma.invite.update({ where: { id: row.id }, data: { sentAt: new Date() } });
+
+  const fresh = await prisma.invite.findUnique({ where: { id: row.id } });
+  res.json({ invite: inviteView(fresh!, req, w.slug, true), emailed });
+});
+
+/** take it back */
+app.delete("/workspaces/:slug/invites/:id", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const staff = await inviteStaff(req, w);
+  if (!staff) return res.status(403).json({ error: "forbidden" });
+
+  const i = await prisma.invite.findUnique({ where: { id: req.params.id } });
+  if (!i || i.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
+  // Revoked rather than deleted: "we asked and then changed our mind" is a
+  // thing somebody may need to see, and the row is what says it.
+  const gone = await prisma.invite.update({
+    where: { id: i.id }, data: { revokedAt: i.revokedAt ?? new Date() },
+  });
+  res.json({ invite: inviteView(gone, req, w.slug, true) });
+});
+
+/**
+ * Read an invitation without spending it.
+ *
+ * The link lands on the app before anybody has signed in, and the page wants to
+ * say which space and who asked. Unauthenticated by design — the token in the
+ * URL is the credential — and it deliberately does not say whether an account
+ * for that address exists.
+ */
+app.get("/invites/:token", async (req, res) => {
+  const i = await prisma.invite.findUnique({
+    where: { token: String(req.params.token) },
+    include: { workspace: { select: { slug: true, name: true } } },
+  });
+  if (!i) return res.status(404).json({ error: "not found" });
+  res.json({
+    invite: {
+      email: i.email, role: i.role, state: inviteState(i),
+      invitedBy: i.invitedByName, space: i.workspace.name, slug: i.workspace.slug,
+      expiresAt: i.expiresAt,
+    },
+  });
+});
+
+/**
+ * Spend it.
+ *
+ * Bound to the address it was sent to. An invitation addressed to one person
+ * that anybody who received a forward could redeem would be the workspace's
+ * shared invite code again, wearing somebody's name — and the pending list
+ * would be telling a story that is not true.
+ */
+app.post("/invites/:token/accept", requireAuth, async (req: AuthedRequest, res) => {
+  const i = await prisma.invite.findUnique({
+    where: { token: String(req.params.token) },
+    include: { workspace: true },
+  });
+  if (!i) return res.status(404).json({ error: "not found" });
+
+  const state = inviteState(i);
+  if (state !== "pending") return res.status(410).json({ error: state });
+  if (req.user!.email.trim().toLowerCase() !== i.email) {
+    return res.status(403).json({ error: "this invitation was sent to a different address", email: i.email });
+  }
+
+  await prisma.membership.upsert({
+    where: { userId_workspaceId: { userId: req.user!.id, workspaceId: i.workspaceId } },
+    create: { userId: req.user!.id, workspaceId: i.workspaceId, role: i.role },
+    // Already a member somehow: leave the role they have. An invitation should
+    // not quietly demote somebody who was promoted while it sat in an inbox.
+    update: {},
+  });
+  await prisma.invite.update({ where: { id: i.id }, data: { acceptedAt: new Date() } });
+  res.json({ workspace: wsView(i.workspace, i.role) });
+});
+
+/** invitations nobody answered, long after they stopped working */
+async function sweepOldInvites() {
+  const cutoff = new Date(Date.now() - Number(process.env.INVITE_KEEP_DAYS || 90) * DAY_MS);
+  const { count } = await prisma.invite.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  if (count) console.log(`[invite] removed ${count} invitation(s) older than the keep window`);
+}
+
 // ---- rooms, held for a while --------------------------------------------------
 
 /** how far a listing may reach in one request */
@@ -1317,8 +1556,7 @@ async function calendarUrl(req: express.Request, w: { slug: string; calendarKey:
     key = newCalendarKey();
     await prisma.workspace.update({ where: { id: w.id }, data: { calendarKey: key } });
   }
-  const origin = `${req.header("x-forwarded-proto") || req.protocol}://${req.header("x-forwarded-host") || req.get("host")}`;
-  return `${origin}/workspaces/${encodeURIComponent(w.slug)}/calendar.ics?key=${key}`;
+  return `${appOriginOf(req)}/workspaces/${encodeURIComponent(w.slug)}/calendar.ics?key=${key}`;
 }
 
 app.get("/workspaces/:slug/calendar-url", async (req, res) => {
@@ -2105,6 +2343,8 @@ void sweepOldMessages().catch((e) => console.error("[chat] sweep failed:", e));
 setInterval(() => void sweepOldMessages().catch((e) => console.error("[chat] sweep failed:", e)), DAY_MS).unref();
 void sweepOldVisits().catch((e) => console.error("[stats] sweep failed:", e));
 setInterval(() => void sweepOldVisits().catch((e) => console.error("[stats] sweep failed:", e)), DAY_MS).unref();
+void sweepOldInvites().catch((e) => console.error("[invite] sweep failed:", e));
+setInterval(() => void sweepOldInvites().catch((e) => console.error("[invite] sweep failed:", e)), DAY_MS).unref();
 void sweepOldBookings().catch((e) => console.error("[calendar] sweep failed:", e));
 setInterval(() => void sweepOldBookings().catch((e) => console.error("[calendar] sweep failed:", e)), DAY_MS).unref();
 void sweepOrphanUploads().catch((e) => console.error("[uploads] sweep failed:", e));
