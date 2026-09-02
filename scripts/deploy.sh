@@ -281,19 +281,46 @@ check "call relay"                              $DC exec -T nexspace-api  node -
 
 # The stamp is what the next deploy reads to decide what to rebuild, so a silent
 # failure here would quietly cost every later deploy a full rebuild.
+#
+# "Carries this commit" is the wrong question, and asking it failed every deploy
+# that touched one app: only the services whose files moved are rebuilt, so a
+# commit under apps/api leaves the game and web images stamped with an older
+# commit — correctly. The question that catches a real problem is whether an
+# image is missing any change to ITS OWN files, which is the same rule the
+# rebuild above uses, so the two can no longer disagree.
 if [ "$CHECK" = 0 ]; then
-  check "images carry this commit" bash -c '
+  check "images are current for their own files" bash -c '
     head=$(git rev-parse HEAD)
+    behind=""
+    fresh=0
     for svc in nexspace-api nexspace-game nexspace-web; do
+      case "$svc" in
+        nexspace-api)  path=apps/api ;;
+        nexspace-game) path=apps/game-server ;;
+        nexspace-web)  path=apps/web ;;
+      esac
       img=$('"$DC"' images -q "$svc" 2>/dev/null | head -1)
       [ -n "$img" ] || { echo "$svc has no image"; exit 1; }
       rev=$(docker inspect --format "{{index .Config.Labels \"org.opencontainers.image.revision\"}}" "$img" 2>/dev/null)
-      case "$rev" in
-        "$head") ;;
-        *) echo "$svc is stamped \"$rev\", wanted $head"; exit 1 ;;
-      esac
+      [ -n "$rev" ] && [ "$rev" != "unknown" ] || { echo "$svc carries no commit stamp"; exit 1; }
+      if [ "$rev" = "$head" ]; then
+        fresh=$((fresh + 1))
+        continue
+      fi
+      # An older stamp is fine only if nothing this image is built from has
+      # moved since — its own directory, or the files that go into every image.
+      missed=$(git log --oneline "$rev..$head" -- "$path" docker-compose.yml .dockerignore package.json package-lock.json 2>/dev/null)
+      if [ -n "$missed" ]; then
+        echo "$svc is stamped \"$rev\" and is missing $(echo "$missed" | wc -l | tr -d " ") commit(s) to $path"
+        exit 1
+      fi
+      behind="$behind $svc"
     done
-    printf "all three"'
+    if [ -n "$behind" ]; then
+      printf "%s at this commit,%s unchanged since theirs" "$fresh" "$behind"
+    else
+      printf "all three"
+    fi'
 fi
 
 echo
