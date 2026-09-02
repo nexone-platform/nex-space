@@ -10,9 +10,49 @@ const FROM = process.env.SMTP_FROM || USER || "NexSpace <no-reply@nexspace.local
 
 export const mailEnabled = !!(HOST && USER && PASS);
 
+/**
+ * Bounded, on purpose.
+ *
+ * Without these, an SMTP port that is filtered rather than refused leaves the
+ * socket hanging until something upstream gives up — nginx at sixty seconds,
+ * answering the browser with an HTML gateway error. The caller then reports
+ * "the invitation failed" for an invitation that was created perfectly well and
+ * only lacked an email, which is the one thing it is designed to survive.
+ *
+ * Ten seconds is far longer than a working relay ever needs and far shorter
+ * than any proxy in front of us.
+ */
 const transporter = mailEnabled
-  ? nodemailer.createTransport({ host: HOST, port: PORT, secure: PORT === 465, auth: { user: USER, pass: PASS } })
+  ? nodemailer.createTransport({
+      host: HOST, port: PORT, secure: PORT === 465,
+      auth: { user: USER, pass: PASS },
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
+    })
   : null;
+
+/**
+ * Is the relay actually reachable, and does it accept these credentials?
+ *
+ * Answered without sending anything, so it can be asked from a health check.
+ * Distinguishes the three things that look identical from the outside: no
+ * configuration, a port that never answers, and a password that is wrong.
+ */
+export async function mailCheck(): Promise<{ ok: boolean; detail: string }> {
+  if (!transporter) return { ok: false, detail: "SMTP is not configured" };
+  try {
+    await transporter.verify();
+    return { ok: true, detail: `${HOST}:${PORT} accepted the credentials` };
+  } catch (e) {
+    const err = e as { code?: string; message?: string };
+    const hint = err.code === "ETIMEDOUT" || err.code === "ESOCKET"
+      ? " — the port never answered, which usually means outbound SMTP is blocked from this host"
+      : err.code === "EAUTH" ? " — the credentials were refused"
+      : "";
+    return { ok: false, detail: `${err.code || "error"}: ${err.message || String(e)}${hint}` };
+  }
+}
 
 /** somebody's name and a space's name both go into HTML, and both are typed by hand */
 const esc = (v: string) =>

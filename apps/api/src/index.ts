@@ -7,7 +7,7 @@ import {
   hashPassword, verifyPassword, createSession, activateSession, sessionFromToken,
   requireAuth, userFromToken, type AuthedRequest,
 } from "./auth";
-import { sendLoginCode, mailEnabled, sendInvite } from "./mailer";
+import { sendLoginCode, mailEnabled, sendInvite, mailCheck } from "./mailer";
 import { iceConfig, turnEnabled } from "./ice";
 import { mapDocProblem } from "./mapValidate";
 import {
@@ -145,6 +145,26 @@ const normEmail = (e: unknown) => String(e ?? "").trim().toLowerCase();
 
 app.get("/auth/config", (_req, res) =>
   res.json({ google: googleEnabled, mail: mailEnabled }));
+
+/**
+ * Can this host actually reach the mail relay?
+ *
+ * `mail` above only says the settings are present, which is the question people
+ * think they are asking and never the one that bites. This one opens the
+ * connection and stops, so a deploy can tell "configured" from "configured and
+ * unreachable" — the second of which looks identical until somebody invites
+ * their first colleague.
+ *
+ * Owner and admin only: the answer names the relay host and repeats its refusal
+ * verbatim, and neither is anybody else's business.
+ */
+app.get("/workspaces/:slug/mail-check", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const staff = await inviteStaff(req, w);
+  if (!staff) return res.status(403).json({ error: "forbidden" });
+  res.json(await mailCheck());
+});
 
 app.post("/auth/code/request", async (req, res) => {
   const email = normEmail((req.body ?? {}).email);
