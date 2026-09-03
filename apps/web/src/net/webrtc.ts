@@ -7,6 +7,17 @@ import { micTreatment } from "../appearance";
 import { t } from "../i18n";
 import { iceConfig, loadIce } from "./ice";
 
+/**
+ * Is there a picture here, or only the promise of one?
+ *
+ * A transceiver made before its track exists still produces a receiver and a
+ * track on the far side — muted, carrying nothing. Counting tracks would call
+ * that a camera, so everything that asks "are they on video" has to ask whether
+ * media is actually flowing.
+ */
+export const hasLiveVideo = (s?: MediaStream | null) =>
+  !!s?.getVideoTracks().some((tr) => tr.readyState === "live" && !tr.muted);
+
 interface Peer {
   pc: RTCPeerConnection;
   polite: boolean;
@@ -14,6 +25,14 @@ interface Peer {
   ignoreOffer: boolean;
   tile: HTMLElement;
   video: HTMLVideoElement;
+  /** the two outgoing slots. One side makes them, the other adopts the ones
+   *  that side's offer creates — see openSlots/adoptSlots. */
+  micSender?: RTCRtpSender;
+  vidSender?: RTCRtpSender;
+  /** the scene routed this peer's picture to an in-world screen instead */
+  hidden?: boolean;
+  /** the answerer's "nobody opened, so I will" fallback */
+  openTimer?: number;
   /** wall clock and element clock at the moment playback started, so lag that
    *  builds up afterwards can be measured — see the latency guard */
   playedAt?: number;
@@ -115,8 +134,10 @@ export class WebRTCManager implements MediaManager {
     };
     this.local.addTrack(track);
     if (kind === "audio") this.micTrack = track; else this.camTrack = track;
-    for (const { pc } of this.peers.values()) {
-      if (!pc.getSenders().some((s) => s.track === track)) pc.addTrack(track, this.local);
+    for (const peer of this.peers.values()) {
+      if (kind === "audio") void peer.micSender?.replaceTrack(track);
+      // a camera opened mid-share does not get to take the screen's slot
+      else if (!this.screenOn) void peer.vidSender?.replaceTrack(track);
     }
     this.renderSelfTile();
     return track;
@@ -172,19 +193,14 @@ export class WebRTCManager implements MediaManager {
         this.screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
         const screen = this.screenStream.getVideoTracks()[0];
         screen.onended = async () => { if (this.screenOn) await this.toggleScreen(); this.onScreenEnd?.(); };
-        // replace the outgoing video track with the screen on every peer
-        for (const { pc } of this.peers.values()) {
-          const sender = pc.getSenders().find((s) => s.track?.kind === "video");
-          if (sender) await sender.replaceTrack(screen);
-          else pc.addTrack(screen, this.screenStream);
-        }
+        // The picture slot already exists on every peer, so the screen goes into
+        // it. Nothing is added, so nothing renegotiates and nothing changes what
+        // stream the far side is playing — the voice keeps flowing throughout.
+        for (const peer of this.peers.values()) await peer.vidSender?.replaceTrack(screen);
         this.screenOn = true;
       } else {
         this.screenStream?.getTracks().forEach((t) => t.stop());
-        for (const { pc } of this.peers.values()) {
-          const sender = pc.getSenders().find((s) => s.track?.kind === "video");
-          if (sender) await sender.replaceTrack(this.camTrack ?? null);
-        }
+        for (const peer of this.peers.values()) await peer.vidSender?.replaceTrack(this.camTrack ?? null);
         this.screenStream = undefined;
         this.screenOn = false;
       }
@@ -221,10 +237,7 @@ export class WebRTCManager implements MediaManager {
     this.local.getAudioTracks().forEach((tr) => { this.local.removeTrack(tr); tr.stop(); });
     this.local.addTrack(nt);
     this.micTrack = nt;
-    for (const { pc } of this.peers.values()) {
-      const s = pc.getSenders().find((se) => se.track?.kind === "audio");
-      if (s) await s.replaceTrack(nt);
-    }
+    for (const peer of this.peers.values()) await peer.micSender?.replaceTrack(nt);
   }
 
   async setMic(id: string) {
@@ -238,10 +251,7 @@ export class WebRTCManager implements MediaManager {
     this.local.getAudioTracks().forEach((tr) => { this.local.removeTrack(tr); tr.stop(); });
     this.local.addTrack(nt);
     this.micTrack = nt;
-    for (const { pc } of this.peers.values()) {
-      const s = pc.getSenders().find((se) => se.track?.kind === "audio");
-      if (s) await s.replaceTrack(nt);
-    }
+    for (const peer of this.peers.values()) await peer.micSender?.replaceTrack(nt);
     this.onState?.();
   }
 
@@ -254,10 +264,7 @@ export class WebRTCManager implements MediaManager {
     this.local.addTrack(nt);
     this.camTrack = nt;
     if (!this.screenOn) {
-      for (const { pc } of this.peers.values()) {
-        const s = pc.getSenders().find((se) => se.track?.kind === "video");
-        if (s) await s.replaceTrack(nt);
-      }
+      for (const peer of this.peers.values()) await peer.vidSender?.replaceTrack(nt);
     }
     this.renderSelfTile();
   }
@@ -281,7 +288,24 @@ export class WebRTCManager implements MediaManager {
   /** hide/show a peer's small tile (used when their video is routed to the in-scene screen) */
   hidePeerTile(peerId: string, hidden: boolean) {
     const peer = this.peers.get(peerId);
-    if (peer) peer.tile.style.display = hidden ? "none" : (peer.video.srcObject ? "block" : "none");
+    if (!peer) return;
+    peer.hidden = hidden;
+    this.paintTile(peerId);
+  }
+
+  /**
+   * Show the thumbnail only while there is a picture in it.
+   *
+   * The element stays in the document either way — audio plays perfectly well
+   * out of a display:none video, and that is how a presenter's voice keeps
+   * coming through while their picture is routed to the screen on the wall.
+   */
+  private paintTile(peerId: string) {
+    const peer = this.peers.get(peerId);
+    if (!peer) return;
+    const show = !peer.hidden && hasLiveVideo(peer.video.srcObject as MediaStream | null);
+    peer.video.style.display = show ? "block" : "none";
+    peer.tile.style.display = show ? "block" : "none";
   }
 
   /** set a peer's playback volume 0..1 (spatial audio by distance) */
@@ -315,18 +339,32 @@ export class WebRTCManager implements MediaManager {
     const pc = new RTCPeerConnection(iceConfig());
     const polite = this.myId > peerId;                 // deterministic role
     const { tile, video } = this.makeTile(peerId);
+
+    /**
+     * One slot for the voice and one for the picture, opened now and kept for
+     * the life of the connection — empty if there is nothing to put in them yet.
+     *
+     * Two things follow from that, and both were bugs.
+     *
+     * The connection negotiates immediately instead of waiting for somebody to
+     * turn a device on. A peer with no track fires no negotiationneeded, so a
+     * person who walked back into the room and then reached for the microphone
+     * was starting ICE, DTLS and an SDP exchange at the moment they began
+     * talking — seconds of it, with the room hearing nothing. Now all of that is
+     * finished while they are still walking, and turning the microphone on is
+     * `replaceTrack` on a live connection: no renegotiation at all.
+     *
+     * And everything leaves under one stream id. addTrack was tagging the screen
+     * share with the screen's own MediaStream, so the far side got a SECOND
+     * stream and `srcObject = streams[0]` replaced the one carrying the voice.
+     * Anybody who shared their screen with the camera off went silent — which is
+     * everybody, because sharing a screen is when you stop pointing a camera at
+     * yourself.
+     */
     const peer: Peer = { pc, polite, makingOffer: false, ignoreOffer: false, tile, video };
     this.peers.set(peerId, peer);
 
-    this.local.getTracks().forEach((tr) => pc.addTrack(tr, this.local));
-    // if we're already screen-sharing, make sure this newly-connected peer gets it too
-    if (this.screenOn && this.screenStream) {
-      const screen = this.screenStream.getVideoTracks()[0];
-      const vsender = pc.getSenders().find((s) => s.track?.kind === "video");
-      if (screen) { if (vsender) void vsender.replaceTrack(screen); else pc.addTrack(screen, this.screenStream); }
-    }
-
-    pc.onnegotiationneeded = async () => {
+    const offer = async () => {
       try {
         peer.makingOffer = true;
         await pc.setLocalDescription();
@@ -334,19 +372,68 @@ export class WebRTCManager implements MediaManager {
       } catch (e) { console.warn("negotiation", e); }
       finally { peer.makingOffer = false; }
     };
+    pc.onnegotiationneeded = () => void offer();
+
+    /**
+     * One side opens the conversation; the other answers into the same slots.
+     *
+     * Both sides making their own pair meant both offered at the same instant on
+     * every connection, and Chrome never reuses a slot that was waiting when an
+     * offer arrives — measured, every arrangement of it: two slots in, four
+     * slots out. So the connection carried two pairs, each side sending on its
+     * own and receiving on the other's, and the settling was racy: three runs of
+     * the probe, two of which took longer than twelve seconds to pass audio.
+     *
+     * Adopting instead gives one pair. The opener is the impolite peer, which is
+     * already the deterministic role perfect negotiation needs, so the two can
+     * never disagree about who goes first.
+     */
+    if (polite) {
+      // Proximity is symmetric, so somebody is already offering. A connection
+      // forced open for a screen share need not be, so the wait has an end.
+      peer.openTimer = window.setTimeout(() => {
+        peer.openTimer = undefined;
+        this.openSlots(peer);
+      }, 1500);
+    } else {
+      this.openSlots(peer);
+    }
     pc.onicecandidate = ({ candidate }) => { if (candidate) this.signal(peerId, "ice", candidate.toJSON()); };
-    pc.ontrack = ({ streams, receiver }) => {
+    pc.ontrack = ({ track, streams, receiver }) => {
       // Ask for the shortest playout the link allows. Chrome grows this delay
       // after a rough patch and does not shrink it again, which is how a
       // conversation ends up running a long way behind the room.
       const live = receiver as RTCRtpReceiver & { jitterBufferTarget?: number | null; playoutDelayHint?: number | null };
       try { if ("jitterBufferTarget" in live) live.jitterBufferTarget = 0; } catch { /* not supported */ }
       try { if ("playoutDelayHint" in live) live.playoutDelayHint = 0; } catch { /* not supported */ }
-      video.srcObject = streams[0] ?? null;
-      video.style.display = "block";
-      tile.style.display = "block"; // reveal the tile only once real media arrives
-      this.play(peerId);
-      this.onPeerStream?.(peerId);
+      /**
+       * Group by the stream the far side named, and fall back to gathering the
+       * tracks ourselves when it named none.
+       *
+       * setStreams is what puts the stream id on an adopted slot, and it is not
+       * everywhere — Safari only got it in 15.4. Without it the answer carries
+       * no msid, `streams` arrives empty, and assigning streams[0] would blank
+       * the element that was already playing this person's voice. Collecting the
+       * tracks into one stream of our own is the same end result by another
+       * route, and costs nothing when the msid is there.
+       */
+      const carrier = streams[0]
+        ?? (video.srcObject instanceof MediaStream ? video.srcObject : new MediaStream());
+      if (!carrier.getTracks().includes(track)) carrier.addTrack(track);
+      if (video.srcObject !== carrier) video.srcObject = carrier;
+      // Both slots arrive the moment the connection is made, empty and muted, so
+      // "a track exists" no longer means "there is something to look at" — and
+      // mute/unmute is how a camera or a screen now starts and stops, since the
+      // slot itself never goes away. Everything that draws has to follow that.
+      const changed = () => {
+        this.paintTile(peerId);
+        this.play(peerId);
+        this.onPeerStream?.(peerId);
+      };
+      track.onunmute = changed;
+      track.onmute = changed;
+      track.onended = changed;
+      changed();
     };
     pc.onconnectionstatechange = () => {
       const st = pc.connectionState;
@@ -369,9 +456,46 @@ export class WebRTCManager implements MediaManager {
     };
   }
 
+  /** make our own pair of outgoing slots, which is what produces the offer */
+  private openSlots(peer: Peer) {
+    if (peer.micSender) return;
+    peer.micSender = peer.pc.addTransceiver("audio", { direction: "sendrecv", streams: [this.local] }).sender;
+    peer.vidSender = peer.pc.addTransceiver("video", { direction: "sendrecv", streams: [this.local] }).sender;
+    this.fillSlots(peer);
+  }
+
+  /**
+   * Take over the slots the other side's offer just created, rather than
+   * answering into them recvonly and then opening a second pair of our own.
+   *
+   * Flipping the direction has to happen between setRemoteDescription and
+   * setLocalDescription: it is the answer that tells the far side we intend to
+   * send, and setStreams is what puts our stream id on it — without that the
+   * far side gets `streams: []` and has nothing to attach.
+   */
+  private adoptSlots(peer: Peer) {
+    if (peer.micSender) return;
+    for (const tx of peer.pc.getTransceivers()) {
+      const kind = tx.receiver.track.kind;
+      if (kind === "audio" && !peer.micSender) { tx.direction = "sendrecv"; peer.micSender = tx.sender; }
+      else if (kind === "video" && !peer.vidSender) { tx.direction = "sendrecv"; peer.vidSender = tx.sender; }
+    }
+    peer.micSender?.setStreams?.(this.local);
+    peer.vidSender?.setStreams?.(this.local);
+    this.fillSlots(peer);
+  }
+
+  /** put whatever this person currently has switched on into the slots */
+  private fillSlots(peer: Peer) {
+    if (this.micTrack) void peer.micSender?.replaceTrack(this.micTrack);
+    const picture = this.screenOn ? this.screenStream?.getVideoTracks()[0] : this.camTrack;
+    if (picture) void peer.vidSender?.replaceTrack(picture);
+  }
+
   private disconnect(peerId: string) {
     const peer = this.peers.get(peerId);
     if (!peer) return;
+    if (peer.openTimer) clearTimeout(peer.openTimer);
     peer.pc.close();
     peer.tile.remove();
     this.peers.delete(peerId);
@@ -420,7 +544,9 @@ export class WebRTCManager implements MediaManager {
         peer.ignoreOffer = !peer.polite && offerCollision;
         if (peer.ignoreOffer) return;
         await pc.setRemoteDescription(payload);
+        if (peer.openTimer) { clearTimeout(peer.openTimer); peer.openTimer = undefined; }
         if (payload.type === "offer") {
+          this.adoptSlots(peer);
           await pc.setLocalDescription();
           this.signal(from, "desc", plainDesc(pc.localDescription));
         }

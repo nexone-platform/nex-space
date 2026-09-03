@@ -1,0 +1,147 @@
+<title>webrtc probe</title>
+<!--
+  The voice and the picture, driven through the real WebRTCManager.
+
+  Open http://localhost:5173/webrtc-probe.html with the web dev server running.
+  Nothing else is needed: the devices are stand-ins built from an oscillator and
+  a canvas, so there is no permission prompt and no hardware, and the two
+  managers signal to each other through a fake room in this page.
+
+  It is not in preflight because it needs a browser, and it is not in the build
+  because vite only emits the entries named in its config — checked, with this
+  file present. Run it by hand after touching net/webrtc.ts.
+
+  Every assertion here was watched to fail against the code as it stood before
+  the fix: no negotiation until a device opens, two descriptions exchanged to
+  unmute, and the voice lost the moment a screen share started.
+-->
+<div id="tilesA"></div><div id="tilesB"></div>
+<pre id="out" style="font:13px/1.6 ui-monospace,monospace;padding:16px;white-space:pre-wrap"></pre>
+<script type="module">
+import { WebRTCManager } from "/src/net/webrtc.ts";
+
+const out = document.getElementById("out");
+const log = (s) => { out.textContent += s + "\n"; };
+let pass = 0, fail = 0;
+const ok = (name, cond, extra = "") => {
+  cond ? pass++ : fail++;
+  log(`${cond ? "  PASS" : "! FAIL"}  ${name}${extra ? "  " + extra : ""}`);
+};
+
+// ---- stand-in devices: no permission prompt, no hardware ----------------
+const audioTrack = () => {
+  const ac = new AudioContext(), dst = ac.createMediaStreamDestination();
+  const osc = ac.createOscillator(); osc.connect(dst); osc.start();
+  return dst.stream;
+};
+const videoTrack = (colour) => {
+  const c = document.createElement("canvas"); c.width = c.height = 64;
+  const g = c.getContext("2d");
+  setInterval(() => { g.fillStyle = colour; g.fillRect(0, 0, 64, 64); }, 100);
+  return c.captureStream(10);
+};
+navigator.mediaDevices.getUserMedia = async (c) => (c.audio ? audioTrack() : videoTrack("#2bb3a3"));
+navigator.mediaDevices.getDisplayMedia = async () => videoTrack("#f0b429");
+
+// ---- two managers, signalling to each other -----------------------------
+const wires = {};
+let descs = 0;
+const trace = [];
+const fakeRoom = (me) => ({
+  onMessage(_type, cb) { wires[me] = cb; },
+  send(_type, { to, kind, payload }) {
+    if (kind === "desc") { descs++; trace.push(`${me}→${to} ${payload.type}`); }
+    queueMicrotask(() => wires[to]?.({ from: me, kind, payload }));
+  },
+});
+const A = new WebRTCManager(fakeRoom("A"), "A", document.getElementById("tilesA"));
+const B = new WebRTCManager(fakeRoom("B"), "B", document.getElementById("tilesB"));
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const until = async (fn, ms = 6000) => {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) { if (fn()) return true; await wait(100); }
+  return false;
+};
+const shape = (s) => s ? `${s.getAudioTracks().length}a/${s.getVideoTracks().length}v` : "no stream";
+const liveShape = (s) => s
+  ? `${s.getAudioTracks().filter((t) => !t.muted).length}a/${s.getVideoTracks().filter((t) => !t.muted).length}v live`
+  : "no stream";
+
+(async () => {
+  log("\ntwo people in earshot, driven through the real manager\n");
+
+  // ---- bug 2: is the connection warm before anybody turns a device on? ----
+  A.syncPeers(new Set(["B"]));
+  B.syncPeers(new Set(["A"]));
+  const warm = await until(() => B.getPeerStream("A") && A.getPeerStream("B"));
+  ok("the connection negotiates with no microphone and no camera open", warm,
+    `B sees ${shape(B.getPeerStream("A"))}`);
+  ok("  · and nothing is playing yet, so no black tile appears",
+    liveShape(B.getPeerStream("A")) === "0a/0v live", liveShape(B.getPeerStream("A")));
+
+  // Everything after this point is on a live connection. Turning the microphone
+  // on must not cost another SDP exchange — that round trip is the delay.
+  const before = descs;
+  await A.toggleMic();
+  await wait(600);
+  ok("turning the microphone on needs no renegotiation", descs === before,
+    `${descs - before} description(s) exchanged`);
+  const t0 = Date.now();
+  const heard = await until(() =>
+    B.getPeerStream("A")?.getAudioTracks().some((t) => !t.muted), 12000);
+  ok("  · and the other side hears it", heard,
+    `${liveShape(B.getPeerStream("A"))} after ${Date.now() - t0}ms`);
+  const at = B.getPeerStream("A")?.getAudioTracks()[0];
+  const lines = (m, other) => m.peers.get(other).pc.getTransceivers().length;
+  ok("  · over one pair of m-lines, not two crossing offers' worth",
+    lines(A, "B") === 2 && lines(B, "A") === 2, `A has ${lines(A, "B")}, B has ${lines(B, "A")}`);
+  log("        who said what: " + trace.join(", "));
+  log(`        remote audio track: readyState=${at?.readyState} muted=${at?.muted}`);
+  const dump = (m, who, other) => {
+    const pc = m.peers.get(other).pc;
+    log(`        ${who}: connection=${pc.connectionState} sig=${pc.signalingState}`);
+    pc.getTransceivers().forEach((tx, i) =>
+      log(`          [${i}] ${tx.receiver.track.kind} mid=${tx.mid} want=${tx.direction} got=${tx.currentDirection} sending=${tx.sender.track?.kind ?? "-"}`));
+  };
+  dump(A, "A", "B"); dump(B, "B", "A");
+
+  // The other half. B answered into slots it did not create, so its sending
+  // path is a different piece of code from A's and needs its own proof.
+  const beforeB = descs;
+  await B.toggleMic();
+  const heardB = await until(() =>
+    A.getPeerStream("B")?.getAudioTracks().some((t) => !t.muted), 8000);
+  ok("the side that answered can speak too", heardB, liveShape(A.getPeerStream("B")));
+  ok("  · also without renegotiating", descs === beforeB, `${descs - beforeB} exchanged`);
+  await B.toggleMic();
+
+  // ---- bug 1: sharing a screen with the camera off ------------------------
+  ok("the camera is off, which is the case that broke", !A.camOn);
+  await A.toggleScreen();
+  await wait(900);
+  const s = B.getPeerStream("A");
+  ok("the screen arrives", !!s?.getVideoTracks().some((t) => !t.muted), liveShape(s));
+  ok("  · on the SAME stream, so the voice is still there",
+    !!s?.getAudioTracks().some((t) => !t.muted), liveShape(s));
+  ok("  · which is one stream, not two", B.getPeerStream("A") === s);
+
+  await A.toggleScreen();
+  await wait(600);
+  ok("and the voice survives the share ending too",
+    !!B.getPeerStream("A")?.getAudioTracks().some((t) => !t.muted),
+    liveShape(B.getPeerStream("A")));
+
+  // ---- walking out and back in --------------------------------------------
+  A.syncPeers(new Set()); B.syncPeers(new Set());
+  await wait(300);
+  ok("walking away drops the connection", !A.hasPeer("B") && !B.hasPeer("A"));
+  A.syncPeers(new Set(["B"])); B.syncPeers(new Set(["A"]));
+  const back = await until(() =>
+    B.getPeerStream("A")?.getAudioTracks().some((t) => !t.muted), 6000);
+  ok("walking back in restores the voice on its own", back, liveShape(B.getPeerStream("A")));
+
+  log(`\n${pass} passed, ${fail} failed\n`);
+  document.title = fail ? `FAIL ${fail}` : `PASS ${pass}`;
+})().catch((e) => { log("PROBE BROKE: " + (e && e.stack || e)); document.title = "BROKE"; });
+</script>

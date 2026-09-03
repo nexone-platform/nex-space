@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { Client, getStateCallbacks, type Room } from "colyseus.js";
 import { wallTileIndex } from "../wallAutotile";
-import { WebRTCManager } from "../net/webrtc";
+import { WebRTCManager, hasLiveVideo } from "../net/webrtc";
 import { LiveKitManager } from "../net/livekit";
 import type { MediaManager } from "../net/media";
 import { buildWalkCanvas, buildSitCanvas, SIT_COLS, SIT_SEATED_COL, decodeAvatar, encodeAvatar, isLpc, avatarKey, defaultDressedConfig, LPC_ROW } from "../avatar/avatarCompose";
@@ -1440,9 +1440,9 @@ export class OfficeScene extends Phaser.Scene {
     const mic = (id: string) => (id === this.mySessionId
       ? this.myMicOn
       : !!(this.room?.state.players.get(id) as { micOn?: boolean } | undefined)?.micOn);
-    const cam = (id: string) => !!(id === this.mySessionId
-      ? this.webrtc?.cameraStream
-      : this.webrtc?.getPeerStream(id)?.getVideoTracks().length);
+    const cam = (id: string) => (id === this.mySessionId
+      ? !!this.webrtc?.cameraStream
+      : hasLiveVideo(this.webrtc?.getPeerStream(id)));
 
     const sig = ids.map((id) => `${id}:${mic(id) ? 1 : 0}${cam(id) ? "v" : ""}`).join("|");
     if (sig === this.convoSig && !panel.hidden) return;
@@ -1473,7 +1473,7 @@ export class OfficeScene extends Phaser.Scene {
       { name?: string; avatar?: string; dir?: string } | undefined;
     const name = me ? this.myName : (this.remotes.get(id)?.name || p?.name || "?");
     const stream = me ? this.webrtc?.cameraStream : this.webrtc?.getPeerStream(id);
-    const hasVideo = !!stream?.getVideoTracks().length;
+    const hasVideo = me ? !!stream?.getVideoTracks().length : hasLiveVideo(stream);
 
     // The <video> is reused when it is already showing this stream. Setting
     // srcObject again restarts playback, and a tile that blinks every time
@@ -3507,7 +3507,7 @@ export class OfficeScene extends Phaser.Scene {
   /** does this person have a camera actually sending? */
   private hasCam(h: MeetingPerson): boolean {
     const stream = h.self ? this.webrtc?.cameraStream : this.webrtc?.getPeerStream(h.id);
-    return !!stream?.getVideoTracks().some((tr: MediaStreamTrack) => tr.readyState === "live" && !tr.muted);
+    return h.self ? !!stream?.getVideoTracks().length : hasLiveVideo(stream);
   }
 
   /** the shared screen, as one more tile in the row */
