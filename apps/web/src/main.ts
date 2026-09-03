@@ -3,6 +3,7 @@ import { runAuthFlow } from "./authUI";
 import { applyColorMode, watchSystemColorMode } from "./appearance";
 import { applyLang } from "./i18n";
 import { splitLayout } from "./layout";
+import { makePanelsDraggable } from "./dragPanel";
 
 // The head script already painted the right palette; this re-applies it from the
 // same source of truth and starts following the OS while the choice is "system".
@@ -61,6 +62,9 @@ async function boot() {
 
   // keep the dock and the stage in step with each other
   splitLayout(game);
+
+  // the panels that float over the map can be put wherever they are wanted
+  makePanelsDraggable();
 
   // expose for debugging / verification
   (window as unknown as { game: Phaser.Game }).game = game;

@@ -374,6 +374,8 @@ const EN: Record<string, string> = {
   "ส่งข้อความส่วนตัว": "Send a direct message",
   "ส่งข้อความส่วนตัว…": "Send a direct message…",
   "ยังไม่มีข้อความส่วนตัว — เริ่มได้จากรายชื่อคน": "No direct messages yet — start one from the people list",
+  "ลากเพื่อย้าย · ดับเบิลคลิกเพื่อคืนที่เดิม": "Drag to move · double-click to put it back",
+
   // ---- invitations addressed to one person ----
   "คำเชิญนี้ส่งไปที่ {email} — เข้าสู่ระบบด้วยอีเมลนั้นเพื่อเข้าร่วม": "This invitation was sent to {email} — sign in with that address to join",
   "คำเชิญนี้ถูกใช้ไปแล้ว": "This invitation has already been used",
