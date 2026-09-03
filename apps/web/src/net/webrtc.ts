@@ -25,6 +25,20 @@ interface Peer {
   ignoreOffer: boolean;
   tile: HTMLElement;
   video: HTMLVideoElement;
+  /**
+   * The element that actually makes the sound, kept apart from the picture.
+   *
+   * A <video> fed a stream whose video track never produces a frame does not
+   * play the audio in it either: it sits at readyState 0 with play() unsettled,
+   * for good. Measured — and it has nothing to do with the element being
+   * hidden, which works fine. Since a slot is now opened before anybody
+   * switches a camera on, every peer with their camera off sends exactly such a
+   * track, so one <video> for both would be silent for almost everybody. An
+   * <audio> element ignores video tracks entirely.
+   */
+  sound: HTMLAudioElement;
+  /** everything the far side sends, which is what the scene asks for */
+  remote: MediaStream;
   /** the two outgoing slots. One side makes them, the other adopts the ones
    *  that side's offer creates — see openSlots/adoptSlots. */
   micSender?: RTCRtpSender;
@@ -281,8 +295,7 @@ export class WebRTCManager implements MediaManager {
 
   /** a connected peer's incoming media stream (undefined if not connected yet) */
   getPeerStream(peerId: string): MediaStream | undefined {
-    const s = this.peers.get(peerId)?.video.srcObject;
-    return s instanceof MediaStream ? s : undefined;
+    return this.peers.get(peerId)?.remote;
   }
 
   hasPeer(peerId: string) { return this.peers.has(peerId); }
@@ -306,6 +319,7 @@ export class WebRTCManager implements MediaManager {
     const peer = this.peers.get(peerId);
     if (!peer) return;
     const show = !peer.hidden && hasLiveVideo(peer.video.srcObject as MediaStream | null);
+    if (show) void peer.video.play().catch(() => { /* it is muted; nothing to hear either way */ });
     peer.video.style.display = show ? "block" : "none";
     peer.tile.style.display = show ? "block" : "none";
   }
@@ -313,14 +327,14 @@ export class WebRTCManager implements MediaManager {
   /** set a peer's playback volume 0..1 (spatial audio by distance) */
   setPeerVolume(peerId: string, vol: number) {
     const peer = this.peers.get(peerId);
-    if (peer) peer.video.volume = Math.max(0, Math.min(1, vol));
+    if (peer) peer.sound.volume = Math.max(0, Math.min(1, vol));
   }
 
   async setSpeaker(id: string) {
     this.selSpk = id;
-    for (const { video } of this.peers.values()) {
-      const v = video as HTMLVideoElement & { setSinkId?: (id: string) => Promise<void> };
-      if (v.setSinkId) await v.setSinkId(id).catch(() => {});
+    for (const { sound } of this.peers.values()) {
+      const a = sound as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+      if (a.setSinkId) await a.setSinkId(id).catch(() => {});
     }
   }
 
@@ -340,7 +354,7 @@ export class WebRTCManager implements MediaManager {
     void loadIce();
     const pc = new RTCPeerConnection(iceConfig());
     const polite = this.myId > peerId;                 // deterministic role
-    const { tile, video } = this.makeTile(peerId);
+    const { tile, video, sound } = this.makeTile(peerId);
 
     /**
      * One slot for the voice and one for the picture, opened now and kept for
@@ -363,7 +377,10 @@ export class WebRTCManager implements MediaManager {
      * everybody, because sharing a screen is when you stop pointing a camera at
      * yourself.
      */
-    const peer: Peer = { pc, polite, makingOffer: false, ignoreOffer: false, tile, video };
+    const peer: Peer = {
+      pc, polite, makingOffer: false, ignoreOffer: false,
+      tile, video, sound, remote: new MediaStream(),
+    };
     this.peers.set(peerId, peer);
 
     const offer = async () => {
@@ -422,10 +439,17 @@ export class WebRTCManager implements MediaManager {
        * tracks into one stream of our own is the same end result by another
        * route, and costs nothing when the msid is there.
        */
-      const carrier = streams[0]
-        ?? (video.srcObject instanceof MediaStream ? video.srcObject : new MediaStream());
+      const carrier = streams[0] ?? peer.remote;
       if (!carrier.getTracks().includes(track)) carrier.addTrack(track);
-      if (video.srcObject !== carrier) video.srcObject = carrier;
+      peer.remote = carrier;                     // what the scene reads
+
+      // Sorted by kind, because the two elements must not share a stream: the
+      // picture stalls on a video track with no frames, and would take the
+      // voice with it.
+      const target: HTMLMediaElement = track.kind === "audio" ? sound : video;
+      const own = target.srcObject instanceof MediaStream ? target.srcObject : new MediaStream();
+      if (!own.getTracks().includes(track)) own.addTrack(track);
+      if (target.srcObject !== own) target.srcObject = own;
       // Both slots arrive the moment the connection is made, empty and muted, so
       // "a track exists" no longer means "there is something to look at" — and
       // mute/unmute is how a camera or a screen now starts and stops, since the
@@ -553,6 +577,8 @@ export class WebRTCManager implements MediaManager {
     if (!peer) return;
     if (peer.openTimer) clearTimeout(peer.openTimer);
     peer.pc.close();
+    peer.sound.srcObject = null;
+    peer.sound.remove();
     peer.tile.remove();
     this.peers.delete(peerId);
   }
@@ -629,10 +655,10 @@ export class WebRTCManager implements MediaManager {
   private play(peerId: string) {
     const peer = this.peers.get(peerId);
     if (!peer) return;
-    const { video } = peer;
-    video.play().then(() => {
+    const { sound } = peer;
+    sound.play().then(() => {
       peer.playedAt = performance.now();
-      peer.playedFrom = video.currentTime;
+      peer.playedFrom = sound.currentTime;
     }).catch(() => {
       // blocked until the page is interacted with; take the next gesture
       const retry = () => { document.removeEventListener("pointerdown", retry); this.play(peerId); };
@@ -692,34 +718,34 @@ export class WebRTCManager implements MediaManager {
         this.disconnect(id);
         continue;
       }
-      const { video } = peer;
-      if (!(video.srcObject instanceof MediaStream)) continue;
+      const { sound } = peer;
+      if (!(sound.srcObject instanceof MediaStream)) continue;
       // A connection that is up and carrying nothing — nobody has switched
       // anything on yet — has no playout to be behind on. Its element's clock
       // does not advance, so measuring it reports the whole idle period as lag
       // and re-attaches the stream every ten seconds for as long as the two
       // stand there saying nothing.
-      if (!video.srcObject.getTracks().some((tr) => tr.readyState === "live" && !tr.muted)) {
+      if (!sound.srcObject.getTracks().some((tr) => tr.readyState === "live" && !tr.muted)) {
         peer.playedAt = peer.playedFrom = undefined;
         continue;
       }
-      if (video.paused) { this.play(id); continue; }
+      if (sound.paused) { this.play(id); continue; }
       if (peer.playedAt == null || peer.playedFrom == null) continue;
-      const behind = (now - peer.playedAt) / 1000 - (video.currentTime - peer.playedFrom);
+      const behind = (now - peer.playedAt) / 1000 - (sound.currentTime - peer.playedFrom);
       if (behind < 1.5) continue;
       // once every 10s at most: re-attaching is a small click in the audio, and a
       // link that is genuinely struggling should not be clicked at every check
       if (peer.lastFix && now - peer.lastFix < 10_000) continue;
       peer.lastFix = now;
       console.warn(`[webrtc] ${id} audio was ${behind.toFixed(1)}s behind — dropping the backlog`);
-      const stream = video.srcObject;
-      video.srcObject = null;
-      video.srcObject = stream;
+      const stream = sound.srcObject;
+      sound.srcObject = null;
+      sound.srcObject = stream;
       this.play(id);
     }
   }
 
-  private makeTile(peerId: string): { tile: HTMLElement; video: HTMLVideoElement } {
+  private makeTile(peerId: string): { tile: HTMLElement; video: HTMLVideoElement; sound: HTMLAudioElement } {
     const tile = document.createElement("div");
     // hidden until this peer actually sends media (avoids empty black boxes for
     // idle/forced connections such as a screen-share target that isn't sending)
@@ -732,9 +758,16 @@ export class WebRTCManager implements MediaManager {
     name.style.cssText = "position:absolute;left:6px;bottom:4px;color:#fff;font:11px sans-serif;text-shadow:0 1px 2px #000;";
     tile.append(video, name);
     this.tilesEl.append(tile);
-    const v = video as HTMLVideoElement & { setSinkId?: (id: string) => Promise<void> };
-    if (this.selSpk && v.setSinkId) v.setSinkId(this.selSpk).catch(() => {});
-    return { tile, video };
+    // Outside the tile, not inside it: the tile is hidden whenever there is no
+    // picture, and the sound must not depend on anything the layout does.
+    const sound = document.createElement("audio");
+    sound.autoplay = true;
+    this.tilesEl.append(sound);
+    const a = sound as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+    if (this.selSpk && a.setSinkId) a.setSinkId(this.selSpk).catch(() => {});
+    // The picture never carries sound, so the two can never both play it.
+    video.muted = true;
+    return { tile, video, sound };
   }
 
   private renderSelfTile() {

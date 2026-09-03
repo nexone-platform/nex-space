@@ -45,6 +45,21 @@ async function directions(mgr, from) {
   return pc ? pc.getTransceivers().map((t) => `${t.receiver.track.kind}:${t.currentDirection}`).join(" ") : "no peer";
 }
 
+/** the element that actually makes the sound, and whether it is making any */
+function audible(mgr, from) {
+  const p = mgr.peers.get(from);
+  if (!p) return { why: "no peer" };
+  const v = p.sound, s = v.srcObject;
+  return {
+    paused: v.paused, muted: v.muted, volume: v.volume,
+    currentTime: v.currentTime,
+    display: v.style.display || "(audio)", tileDisplay: p.tile.style.display,
+    inDocument: document.contains(v),
+    readyState: v.readyState,
+    tracks: s ? s.getTracks().map((t) => `${t.kind}:${t.muted ? "muted" : "live"}`).join(" ") : "none",
+  };
+}
+
 /**
  * One scenario. `lag` is the one-way signalling delay, `open` decides the order
  * things happen in, and everything else is the same both ways.
@@ -69,6 +84,16 @@ async function scenario(name, { lag, order }) {
   const [ab, ba] = [await received(B, ids[0]), await received(A, ids[1])];
   ok(`${name}: A is heard`, ab > 0, `${ab} packets · ${await directions(B, ids[0])}`);
   ok(`${name}: B is heard`, ba > 0, `${ba} packets · ${await directions(A, ids[1])}`);
+
+  // Packets arriving is not the same as a sound coming out. Everything above
+  // measures the wire; this measures the element that plays it.
+  const heard = audible(B, ids[0]);
+  const t1 = heard.currentTime;
+  await wait(700);
+  const t2 = audible(B, ids[0]).currentTime;
+  ok(`${name}: and it actually plays`,
+    !heard.paused && !heard.muted && heard.volume > 0 && t2 > t1,
+    `paused=${heard.paused} muted=${heard.muted} volume=${heard.volume} clock ${t1.toFixed(2)}→${t2.toFixed(2)} display=${heard.display}/${heard.tileDisplay}`);
   clearInterval(frames);
   A.dispose(); B.dispose();
 }

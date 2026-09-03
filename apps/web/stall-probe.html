@@ -1,0 +1,65 @@
+<title>stall probe</title>
+<!--
+  Why a peer could be connected, negotiated sendrecv, receiving packets — and
+  silent.
+
+  Open http://localhost:5173/stall-probe.html with the web dev server running.
+
+  The answer, measured here: a <video> fed a stream whose video track never
+  produces a frame sits at readyState 0 with play() unsettled, forever, and
+  plays the audio in that stream not at all. It has nothing to do with the
+  element being hidden — the audio-only rows play fine at display:none. An
+  <audio> element with the same stream is unaffected, because it ignores video
+  tracks.
+
+  That matters because slots are opened before anybody switches a camera on, so
+  every peer with their camera off sends exactly such a track.
+-->
+<pre id="out" style="font:13px/1.6 ui-monospace,monospace;padding:16px;white-space:pre-wrap"></pre>
+<div id="stage"></div>
+<script>
+const out = document.getElementById("out");
+const log = (s) => { out.textContent += s + "\n"; };
+
+const liveAudio = () => {
+  const ac = new AudioContext(), d = ac.createMediaStreamDestination();
+  const o = ac.createOscillator(); o.connect(d); o.start();
+  return d.stream.getAudioTracks()[0];
+};
+// A video track that exists and never produces a frame — which is what a slot
+// opened before anybody switched a camera on looks like on the far side.
+const silentVideo = () => document.createElement("canvas").captureStream(0).getVideoTracks()[0];
+
+async function trial(tag, { element, withVideo, display }) {
+  const el = document.createElement(element);
+  el.autoplay = true; el.playsInline = true;
+  el.style.display = display;
+  document.getElementById("stage").append(el);
+  const s = new MediaStream([liveAudio()]);
+  if (withVideo) s.addTrack(silentVideo());
+  el.srcObject = s;
+  let err = "";
+  // play() does not always come back — that is one of the findings — so it is
+  // raced rather than awaited.
+  await Promise.race([
+    el.play().then(() => { err = "resolved"; }).catch((e) => { err = e.name; }),
+    new Promise((r) => setTimeout(() => { err = err || "play() never settled"; r(); }, 2000)),
+  ]);
+  const t1 = el.currentTime;
+  await new Promise((r) => setTimeout(r, 1200));
+  const t2 = el.currentTime;
+  log(`${tag}`);
+  log(`   clock ${t1.toFixed(2)} → ${t2.toFixed(2)}  ${t2 > t1 ? "ADVANCING — audible" : "STUCK — silent"}` +
+      `   paused=${el.paused} readyState=${el.readyState}${err ? " play() threw " + err : ""}`);
+}
+
+(async () => {
+  log("what makes a media element stop feeding audio?\n");
+  await trial("<video>  audio only        display:block", { element: "video", withVideo: false, display: "block" });
+  await trial("<video>  audio only        display:none ", { element: "video", withVideo: false, display: "none" });
+  await trial("<video>  audio + dead video display:block", { element: "video", withVideo: true, display: "block" });
+  await trial("<video>  audio + dead video display:none ", { element: "video", withVideo: true, display: "none" });
+  await trial("<audio>  audio + dead video display:none ", { element: "audio", withVideo: true, display: "none" });
+  document.title = "done";
+})().catch((e) => { log("BROKE: " + e); document.title = "BROKE"; });
+</script>

@@ -74,7 +74,11 @@ const liveShape = (s) => s
   // ---- bug 2: is the connection warm before anybody turns a device on? ----
   A.syncPeers(new Set(["B"]));
   B.syncPeers(new Set(["A"]));
-  const warm = await until(() => B.getPeerStream("A") && A.getPeerStream("B"));
+  // A peer's stream object now exists from the moment the connection does, so
+  // "is it there" answers yes before anything has been negotiated. The question
+  // is whether the slots have arrived.
+  const tracks = (m, id) => m.getPeerStream(id)?.getTracks().length ?? 0;
+  const warm = await until(() => tracks(B, "A") >= 2 && tracks(A, "B") >= 2);
   ok("the connection negotiates with no microphone and no camera open", warm,
     `B sees ${shape(B.getPeerStream("A"))}`);
   ok("  · and nothing is playing yet, so no black tile appears",
