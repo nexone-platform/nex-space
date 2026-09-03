@@ -66,6 +66,12 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-}
+      # Sending over HTTPS instead of SMTP. Set this and it wins: plenty of
+      # hosts drop outbound connections on every SMTP port, and this one does —
+      # 587 and 2587 were both checked and both silently dropped. Port 443 is
+      # never blocked.
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - MAIL_FROM=${MAIL_FROM:-}
       # Relay for calls that cannot find a direct path (the coturn service
       # below). Blank means STUN only: fine at home, silence behind a corporate
       # firewall. TURN_HOST must be the public name or address of THIS machine —

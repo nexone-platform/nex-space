@@ -361,6 +361,40 @@ that, an invitation addressed to one person would be the workspace's shared
 invite code again wearing somebody's name, and the pending list would be telling
 a story that is not true.
 
+### When the host blocks outbound SMTP — which it does here
+
+Checked on this server:
+
+```
+timeout 10 bash -c 'cat < /dev/null > /dev/tcp/smtp.resend.com/587'   -> blocked
+                                                          .../2587   -> blocked
+```
+
+Many providers drop outbound connections on every SMTP port so that a
+compromised box cannot become a relay, and nothing an application does from the
+inside changes that. Port 443 is never blocked, so send over the provider's HTTP
+API instead:
+
+```dotenv
+RESEND_API_KEY=<the API key>
+MAIL_FROM=NexSpace <no-reply@mail.xy789.click>
+APP_URL=https://nexspace.xy789.click
+```
+
+That is the whole change — no `SMTP_*` needed. When `RESEND_API_KEY` is set it
+wins, and the SMTP settings are ignored; they stay supported for a deployment
+that can reach a relay.
+
+Confirm which way it is going, and whether it works at all, without sending
+anything:
+
+```bash
+curl -s -H "authorization: Bearer <your token>" https://<host>/workspaces/<slug>/mail-check
+```
+
+`{"ok":true,...}` means the credentials were accepted and the network allows it.
+Anything else says which of the two failed, in the provider's own words.
+
 ### Which domain the mail is sent as — the part that decides whether it arrives
 
 This matters more than which provider you pick. What was checked on this

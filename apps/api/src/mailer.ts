@@ -1,14 +1,36 @@
 import nodemailer from "nodemailer";
 
-// SMTP is optional. Without it the API still works — sign-in codes are printed
-// to the server log instead of emailed, which is what you want in development.
+/**
+ * Getting an email out of this deployment.
+ *
+ * Two ways, because one of them is not always available. Plenty of hosts —
+ * this one included — drop outbound connections on every SMTP port to keep
+ * compromised boxes from becoming relays, and there is nothing an application
+ * can do about it from the inside. Port 443 is never blocked, so a provider's
+ * own HTTP API is the way through.
+ *
+ * `RESEND_API_KEY` therefore wins when it is set. The SMTP settings still work
+ * and are still the right answer for a deployment that can reach a relay, or
+ * for a provider that offers nothing else.
+ *
+ * Neither configured is a supported state: sign-in codes go to the log and
+ * invitations still exist, carrying a link to pass on by hand.
+ */
 const HOST = process.env.SMTP_HOST || "";
 const PORT = Number(process.env.SMTP_PORT || 587);
 const USER = process.env.SMTP_USER || "";
 const PASS = process.env.SMTP_PASS || "";
-const FROM = process.env.SMTP_FROM || USER || "NexSpace <no-reply@nexspace.local>";
+const RESEND_KEY = process.env.RESEND_API_KEY || "";
+/** MAIL_FROM is the honest name now that the transport may not be SMTP at all */
+const FROM = process.env.MAIL_FROM || process.env.SMTP_FROM || USER || "NexSpace <no-reply@nexspace.local>";
 
-export const mailEnabled = !!(HOST && USER && PASS);
+const smtpReady = !!(HOST && USER && PASS);
+export const mailEnabled = !!RESEND_KEY || smtpReady;
+/** which way this deployment actually gets mail out, for anything that reports */
+export const mailTransport = RESEND_KEY ? "resend-api" : smtpReady ? "smtp" : "none";
+
+/** the same ceiling both ways: far longer than a working relay, far shorter than any proxy */
+const MAIL_TIMEOUT_MS = 10_000;
 
 /**
  * Bounded, on purpose.
@@ -22,7 +44,7 @@ export const mailEnabled = !!(HOST && USER && PASS);
  * Ten seconds is far longer than a working relay ever needs and far shorter
  * than any proxy in front of us.
  */
-const transporter = mailEnabled
+const transporter = smtpReady
   ? nodemailer.createTransport({
       host: HOST, port: PORT, secure: PORT === 465,
       auth: { user: USER, pass: PASS },
@@ -40,7 +62,21 @@ const transporter = mailEnabled
  * configuration, a port that never answers, and a password that is wrong.
  */
 export async function mailCheck(): Promise<{ ok: boolean; detail: string }> {
-  if (!transporter) return { ok: false, detail: "SMTP is not configured" };
+  if (RESEND_KEY) {
+    // A read, not a send: it proves the key works and that port 443 is open,
+    // without putting a message in anybody's inbox.
+    try {
+      const r = await fetch("https://api.resend.com/domains", {
+        headers: { authorization: `Bearer ${RESEND_KEY}` },
+        signal: AbortSignal.timeout(MAIL_TIMEOUT_MS),
+      });
+      if (r.ok) return { ok: true, detail: `resend HTTP API accepted the key · sending as ${FROM}` };
+      return { ok: false, detail: `resend answered ${r.status} — the API key was refused` };
+    } catch (e) {
+      return { ok: false, detail: `could not reach api.resend.com: ${(e as Error).message}` };
+    }
+  }
+  if (!transporter) return { ok: false, detail: "no mail transport is configured" };
   try {
     await transporter.verify();
     return { ok: true, detail: `${HOST}:${PORT} accepted the credentials` };
@@ -54,18 +90,48 @@ export async function mailCheck(): Promise<{ ok: boolean; detail: string }> {
   }
 }
 
+/** what every message here needs, regardless of how it leaves */
+type Letter = { to: string; subject: string; text: string; html: string };
+
+/**
+ * Hand it to whichever transport this deployment has.
+ *
+ * Returns false rather than throwing when there is nowhere to send it: the
+ * caller's job is to carry on and say the email did not go, not to fail the
+ * thing the email was about.
+ */
+async function deliver(letter: Letter): Promise<boolean> {
+  if (RESEND_KEY) {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { authorization: `Bearer ${RESEND_KEY}`, "content-type": "application/json" },
+      body: JSON.stringify({ from: FROM, to: [letter.to], subject: letter.subject, text: letter.text, html: letter.html }),
+      signal: AbortSignal.timeout(MAIL_TIMEOUT_MS),
+    });
+    if (!r.ok) {
+      // Their message names the real problem — an unverified sending domain,
+      // usually — and repeating it verbatim beats inventing a summary.
+      const said = await r.text().catch(() => "");
+      throw new Error(`resend answered ${r.status}: ${said.slice(0, 300)}`);
+    }
+    return true;
+  }
+  if (!transporter) return false;
+  await transporter.sendMail({ from: FROM, ...letter });
+  return true;
+}
+
 /** somebody's name and a space's name both go into HTML, and both are typed by hand */
 const esc = (v: string) =>
   String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
 export async function sendLoginCode(to: string, code: string) {
-  if (!transporter) {
-    console.log(`[mail] SMTP not configured — sign-in code for ${to}: ${code}`);
+  if (!mailEnabled) {
+    console.log(`[mail] no mail transport configured — sign-in code for ${to}: ${code}`);
     return;
   }
-  await transporter.sendMail({
-    from: FROM,
+  await deliver({
     to,
     subject: `${code} คือรหัสเข้าสู่ระบบ NexSpace`,
     text: `รหัสเข้าสู่ระบบของคุณคือ ${code}\nรหัสนี้ใช้ได้ 10 นาที หากคุณไม่ได้ร้องขอ ให้ละเว้นอีเมลนี้`,
@@ -108,12 +174,11 @@ export async function sendInvite(opts: {
     `ลิงก์นี้ใช้ได้กับอีเมล ${to} เท่านั้น และหมดอายุใน ${days} วัน`,
     `หากคุณไม่รู้จักผู้เชิญ ให้ละเว้นอีเมลนี้ — ไม่มีอะไรเกิดขึ้นถ้าคุณไม่กด`,
   ];
-  if (!transporter) {
-    console.log(`[mail] SMTP not configured — invitation for ${to} not sent. Link: ${link}`);
+  if (!mailEnabled) {
+    console.log(`[mail] no mail transport configured — invitation for ${to} not sent. Link: ${link}`);
     return false;
   }
-  await transporter.sendMail({
-    from: FROM,
+  return deliver({
     to,
     subject,
     text: lines.join("\n"),

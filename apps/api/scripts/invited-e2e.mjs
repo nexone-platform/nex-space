@@ -52,7 +52,12 @@ try {
 const api = spawn(process.execPath, [TSX, "src/index.ts"], {
   cwd: API_DIR,
   // INVITE_DAYS small enough to reason about, and no SMTP on purpose
-  env: { ...process.env, PORT: String(PORT), INVITE_DAYS: "14", SMTP_HOST: "", SMTP_USER: "", SMTP_PASS: "" },
+  // Every transport off, deliberately. Inheriting a real key from the machine
+  // running the suite would send actual email to made-up addresses.
+  env: {
+    ...process.env, PORT: String(PORT), INVITE_DAYS: "14",
+    SMTP_HOST: "", SMTP_USER: "", SMTP_PASS: "", RESEND_API_KEY: "",
+  },
   stdio: ["ignore", "pipe", "pipe"],
 });
 api.stdout.on("data", (d) => process.env.VERBOSE && process.stdout.write(`[api] ${d}`));
