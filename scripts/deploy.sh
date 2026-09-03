@@ -309,7 +309,14 @@ if [ "$CHECK" = 0 ]; then
       fi
       # An older stamp is fine only if nothing this image is built from has
       # moved since — its own directory, or the files that go into every image.
-      missed=$(git log --oneline "$rev..$head" -- "$path" docker-compose.yml .dockerignore package.json package-lock.json 2>/dev/null)
+      # Only what actually goes INTO an image. Every Dockerfile copies its own
+      # apps/<svc> directory and nothing else, so docker-compose.yml and the root
+      # package.json are not build inputs — a compose change is env, ports and
+      # volumes, which belong to the container and not to the image. Counting
+      # them here failed a deploy whose only shared change was two new
+      # environment lines. .dockerignore stays: it decides what those COPYs pick
+      # up, so changing it does change the image.
+      missed=$(git log --oneline "$rev..$head" -- "$path" .dockerignore 2>/dev/null)
       if [ -n "$missed" ]; then
         echo "$svc is stamped \"$rev\" and is missing $(echo "$missed" | wc -l | tr -d " ") commit(s) to $path"
         exit 1
