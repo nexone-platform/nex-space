@@ -1,0 +1,143 @@
+<title>webrtc probe 2</title>
+<!--
+  Closer to production than webrtc-probe.html: signalling takes real time, the
+  proximity pass runs every frame, and "can they hear it" is answered by RTP
+  counters rather than by a track's muted flag. Two people, both with a
+  microphone, which is the case that went silent on the server.
+-->
+<div id="tA"></div><div id="tB"></div>
+<pre id="out" style="font:13px/1.6 ui-monospace,monospace;padding:16px;white-space:pre-wrap"></pre>
+<script type="module">
+import { WebRTCManager } from "/src/net/webrtc.ts";
+
+const out = document.getElementById("out");
+const log = (s) => { out.textContent += s + "\n"; };
+let pass = 0, fail = 0;
+const ok = (n, c, x = "") => { c ? pass++ : fail++; log(`${c ? "  PASS" : "! FAIL"}  ${n}${x ? "  " + x : ""}`); };
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const audio = () => {
+  const ac = new AudioContext(), d = ac.createMediaStreamDestination();
+  const o = ac.createOscillator(); o.connect(d); o.start();
+  return d.stream;
+};
+const canvas = () => {
+  const c = document.createElement("canvas"); c.width = c.height = 64;
+  const g = c.getContext("2d");
+  setInterval(() => { g.fillStyle = "#2bb3a3"; g.fillRect(0, 0, 64, 64); }, 100);
+  return c.captureStream(10);
+};
+navigator.mediaDevices.getUserMedia = async (c) => (c.audio ? audio() : canvas());
+navigator.mediaDevices.getDisplayMedia = async () => canvas();
+
+/** how much audio has actually crossed the wire, in packets */
+async function received(mgr, from) {
+  const peer = mgr.peers.get(from);
+  if (!peer) return -1;
+  let n = 0;
+  (await peer.pc.getStats()).forEach((r) => {
+    if (r.type === "inbound-rtp" && r.kind === "audio") n += r.packetsReceived || 0;
+  });
+  return n;
+}
+async function directions(mgr, from) {
+  const pc = mgr.peers.get(from)?.pc;
+  return pc ? pc.getTransceivers().map((t) => `${t.receiver.track.kind}:${t.currentDirection}`).join(" ") : "no peer";
+}
+
+/**
+ * One scenario. `lag` is the one-way signalling delay, `open` decides the order
+ * things happen in, and everything else is the same both ways.
+ */
+async function scenario(name, { lag, order }) {
+  log(`\n── ${name}  (signalling ${lag}ms each way)`);
+  const wires = {}, ids = ["p-aaaa", "p-bbbb"];
+  const room = (me) => ({
+    onMessage(_t, cb) { wires[me] = cb; },
+    send(_t, { to, kind, payload }) { setTimeout(() => wires[to]?.({ from: me, kind, payload }), lag); },
+  });
+  const A = new WebRTCManager(room(ids[0]), ids[0], document.getElementById("tA"));
+  const B = new WebRTCManager(room(ids[1]), ids[1], document.getElementById("tB"));
+  // the proximity pass, as the scene runs it
+  const frames = setInterval(() => {
+    A.syncPeers(new Set([ids[1]])); B.syncPeers(new Set([ids[0]]));
+  }, 16);
+
+  await order(A, B, ids);
+  await wait(3500);
+
+  const [ab, ba] = [await received(B, ids[0]), await received(A, ids[1])];
+  ok(`${name}: A is heard`, ab > 0, `${ab} packets · ${await directions(B, ids[0])}`);
+  ok(`${name}: B is heard`, ba > 0, `${ba} packets · ${await directions(A, ids[1])}`);
+  clearInterval(frames);
+  A.dispose(); B.dispose();
+}
+
+(async () => {
+  // Both already talking when they meet — the ordinary case.
+  await scenario("mics on before meeting", {
+    lag: 60,
+    order: async (A, B) => { await A.toggleMic(); await B.toggleMic(); await wait(400); },
+  });
+
+  // They meet first and reach for the microphone afterwards.
+  await scenario("mics on after meeting", {
+    lag: 60,
+    order: async (A, B) => { await wait(1000); await A.toggleMic(); await B.toggleMic(); },
+  });
+
+  // What two people actually do: join, stand about for a while, then talk. Long
+  // enough for the three-second latency guard to have run several times over a
+  // connection that is up and carrying nothing.
+  await scenario("a while spent connected before anyone speaks", {
+    lag: 60,
+    order: async (A, B) => { await wait(9000); await A.toggleMic(); await B.toggleMic(); },
+  });
+
+  // A relay slow enough that the answering side gives up waiting and opens the
+  // conversation itself, so two offers cross.
+  await scenario("a relay slower than the wait", {
+    lag: 1000,
+    order: async (A, B) => { await A.toggleMic(); await B.toggleMic(); await wait(2500); },
+  });
+
+  // ---- the safety net -------------------------------------------------------
+  // Whatever the cause, a microphone that is open and sending nothing has to
+  // come back on its own. Break a sender on purpose and watch it recover.
+  log("");
+  log("── a sender that stops carrying, for no reason the code can know");
+  {
+    const wires = {}, ids = ["p-aaaa", "p-bbbb"];
+    const room = (me) => ({
+      onMessage(_t, cb) { wires[me] = cb; },
+      send(_t, { to, kind, payload }) { setTimeout(() => wires[to]?.({ from: me, kind, payload }), 60); },
+    });
+    const A = new WebRTCManager(room(ids[0]), ids[0], document.getElementById("tA"));
+    const B = new WebRTCManager(room(ids[1]), ids[1], document.getElementById("tB"));
+    const frames = setInterval(() => {
+      A.syncPeers(new Set([ids[1]])); B.syncPeers(new Set([ids[0]]));
+    }, 16);
+    await A.toggleMic(); await B.toggleMic();
+    await wait(6000);
+    const healthy = await received(B, ids[0]);
+    ok("A is heard to begin with", healthy > 0, `${healthy} packets`);
+    if (!healthy) { log("        (nothing to break — the rest of this block means nothing)"); }
+
+    await A.peers.get(ids[1]).micSender.replaceTrack(null);   // the sender goes nowhere
+    const atBreak = await received(B, ids[0]);
+    await wait(2000);
+    ok("  · breaking the sender does stop the audio",
+      (await received(B, ids[0])) - atBreak < 20, "packets stalled");
+
+    await wait(9000);                                          // two guard ticks and change
+    const after = await received(B, ids[0]);
+    await wait(1500);
+    const finish = await received(B, ids[0]);
+    ok("  · and it comes back without anybody being told why",
+      finish > after + 20, `${after} → ${finish} packets`);
+    clearInterval(frames); A.dispose(); B.dispose();
+  }
+  log(`\n${pass} passed, ${fail} failed\n`);
+  document.title = fail ? `FAIL ${fail}` : `PASS ${pass}`;
+})().catch((e) => { log("BROKE: " + (e?.stack || e)); document.title = "BROKE"; });
+</script>

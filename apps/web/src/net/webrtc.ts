@@ -38,6 +38,8 @@ interface Peer {
   playedAt?: number;
   playedFrom?: number;
   lastFix?: number;
+  /** outbound audio packets at the previous check, to notice a sender going nowhere */
+  lastSent?: number;
   droppedAt?: number;   // when ICE first said "disconnected"
   retried?: boolean;    // an ICE restart has already been spent on this peer
 }
@@ -398,6 +400,9 @@ export class WebRTCManager implements MediaManager {
     } else {
       this.openSlots(peer);
     }
+    pc.onsignalingstatechange = () => {
+      if (pc.signalingState === "stable") this.reconcileSlots(peer);
+    };
     pc.onicecandidate = ({ candidate }) => { if (candidate) this.signal(peerId, "ice", candidate.toJSON()); };
     pc.ontrack = ({ track, streams, receiver }) => {
       // Ask for the shortest playout the link allows. Chrome grows this delay
@@ -452,7 +457,12 @@ export class WebRTCManager implements MediaManager {
       // Tearing the connection down here meant a lost packet cost a rebuild, and
       // a rebuild is what the audio has to catch up from.
       if (st === "disconnected") { peer.droppedAt = Date.now(); return; }
-      if (st === "connected") { peer.droppedAt = undefined; this.play(peerId); }
+      if (st === "connected") {
+        peer.droppedAt = undefined;
+        this.play(peerId);
+        console.log(`[webrtc] ${peerId} connected —`,
+          pc.getTransceivers().map((tx) => `${tx.receiver.track.kind}:${tx.currentDirection}`).join(" "));
+      }
     };
   }
 
@@ -482,6 +492,52 @@ export class WebRTCManager implements MediaManager {
     }
     peer.micSender?.setStreams?.(this.local);
     peer.vidSender?.setStreams?.(this.local);
+    this.fillSlots(peer);
+  }
+
+  /**
+   * Point the two slots at transceivers that can actually send.
+   *
+   * A slot is only worth anything while the m-line under it is negotiated, and
+   * that is not guaranteed by having created it. If both sides open at once —
+   * which the wait below is meant to prevent and cannot promise, since a
+   * backgrounded tab stops running the proximity pass altogether — the rollback
+   * that resolves the collision leaves a transceiver attached to nothing.
+   * `currentDirection` reads null, `replaceTrack` still succeeds, the level
+   * meter still moves, and not one packet leaves. That is a person talking to a
+   * room that cannot hear them, with nothing on their screen to say so.
+   *
+   * So the senders are re-derived every time the connection settles rather than
+   * trusted from when they were made. A slot that went nowhere is swapped for
+   * one that goes somewhere; if the only ones left are receive-only, one is
+   * turned around, which costs a renegotiation and is worth it.
+   */
+  private reconcileSlots(peer: Peer) {
+    const sends = (tx: RTCRtpTransceiver) =>
+      tx.currentDirection === "sendrecv" || tx.currentDirection === "sendonly";
+    const all = peer.pc.getTransceivers();
+    let repaired = false;
+
+    for (const kind of ["audio", "video"] as const) {
+      const key = kind === "audio" ? "micSender" : "vidSender";
+      const held = all.find((tx) => tx.sender === peer[key]);
+      if (held && sends(held)) continue;                       // still carries
+
+      const working = all.find((tx) => tx.receiver.track.kind === kind && sends(tx));
+      if (working) { peer[key] = working.sender; repaired = true; continue; }
+
+      const listening = all.find((tx) => tx.receiver.track.kind === kind && tx.currentDirection === "recvonly");
+      if (listening) {
+        listening.direction = "sendrecv";                      // renegotiates
+        listening.sender.setStreams?.(this.local);
+        peer[key] = listening.sender;
+        repaired = true;
+      }
+    }
+    // Unconditional, not only when a slot moved: a sender can also simply have
+    // lost its track. replaceTrack with the track already in place resolves
+    // without renegotiating, so this is free when there is nothing wrong.
+    void repaired;
     this.fillSlots(peer);
   }
 
@@ -593,9 +649,41 @@ export class WebRTCManager implements MediaManager {
    * Measured from when playback began, not from when the track arrived, so
    * ordinary setup time is not mistaken for lag.
    */
+  /**
+   * Is the voice we think we are sending actually leaving?
+   *
+   * Nothing on screen tells the difference between a microphone that is on and
+   * a microphone that is on and heard. The level meter moves either way, and so
+   * does replaceTrack. This is the only place that can tell, and it asks the
+   * connection itself: with the microphone open and unmuted, outbound packets
+   * must keep climbing.
+   *
+   * When they do not, the slots are re-derived. That repairs the case this was
+   * written for — a sender left pointing at a transceiver that a rollback
+   * detached — and costs nothing in every other case, because reconcileSlots
+   * does nothing at all when the slots are sound. It is deliberately blind to
+   * WHY the packets stopped: the point is to recover without needing to have
+   * predicted the reason.
+   */
+  private async guardSending(id: string, peer: Peer) {
+    if (!this.micOn || !this.micTrack?.enabled) { peer.lastSent = undefined; return; }
+    let sent = 0;
+    try {
+      (await peer.pc.getStats()).forEach((r: any) => {
+        if (r.type === "outbound-rtp" && r.kind === "audio") sent += r.packetsSent || 0;
+      });
+    } catch { return; }                       // closing
+    const before = peer.lastSent;
+    peer.lastSent = sent;
+    if (before === undefined || sent > before) return;
+    console.warn(`[webrtc] ${id}: microphone is open but nothing is leaving (${sent} packets) — repairing`);
+    this.reconcileSlots(peer);
+  }
+
   private guardLatency() {
     const now = performance.now();
     for (const [id, peer] of this.peers) {
+      void this.guardSending(id, peer);
       // ICE said "disconnected" and never came back: give it a few seconds to
       // recover on its own, then rebuild rather than leaving a dead connection in
       // place. The next proximity pass reconnects if they are still in range.
@@ -606,6 +694,15 @@ export class WebRTCManager implements MediaManager {
       }
       const { video } = peer;
       if (!(video.srcObject instanceof MediaStream)) continue;
+      // A connection that is up and carrying nothing — nobody has switched
+      // anything on yet — has no playout to be behind on. Its element's clock
+      // does not advance, so measuring it reports the whole idle period as lag
+      // and re-attaches the stream every ten seconds for as long as the two
+      // stand there saying nothing.
+      if (!video.srcObject.getTracks().some((tr) => tr.readyState === "live" && !tr.muted)) {
+        peer.playedAt = peer.playedFrom = undefined;
+        continue;
+      }
       if (video.paused) { this.play(id); continue; }
       if (peer.playedAt == null || peer.playedFrom == null) continue;
       const behind = (now - peer.playedAt) / 1000 - (video.currentTime - peer.playedFrom);
