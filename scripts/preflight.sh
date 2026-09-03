@@ -153,6 +153,16 @@ else
 fi
 
 # ------------------------------------------------------------------------ e2e
+# This one needs nothing running — it replaces fetch and reads the request body
+# — so unlike the suites below it is never skipped.
+say "Outgoing mail"
+if out=$(npm run --silent test:invitemail -w @nexspace/api 2>&1); then
+  ok "invitation shape — $(echo "$out" | grep -oE '[0-9]+ passed, [0-9]+ failed' | tail -1)"
+else
+  bad "the invitation email is not shaped the way it needs to be"
+  echo "$out" | grep -E '^! FAIL|passed,' | head -8 | sed 's/^/        /' >&2
+fi
+
 # These talk to a running API and game server, so they are skipped rather than
 # failed when the dev stack is down.
 say "End-to-end suites"

@@ -26,7 +26,8 @@
     "test:files": "node scripts/files-e2e.mjs",
     "test:calendar": "node scripts/calendar-e2e.mjs",
     "test:invite": "node scripts/invite-e2e.mjs",
-    "test:invited": "node scripts/invited-e2e.mjs"
+    "test:invited": "node scripts/invited-e2e.mjs",
+    "test:invitemail": "node ../../node_modules/tsx/dist/cli.mjs scripts/invite-mail.test.mts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

@@ -1297,7 +1297,7 @@ app.post("/workspaces/:slug/invites", async (req, res) => {
   let emailed = false;
   try {
     emailed = await sendInvite({
-      to: email, space: w.name, invitedBy: staff.me.name,
+      to: email, space: w.name, invitedBy: staff.me.name, invitedByEmail: staff.me.email,
       link: inviteLinkFor(req, w.slug, token), days: INVITE_DAYS,
     });
   } catch (e) {

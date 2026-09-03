@@ -90,8 +90,14 @@ export async function mailCheck(): Promise<{ ok: boolean; detail: string }> {
   }
 }
 
-/** what every message here needs, regardless of how it leaves */
-type Letter = { to: string; subject: string; text: string; html: string };
+/**
+ * What every message here needs, regardless of how it leaves.
+ *
+ * `replyTo` is optional and worth setting wherever a real person is behind the
+ * message. Mail from a no-reply address that cannot be answered is one of the
+ * things spam classifiers count against a sender, and it is also just rude.
+ */
+type Letter = { to: string; subject: string; text: string; html: string; replyTo?: string };
 
 /**
  * Hand it to whichever transport this deployment has.
@@ -105,7 +111,10 @@ async function deliver(letter: Letter): Promise<boolean> {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { authorization: `Bearer ${RESEND_KEY}`, "content-type": "application/json" },
-      body: JSON.stringify({ from: FROM, to: [letter.to], subject: letter.subject, text: letter.text, html: letter.html }),
+      body: JSON.stringify({
+        from: FROM, to: [letter.to], subject: letter.subject, text: letter.text, html: letter.html,
+        ...(letter.replyTo ? { reply_to: [letter.replyTo] } : {}),
+      }),
       signal: AbortSignal.timeout(MAIL_TIMEOUT_MS),
     });
     if (!r.ok) {
@@ -156,23 +165,37 @@ export async function sendLoginCode(to: string, code: string) {
  * the link only works for this address. The link expires, and the mail says so
  * — a link with no stated life is one people sit on for a month and then report
  * as broken.
+ *
+ * The same reasoning is why the destination is printed under the button and why
+ * the inviter's own address is the Reply-To. A button whose words are "join" and
+ * whose href is a long opaque URL is the shape of every phishing mail ever sent,
+ * and a filter that has never heard of this domain has little else to go on.
+ * Showing where the link goes, and letting the reader answer a real person, are
+ * the two things that separate this from that — for the classifier and for the
+ * human reading it.
  */
 export async function sendInvite(opts: {
   to: string;
   space: string;
   invitedBy: string;
+  /** the inviter's own address, so the reader can just hit reply */
+  invitedByEmail?: string;
   link: string;
   days: number;
 }) {
-  const { to, space, invitedBy, link, days } = opts;
+  const { to, space, invitedBy, invitedByEmail, link, days } = opts;
   const subject = `${invitedBy} เชิญคุณเข้าร่วม ${space} บน NexSpace`;
+  const from = invitedByEmail ? `${invitedBy} (${invitedByEmail})` : invitedBy;
   const lines = [
-    `${invitedBy} เชิญคุณเข้าร่วมพื้นที่ทำงาน "${space}" บน NexSpace`,
+    `${from} เชิญคุณเข้าร่วมพื้นที่ทำงาน "${space}" บน NexSpace`,
     ``,
-    `เปิดลิงก์นี้เพื่อเข้าร่วม: ${link}`,
+    `เปิดลิงก์นี้เพื่อเข้าร่วม:`,
+    link,
     ``,
     `ลิงก์นี้ใช้ได้กับอีเมล ${to} เท่านั้น และหมดอายุใน ${days} วัน`,
     `หากคุณไม่รู้จักผู้เชิญ ให้ละเว้นอีเมลนี้ — ไม่มีอะไรเกิดขึ้นถ้าคุณไม่กด`,
+    ``,
+    `NexSpace — พื้นที่ทำงานเสมือนของทีม · ส่งอัตโนมัติเพราะมีคนกรอกอีเมลนี้เพื่อเชิญคุณ`,
   ];
   if (!mailEnabled) {
     console.log(`[mail] no mail transport configured — invitation for ${to} not sent. Link: ${link}`);
@@ -181,22 +204,33 @@ export async function sendInvite(opts: {
   return deliver({
     to,
     subject,
+    replyTo: invitedByEmail,
     text: lines.join("\n"),
     html: `
       <div style="font-family:'Segoe UI',sans-serif;max-width:460px;margin:0 auto;padding:28px 24px;color:#1c1b22">
         <h2 style="margin:0 0 6px;font-size:19px">${esc(invitedBy)} เชิญคุณเข้าร่วม ${esc(space)}</h2>
         <p style="margin:0 0 22px;color:#6b7280;font-size:14px">
-          พื้นที่ทำงานเสมือนบน NexSpace — เดินไปคุยกับเพื่อนร่วมงานได้เหมือนอยู่ออฟฟิศเดียวกัน
+          พื้นที่ทำงานเสมือนบน NexSpace — เดินไปคุยกับเพื่อนร่วมงานได้เหมือนอยู่ออฟฟิศเดียวกัน${
+            invitedByEmail ? `<br>ผู้เชิญ: <b>${esc(invitedBy)}</b> &lt;${esc(invitedByEmail)}&gt;` : ""
+          }
         </p>
         <a href="${esc(link)}" style="display:block;text-align:center;text-decoration:none;
            padding:13px;border-radius:11px;background:#2bb3a3;color:#fff;font-weight:600;font-size:15px">
           เข้าร่วม ${esc(space)}
         </a>
-        <p style="margin:22px 0 0;color:#8a8f98;font-size:12.5px;line-height:1.6">
+        <p style="margin:14px 0 0;color:#8a8f98;font-size:12px;line-height:1.5;word-break:break-all">
+          ปุ่มไม่ทำงาน? เปิดลิงก์นี้แทน:<br>
+          <a href="${esc(link)}" style="color:#6b7280">${esc(link)}</a>
+        </p>
+        <p style="margin:20px 0 0;color:#8a8f98;font-size:12.5px;line-height:1.6">
           ลิงก์นี้ใช้ได้กับอีเมล <b>${esc(to)}</b> เท่านั้น และหมดอายุใน ${days} วัน<br>
           หากคุณไม่รู้จักผู้เชิญ ให้ละเว้นอีเมลนี้ — ไม่มีอะไรเกิดขึ้นถ้าคุณไม่กด
         </p>
+        <p style="margin:20px 0 0;padding-top:14px;border-top:1px solid #e8e9ee;
+                  color:#a3a7b0;font-size:11.5px;line-height:1.6">
+          NexSpace — พื้นที่ทำงานเสมือนของทีม<br>
+          ส่งอัตโนมัติเพราะมีคนกรอกอีเมลนี้เพื่อเชิญคุณเข้าทีม
+        </p>
       </div>`,
   });
-  return true;
 }
