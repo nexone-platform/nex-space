@@ -126,6 +126,37 @@ async function scenario(name, { lag, order }) {
     order: async (A, B) => { await A.toggleMic(); await B.toggleMic(); await wait(2500); },
   });
 
+  // ---- the tab nobody is looking at -----------------------------------------
+  // Phaser's update loop stops in a background tab, so that side's proximity
+  // pass never runs and it never opens a connection of its own. This is the
+  // ordinary case when three people are tested from one machine, and it used to
+  // end in two crossing offers and a connection carrying nothing.
+  log("");
+  log("── one side's proximity pass never runs (a backgrounded tab)");
+  {
+    const wires = {}, ids = ["p-aaaa", "p-bbbb"];
+    const room = (me) => ({
+      onMessage(_t, cb) { wires[me] = cb; },
+      send(_t, { to, kind, payload }) { setTimeout(() => wires[to]?.({ from: me, kind, payload }), 60); },
+    });
+    const A = new WebRTCManager(room(ids[0]), ids[0], document.getElementById("tA"));
+    const B = new WebRTCManager(room(ids[1]), ids[1], document.getElementById("tB"));
+    await A.toggleMic(); await B.toggleMic();
+
+    // A is "p-aaaa", so A is the impolite one and would normally open. Only B
+    // runs its proximity pass — A's is frozen.
+    const frames = setInterval(() => { B.syncPeers(new Set([ids[0]])); }, 16);
+    await wait(6000);
+
+    const [ab, ba] = [await received(B, ids[0]), await received(A, ids[1])];
+    ok("the frozen side is still heard", ab > 0, `${ab} packets`);
+    ok("  · and still hears", ba > 0, `${ba} packets`);
+    ok("  · over one pair of m-lines, not two crossing offers' worth",
+      A.peers.get(ids[1])?.pc.getTransceivers().length === 2, await directions(A, ids[1]));
+    ok("  · with nothing left attached to nothing",
+      !(await directions(A, ids[1])).includes("null"), await directions(A, ids[1]));
+    clearInterval(frames); A.dispose(); B.dispose();
+  }
   // ---- the safety net -------------------------------------------------------
   // Whatever the cause, a microphone that is open and sending nothing has to
   // come back on its own. Break a sender on purpose and watch it recover.

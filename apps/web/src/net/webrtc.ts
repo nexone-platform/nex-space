@@ -58,7 +58,7 @@ interface Peer {
   retried?: boolean;    // an ICE restart has already been spent on this peer
 }
 
-type SignalMsg = { from: string; kind: "desc" | "ice"; payload: any };
+type SignalMsg = { from: string; kind: "desc" | "ice" | "hello"; payload: any };
 
 // RTCSessionDescription's fields live on the prototype (getters), so it serializes
 // to {} over msgpack. Copy to a PLAIN object before sending over Colyseus.
@@ -414,12 +414,29 @@ export class WebRTCManager implements MediaManager {
      * never disagree about who goes first.
      */
     if (polite) {
-      // Proximity is symmetric, so somebody is already offering. A connection
-      // forced open for a screen share need not be, so the wait has an end.
+      /**
+       * Ask them to open it, rather than wait and then guess.
+       *
+       * Waiting was the whole problem. The other side opens when ITS proximity
+       * pass notices us, and that pass runs from the scene's update loop, which
+       * stops dead while a tab is in the background — so the wait expired
+       * routinely, both sides offered, and the rollback that resolves the
+       * collision left transceivers attached to nothing. In a room of three
+       * that was very nearly every connection: the console said
+       * "audio:null video:null" with four m-lines where two belong.
+       *
+       * A message does not depend on anyone's animation frames. It arrives at a
+       * backgrounded tab like any other, and the side whose turn it is opens
+       * the conversation on hearing it. Nothing has to be timed.
+       */
+      this.signal(peerId, "hello", null);
+      // Kept only for a peer that cannot answer — a browser still holding the
+      // previous bundle through a deploy, say. Long, because the ask is fast
+      // and this firing at all is what glare is made of.
       peer.openTimer = window.setTimeout(() => {
         peer.openTimer = undefined;
         this.openSlots(peer);
-      }, 1500);
+      }, 4000);
     } else {
       this.openSlots(peer);
     }
@@ -600,6 +617,12 @@ export class WebRTCManager implements MediaManager {
   }
 
   private async onSignal({ from, kind, payload }: SignalMsg) {
+    if (kind === "hello") {
+      // Somebody in range is waiting for us to open. Only ever acted on by the
+      // side whose turn it is, so that two of these cannot answer each other.
+      if (!this.peers.has(from) && !(this.myId > from)) this.connect(from);
+      return;
+    }
     let peer = this.peers.get(from);
     /**
      * An offer from someone we have not connected to yet is an invitation, not
@@ -644,7 +667,7 @@ export class WebRTCManager implements MediaManager {
     } catch (e) { console.warn("signal handling", e); }
   }
 
-  private signal(to: string, kind: "desc" | "ice", payload: unknown) {
+  private signal(to: string, kind: "desc" | "ice" | "hello", payload: unknown) {
     try { this.room.send("signal", { to, kind, payload }); }
     catch (e) { console.warn("signal send skipped", e); } // ws mid-close: don't crash the negotiation
   }
