@@ -233,11 +233,34 @@ const NGINX = fileURLToPath(new URL("../apps/web/nginx.conf", import.meta.url));
 const conf = readFileSync(NGINX, "utf8");
 const lkBlock = /location \/lk\/ \{([\s\S]*?)\n {4}\}/.exec(conf)?.[1] ?? "";
 ok("nginx carries the signalling socket", !!lkBlock, lkBlock ? "" : "no /lk/ block");
-ok("  · to the media server", lkBlock.includes("proxy_pass http://nexspace-livekit:7880/;"));
+ok("  · to the media server", lkBlock.includes("http://nexspace-livekit:7880"));
 ok("  · as a WebSocket, or it closes on the first frame",
   lkBlock.includes("Upgrade $http_upgrade") && lkBlock.includes('Connection "Upgrade"'));
 ok("  · and holds it open longer than a quiet participant stays quiet",
   /proxy_read_timeout\s+(\d+)h/.test(lkBlock), (/proxy_read_timeout[^;]*/.exec(lkBlock) || ["none"])[0]);
+
+/**
+ * An optional service must not be able to take nginx down with it.
+ *
+ * nginx resolves a literal proxy_pass host when it reads the config and exits
+ * if the name does not exist. The media server is behind a profile, so on a
+ * deployment without one that name does not exist — and naming it directly
+ * stopped the web container booting at all, taking the app and every other
+ * proxy in this file with it. A variable defers the lookup to the request.
+ *
+ * Only services that always run may be named literally.
+ */
+const OPTIONAL = ["nexspace-livekit", "nexspace-turn"];
+const literal = OPTIONAL.filter((svc) =>
+  new RegExp(`proxy_pass\\s+https?://${svc}\\b`).test(conf));
+ok("no optional service is a literal upstream", literal.length === 0,
+  literal.join(" ") || "checked " + OPTIONAL.join(" "));
+ok("  · the media server is reached through a variable",
+  /proxy_pass\s+\$\w+;/.test(lkBlock), (/proxy_pass[^;]*/.exec(lkBlock) || ["none"])[0]);
+ok("  · resolved per request against docker's own DNS",
+  /resolver\s+127\.0\.0\.11/.test(lkBlock));
+ok("  · with the prefix stripped by rewrite, since a variable passes the URI through",
+  /rewrite\s+\^\/lk\/\(\.\*\)\$\s+\/\$1\s+break;/.test(lkBlock));
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

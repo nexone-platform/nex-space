@@ -117,7 +117,14 @@ else
       fi
     done
     SERVICES=$(echo "$SERVICES" | xargs || true)
-    if [ -z "$SERVICES" ]; then
+    # "Nothing changed" is about images, and the media server has none — it is a
+    # published image turned on by a line in .env. Someone who adds that line and
+    # deploys has changed no file, so stopping here would tell them everything
+    # was up to date while the thing they just configured never started.
+    if [ -z "$SERVICES" ] && [ -f .env ] && grep -qE '^LIVEKIT_API_KEY=.+' .env \
+       && ! $DC ps --format '{{.Name}}' 2>/dev/null | grep -q nexspace-livekit; then
+      say "Nothing to rebuild, but the media server is configured and not running"
+    elif [ -z "$SERVICES" ]; then
       say "Everything running is already built from $(git log -1 --format='%h %s')"
       echo "  nothing to rebuild — pass --all to force one anyway"
       exit 0
@@ -176,9 +183,17 @@ else
   # configured is not left with a container that cannot start. Which means
   # something has to switch the profile on, and doing it from .env is the only
   # way the two cannot disagree: configure the key, and it runs.
+  #
+  # Switching the profile on is NOT enough on its own, which cost a deploy:
+  # `up` is given an explicit list of what to rebuild, and a service missing
+  # from that list is not started however many profiles are active. It has to be
+  # named. It carries no build context, so --build has nothing to do to it.
   if [ -f .env ] && grep -qE '^LIVEKIT_API_KEY=.+' .env; then
     export COMPOSE_PROFILES="${COMPOSE_PROFILES:+$COMPOSE_PROFILES,}livekit"
+    SERVICES="$SERVICES nexspace-livekit"
     ok "media server on — browsers send one copy each instead of one per listener"
+  else
+    warn "no media server — above two people in a conversation the audio will run late"
   fi
   # shellcheck disable=SC2086
   $DC up -d --build $SERVICES
