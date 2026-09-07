@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { ics, type IcsEvent } from "./calendar.js";
 
 /**
  * Getting an email out of this deployment.
@@ -97,7 +98,16 @@ export async function mailCheck(): Promise<{ ok: boolean; detail: string }> {
  * message. Mail from a no-reply address that cannot be answered is one of the
  * things spam classifiers count against a sender, and it is also just rude.
  */
-type Letter = { to: string; subject: string; text: string; html: string; replyTo?: string };
+type Letter = {
+  to: string; subject: string; text: string; html: string; replyTo?: string;
+  /**
+   * Files to carry along. Used for exactly one thing so far: a calendar
+   * invitation, which has to arrive as a part of its own with the right MIME
+   * type — a client decides whether to offer accept and decline by reading
+   * `method=REQUEST` off the content type, not by looking inside the file.
+   */
+  attach?: { filename: string; body: string; type: string }[];
+};
 
 /**
  * Hand it to whichever transport this deployment has.
@@ -114,6 +124,14 @@ async function deliver(letter: Letter): Promise<boolean> {
       body: JSON.stringify({
         from: FROM, to: [letter.to], subject: letter.subject, text: letter.text, html: letter.html,
         ...(letter.replyTo ? { reply_to: [letter.replyTo] } : {}),
+        ...(letter.attach?.length ? {
+          attachments: letter.attach.map((a) => ({
+            filename: a.filename,
+            // Base64 over the wire, so a Thai room name survives the trip
+            content: Buffer.from(a.body, "utf8").toString("base64"),
+            content_type: a.type,
+          })),
+        } : {}),
       }),
       signal: AbortSignal.timeout(MAIL_TIMEOUT_MS),
     });
@@ -126,7 +144,13 @@ async function deliver(letter: Letter): Promise<boolean> {
     return true;
   }
   if (!transporter) return false;
-  await transporter.sendMail({ from: FROM, ...letter });
+  const { attach, ...rest } = letter;
+  await transporter.sendMail({
+    from: FROM, ...rest,
+    ...(attach?.length ? {
+      attachments: attach.map((a) => ({ filename: a.filename, content: a.body, contentType: a.type })),
+    } : {}),
+  });
   return true;
 }
 
@@ -232,5 +256,107 @@ export async function sendInvite(opts: {
           ส่งอัตโนมัติเพราะมีคนกรอกอีเมลนี้เพื่อเชิญคุณเข้าทีม
         </p>
       </div>`,
+  });
+}
+
+/**
+ * A room booking, as a calendar invitation.
+ *
+ * The feed this app already publishes is the right shape for a standing
+ * subscription and the wrong one for news: Google refreshes an external .ics
+ * between every eight and twenty-four hours, will not say when, and offers
+ * nobody a refresh button. A meeting booked for this afternoon reaches a
+ * subscriber's calendar some time tomorrow, which is to say never.
+ *
+ * An email arrives now. It also needs no OAuth on either side — a calendar
+ * invitation is a file with a MIME type, and Outlook and Gmail have both read
+ * it for twenty years. That matters more here than it sounds: writing to
+ * somebody's Google Calendar directly needs a scope Google treats as
+ * sensitive, and a review to go with it.
+ *
+ * `method` decides what the recipient is offered. REQUEST is an invitation;
+ * CANCEL removes one they already accepted, which is why cancelling has to be
+ * an email of its own rather than silence.
+ */
+export async function sendBooking(opts: {
+  to: string;
+  toName: string;
+  space: string;
+  booking: IcsEvent;
+  organizer?: { name: string; email: string };
+  /** the room, in the app — so an event in Outlook can be walked into */
+  url?: string;
+  method: "REQUEST" | "CANCEL";
+}): Promise<boolean> {
+  const { to, toName, space, booking: b, organizer, url, method } = opts;
+  const off = method === "CANCEL";
+  const when = new Intl.DateTimeFormat("th-TH", {
+    dateStyle: "full", timeStyle: "short", timeZone: process.env.BOOKING_TZ || "Asia/Bangkok",
+  }).format(b.startsAt);
+  const until = new Intl.DateTimeFormat("th-TH", {
+    timeStyle: "short", timeZone: process.env.BOOKING_TZ || "Asia/Bangkok",
+  }).format(b.endsAt);
+
+  const subject = off ? `ยกเลิก: ${b.title}` : `${b.title} — ${b.roomLabel}`;
+  const lines = [
+    off ? `การประชุมนี้ถูกยกเลิกแล้ว` : `${b.hostName} จองห้องประชุมไว้`,
+    ``,
+    `${b.title}`,
+    `${b.roomLabel} · ${when} – ${until}`,
+    ...(url ? [``, `เข้าห้อง: ${url}`] : []),
+    ``,
+    off
+      ? `ปฏิทินของคุณจะเอารายการนี้ออกให้เอง`
+      : `ไฟล์ที่แนบมาจะเพิ่มรายการนี้ลงปฏิทินของคุณ`,
+    `พื้นที่ทำงาน ${space} บน NexSpace`,
+  ];
+
+  if (!mailEnabled) {
+    console.log(`[mail] no mail transport configured — booking ${method} for ${to} not sent`);
+    return false;
+  }
+  return deliver({
+    to,
+    subject,
+    replyTo: organizer?.email,
+    text: lines.join("\n"),
+    html: `
+      <div style="font-family:'Segoe UI',sans-serif;max-width:460px;margin:0 auto;padding:28px 24px;color:#1c1b22">
+        <p style="margin:0 0 4px;color:#6b7280;font-size:13px">
+          ${off ? "การประชุมนี้ถูกยกเลิกแล้ว" : `${esc(b.hostName)} จองห้องประชุมไว้`}
+        </p>
+        <h2 style="margin:0 0 14px;font-size:19px${off ? ";text-decoration:line-through;color:#8a8f98" : ""}">
+          ${esc(b.title)}
+        </h2>
+        <table style="border-collapse:collapse;font-size:14px;color:#1c1b22">
+          <tr><td style="padding:2px 12px 2px 0;color:#8a8f98">ห้อง</td><td>${esc(b.roomLabel)}</td></tr>
+          <tr><td style="padding:2px 12px 2px 0;color:#8a8f98">เวลา</td><td>${esc(when)} – ${esc(until)}</td></tr>
+        </table>
+        ${url && !off ? `
+        <a href="${esc(url)}" style="display:block;text-align:center;text-decoration:none;margin-top:20px;
+           padding:13px;border-radius:11px;background:#2bb3a3;color:#fff;font-weight:600;font-size:15px">
+          เข้าห้อง ${esc(b.roomLabel)}
+        </a>
+        <p style="margin:12px 0 0;color:#8a8f98;font-size:12px;word-break:break-all">
+          <a href="${esc(url)}" style="color:#6b7280">${esc(url)}</a>
+        </p>` : ""}
+        <p style="margin:20px 0 0;padding-top:14px;border-top:1px solid #e8e9ee;
+                  color:#a3a7b0;font-size:11.5px;line-height:1.6">
+          ${off ? "ปฏิทินของคุณจะเอารายการนี้ออกให้เอง"
+                : "ไฟล์ที่แนบมาจะเพิ่มรายการนี้ลงปฏิทินของคุณ"}<br>
+          พื้นที่ทำงาน ${esc(space)} บน NexSpace
+        </p>
+      </div>`,
+    attach: [{
+      filename: off ? "cancelled.ics" : "meeting.ics",
+      body: ics(space, [b], {
+        method, url, organizer,
+        attendees: [{ name: toName || to, email: to }],
+      }),
+      // The method belongs on the content type as well as inside the file:
+      // that is what a client reads to decide between "add this" and "do you
+      // accept". Without it the same bytes are just an attachment.
+      type: `text/calendar; method=${method}; charset=utf-8`,
+    }],
   });
 }

@@ -49,7 +49,17 @@ try {
 } catch { /* free */ }
 
 const api = spawn(process.execPath, [TSX, "src/index.ts"], {
-  cwd: API_DIR, env: { ...process.env, PORT: String(PORT) }, stdio: ["ignore", "pipe", "pipe"],
+  cwd: API_DIR,
+  // Every transport off, deliberately. Booking a room now emails a calendar
+  // invitation to everyone coming, and the people in this suite are made up —
+  // inheriting a real key from the machine running it would send mail to
+  // addresses at test.local, which bounce and are charged to the sender's
+  // reputation. The suite is about the routes, not about the mail.
+  env: {
+    ...process.env, PORT: String(PORT),
+    SMTP_HOST: "", SMTP_USER: "", SMTP_PASS: "", RESEND_API_KEY: "",
+  },
+  stdio: ["ignore", "pipe", "pipe"],
 });
 api.stdout.on("data", (d) => process.env.VERBOSE && process.stdout.write(`[api] ${d}`));
 api.stderr.on("data", (d) => process.env.VERBOSE && process.stderr.write(`[api] ${d}`));

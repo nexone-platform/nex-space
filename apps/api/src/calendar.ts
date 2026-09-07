@@ -109,16 +109,54 @@ export type IcsEvent = {
   startsAt: Date;
   endsAt: Date;
   createdAt: Date;
+  /**
+   * Where to go to attend this one.
+   *
+   * Per event rather than per file, because a feed carries bookings across
+   * several maps and they are not in the same place. `opts.url` covers the
+   * single-event case, where there is nothing to disambiguate.
+   */
+  url?: string;
 };
 
-/** one VCALENDAR holding however many events were handed in */
-export function ics(name: string, events: IcsEvent[], now = new Date()): string {
+/** somebody a calendar client can name and, for the organiser, reply to */
+export type IcsPerson = { name: string; email: string };
+
+export type IcsOpts = {
+  /**
+   * PUBLISH for a feed somebody subscribed to, REQUEST for an invitation sent
+   * to a person, CANCEL to take one back.
+   *
+   * It changes what a client does with the file, not just what it says: a
+   * REQUEST is offered with accept and decline, a CANCEL removes the event
+   * that was already accepted. PUBLISH is neither — it is "here is what is
+   * happening", which is right for the feed and useless in an email.
+   */
+  method?: "PUBLISH" | "REQUEST" | "CANCEL";
+  /** where to go to actually attend — the room, in the app */
+  url?: string;
+  organizer?: IcsPerson;
+  attendees?: IcsPerson[];
+  now?: Date;
+};
+
+/**
+ * One VCALENDAR holding however many events were handed in.
+ *
+ * SEQUENCE is 0 for anything that stands and 1 for a cancellation, because a
+ * client ignores a CANCEL that does not out-rank the invitation it already
+ * has. Nothing here is ever edited — a booking is made or dropped — so two
+ * values are all the revision history this needs.
+ */
+export function ics(name: string, events: IcsEvent[], opts: IcsOpts = {}): string {
+  const { method = "PUBLISH", url, organizer, attendees = [], now = new Date() } = opts;
+  const cancelled = method === "CANCEL";
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//NexSpace//Office Calendar//EN",
     "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH",
+    `METHOD:${method}`,
     `X-WR-CALNAME:${esc(name)}`,
     // Ask subscribers not to hammer us. Advisory, and honoured by most.
     "X-PUBLISHED-TTL:PT30M",
@@ -135,8 +173,20 @@ export function ics(name: string, events: IcsEvent[], now = new Date()): string 
       `LOCATION:${esc(e.roomLabel)}`,
       `DESCRIPTION:${esc(`จองโดย ${e.hostName}`)}`,
       `CREATED:${stamp(e.createdAt)}`,
-      "END:VEVENT",
+      `SEQUENCE:${cancelled ? 1 : 0}`,
+      `STATUS:${cancelled ? "CANCELLED" : "CONFIRMED"}`,
     );
+    // Without this, an event sitting in somebody's Outlook is a time and a room
+    // name with no way back to the room.
+    const link = e.url ?? url;
+    if (link) lines.push(`URL:${esc(link)}`);
+    if (organizer) lines.push(`ORGANIZER;CN=${esc(organizer.name)}:mailto:${organizer.email}`);
+    for (const a of attendees) {
+      lines.push(
+        `ATTENDEE;CN=${esc(a.name)};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${a.email}`,
+      );
+    }
+    lines.push("END:VEVENT");
   }
   lines.push("END:VCALENDAR");
   return lines.map(fold).join("\r\n") + "\r\n";

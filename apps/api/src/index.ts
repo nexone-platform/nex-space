@@ -7,7 +7,7 @@ import {
   hashPassword, verifyPassword, createSession, activateSession, sessionFromToken,
   requireAuth, userFromToken, type AuthedRequest,
 } from "./auth";
-import { sendLoginCode, mailEnabled, sendInvite, mailCheck } from "./mailer";
+import { sendLoginCode, mailEnabled, sendInvite, sendBooking, mailCheck } from "./mailer";
 import { iceConfig, turnEnabled } from "./ice";
 import { mapDocProblem } from "./mapValidate";
 import {
@@ -1466,6 +1466,74 @@ app.get("/workspaces/:slug/bookings", async (req, res) => {
 });
 
 /** hold a room */
+/**
+ * Tell people about a booking, in a calendar they already use.
+ *
+ * The list is whoever said they are coming, which the create route seeds with
+ * the host — booking a room is saying you will be there, so nobody has to be
+ * invited separately for the ordinary case of one person holding a room.
+ *
+ * Never awaited by a route and never able to fail one. A meeting that exists
+ * and did not send an email is a smaller problem than a meeting that could not
+ * be booked because a mail API was slow, and the booking is the thing the
+ * person pressed a button for.
+ */
+async function tellAboutBooking(
+  req: express.Request,
+  w: { id: string; slug: string; name: string },
+  b: BookingRow,
+  method: "REQUEST" | "CANCEL",
+  only?: string,
+) {
+  if (!mailEnabled) return;
+  try {
+    const going = await prisma.bookingGoing.findMany({
+      where: { bookingId: b.id, ...(only ? { userId: only } : {}) },
+      include: { user: { select: { email: true, name: true } } },
+    });
+    // A cancellation has to reach whoever was going, and by the time it is sent
+    // the rows are gone — so the caller passes them in that case.
+    const people = going.map((g) => g.user).filter((u) => u?.email);
+    if (!people.length) return;
+
+    const host = b.userId
+      ? await prisma.user.findUnique({ where: { id: b.userId }, select: { email: true, name: true } })
+      : null;
+    const url = `${appOriginOf(req)}/?w=${encodeURIComponent(w.slug)}&m=${encodeURIComponent(b.mapSlug)}`;
+
+    for (const p of people) {
+      await sendBooking({
+        to: p.email, toName: p.name || p.email,
+        space: w.name, booking: b, method, url,
+        organizer: host?.email ? { name: b.hostName, email: host.email } : undefined,
+      }).catch((e) => console.warn(`[calendar] ${method} to ${p.email} did not go:`, e));
+    }
+  } catch (e) {
+    console.warn("[calendar] could not tell anybody about the booking:", e);
+  }
+}
+
+/** the same, for people whose "going" rows are about to stop existing */
+async function tellTheseAboutBooking(
+  req: express.Request,
+  w: { id: string; slug: string; name: string },
+  b: BookingRow,
+  people: { email: string; name: string }[],
+) {
+  if (!mailEnabled || !people.length) return;
+  const host = b.userId
+    ? await prisma.user.findUnique({ where: { id: b.userId }, select: { email: true } })
+    : null;
+  const url = `${appOriginOf(req)}/?w=${encodeURIComponent(w.slug)}&m=${encodeURIComponent(b.mapSlug)}`;
+  for (const p of people) {
+    await sendBooking({
+      to: p.email, toName: p.name || p.email,
+      space: w.name, booking: b, method: "CANCEL", url,
+      organizer: host?.email ? { name: b.hostName, email: host.email } : undefined,
+    }).catch((e) => console.warn(`[calendar] cancellation to ${p.email} did not go:`, e));
+  }
+}
+
 app.post("/workspaces/:slug/bookings", async (req, res) => {
   const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
   if (!w) return res.status(404).json({ error: "not found" });
@@ -1511,6 +1579,8 @@ app.post("/workspaces/:slug/bookings", async (req, res) => {
     include: { going: { select: { userId: true } } },
   });
   res.json({ booking: bookingView(b, can.me.id, w.slug) });
+  // After the answer, not before it. The room is held either way.
+  void tellAboutBooking(req, w, b as BookingRow, "REQUEST");
 });
 
 /** "I am coming" / "I am not" */
@@ -1524,6 +1594,9 @@ app.post("/workspaces/:slug/bookings/:id/going", async (req, res) => {
   if (!b || b.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
 
   const coming = (req.body ?? {}).going !== false;
+  const already = await prisma.bookingGoing.findUnique({
+    where: { bookingId_userId: { bookingId: b.id, userId: can.me.id } },
+  });
   if (coming) {
     await prisma.bookingGoing.upsert({
       where: { bookingId_userId: { bookingId: b.id, userId: can.me.id } },
@@ -1531,6 +1604,13 @@ app.post("/workspaces/:slug/bookings/:id/going", async (req, res) => {
     });
   } else {
     await prisma.bookingGoing.deleteMany({ where: { bookingId: b.id, userId: can.me.id } });
+  }
+  // Only on a change of mind. Pressing "coming" twice is not a second meeting,
+  // and sending the invitation again would put a duplicate in their calendar.
+  if (coming && !already) {
+    void tellAboutBooking(req, w, b as BookingRow, "REQUEST", can.me.id);
+  } else if (!coming && already) {
+    void tellTheseAboutBooking(req, w, b as BookingRow, [{ email: can.me.email, name: can.me.name }]);
   }
   const after = await prisma.booking.findUnique({
     where: { id: b.id }, include: { going: { select: { userId: true } } },
@@ -1557,8 +1637,17 @@ app.delete("/workspaces/:slug/bookings/:id", async (req, res) => {
   const staff = can.role === "owner" || can.role === "admin";
   if (b.userId !== can.me.id && !staff) return res.status(403).json({ error: "not yours to cancel" });
 
+  // Read before the delete, because the rows go with it. Everyone who was
+  // coming has this in their calendar now, and a cancelled meeting that stays
+  // in the calendar is worse than one that was never sent: people turn up.
+  const were = (await prisma.bookingGoing.findMany({
+    where: { bookingId: b.id },
+    include: { user: { select: { email: true, name: true } } },
+  })).map((g) => g.user).filter((u): u is { email: string; name: string } => !!u?.email);
+
   await prisma.booking.delete({ where: { id: b.id } });
   res.json({ ok: true });
+  void tellTheseAboutBooking(req, w, b as BookingRow, were);
 });
 
 // ---- getting it into a real calendar ------------------------------------------
@@ -1622,7 +1711,12 @@ app.get("/workspaces/:slug/calendar.ics", async (req, res) => {
   res.setHeader("content-type", "text/calendar; charset=utf-8");
   res.setHeader("cache-control", "private, max-age=300");
   res.setHeader("content-disposition", `inline; filename="${w.slug}.ics"`);
-  res.send(ics(w.name, rows));
+  // A time and a room name with no way back to the room is most of an event.
+  const origin = appOriginOf(req);
+  res.send(ics(w.name, rows.map((b) => ({
+    ...b,
+    url: `${origin}/?w=${encodeURIComponent(w.slug)}&m=${encodeURIComponent(b.mapSlug)}`,
+  }))));
 });
 
 /** one event, for "add this to my calendar" */
@@ -1638,7 +1732,9 @@ app.get("/workspaces/:slug/bookings/:id.ics", async (req, res) => {
 
   res.setHeader("content-type", "text/calendar; charset=utf-8");
   res.setHeader("content-disposition", `attachment; filename="meeting.ics"`);
-  res.send(ics(w.name, [b]));
+  res.send(ics(w.name, [b], {
+    url: `${appOriginOf(req)}/?w=${encodeURIComponent(w.slug)}&m=${encodeURIComponent(b.mapSlug)}`,
+  }));
 });
 
 /**

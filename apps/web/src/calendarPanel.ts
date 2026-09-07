@@ -344,6 +344,14 @@ export function mountCalendarPanel(o: CalendarOptions) {
         foot.innerHTML = "";
         const note = document.createElement("small");
         note.textContent = t("วางที่อยู่นี้ใน Google Calendar › เพิ่มปฏิทิน › จาก URL");
+        // Said out loud, because the row above reads as "this syncs" and it
+        // does not sync in any sense a person would mean by the word. Google
+        // re-reads a subscribed feed somewhere between eight and twenty-four
+        // hours, on its own schedule, and gives nobody a refresh button. The
+        // feed is for seeing the month; the email is what arrives in time to
+        // be useful, and it goes out the moment a room is held.
+        const slow = document.createElement("small");
+        slow.textContent = t("ปฏิทินภายนอกจะดึงข้อมูลใหม่ทุกไม่กี่ชั่วโมง — การจองใหม่จะถูกส่งทางอีเมลให้คนที่กดว่าจะไปทันที");
         const box = document.createElement("input");
         box.type = "text"; box.readOnly = true; box.value = d.url;
         box.onclick = () => box.select();
@@ -359,7 +367,7 @@ export function mountCalendarPanel(o: CalendarOptions) {
         const warn = document.createElement("small");
         warn.className = "cal-warn";
         warn.textContent = t("ใครมีที่อยู่นี้ก็อ่านปฏิทินได้ — เปลี่ยนใหม่ได้ในหน้าตั้งค่า");
-        foot.append(note, box, copy, warn);
+        foot.append(note, box, copy, slow, warn);
       } finally {
         link.disabled = false;
       }

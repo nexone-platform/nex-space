@@ -340,6 +340,40 @@ everything else, so it is included in whatever backs that file up — and it is 
 part of the database that grows on its own, which makes it the first reason this
 deployment will eventually want Postgres.
 
+## Room bookings, in a real calendar
+
+Two ways out, and they are for different things.
+
+**The feed** is a subscribable `.ics` per space, handed to members from the
+calendar panel and rotatable if the address leaks. Google Calendar, Outlook and
+Apple Calendar all read it. It is for seeing the month.
+
+**It is not for news, and the panel now says so.** Google re-reads an external
+feed somewhere between eight and twenty-four hours, on a schedule it does not
+publish, and offers nobody a refresh button — the `REFRESH-INTERVAL: PT30M` in
+our file is advisory and ignored. A room booked for this afternoon reaches a
+subscriber tomorrow.
+
+**So a booking is also emailed**, as a calendar invitation, to everyone who
+said they are coming — which starts with the host, since booking a room is
+saying you will be there. Cancelling sends a cancellation, because an event
+that stays in somebody's calendar after the meeting is off is worse than one
+that never arrived: people turn up.
+
+This needs no OAuth on either side, which is the point. Writing to somebody's
+Google Calendar directly needs a scope Google treats as sensitive, and a review
+with a privacy policy and a demo video attached. An invitation is a file with a
+MIME type, and every mail client has read it for twenty years.
+
+Two things worth knowing:
+
+- **Accept and decline go to the host's mailbox, not back into the app.** The
+  organiser on the invitation is the host's own address, so replies reach a
+  person; NexSpace has no mailbox to read them from, and its own "coming" list
+  stays separate.
+- **It needs mail configured.** With no transport the booking is still made and
+  nothing is sent — see the mail section above.
+
 ## More than two people in one conversation
 
 Without a media server every browser sends one copy of its audio to every other
