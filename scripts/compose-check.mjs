@@ -217,12 +217,39 @@ ok("TLS turns on as one piece", ["--tls-listening-port=443", "--cert=/certs/a.pe
 // The reader above folds list values away, so this one block is read as text —
 // which is also what these assertions are really about: what the file says.
 const lkRaw = /\n {2}nexspace-livekit:\n([\s\S]*?)(?=\n {2}[a-z#]|\nvolumes:)/.exec(raw)?.[1] ?? "";
-const published = (lkRaw.match(/- "\d+:[^"]+"/g) || []).join(" ");
+/** the same substitutions compose would make, so both settings can be read */
+const lkInterp = (env) => lkRaw.replace(/\$\{([A-Z_]+)(:[-+])([^}]*)\}/g, (_, name, op, word) => {
+  const set = env[name] !== undefined && env[name] !== "";
+  return op === ":-" ? (set ? env[name] : word) : (set ? word : "");
+});
+// The ports block alone. Read across the whole service it also catches the
+// config line, which names 7880 without publishing it — and then reports the
+// signalling port as exposed when it is not.
+const portsOf = (env) => (/\n {4}ports:\n([\s\S]*?)(?=\n {4}\S|$)/.exec(lkInterp(env)) || ["", ""])[1];
+const publishedOf = (env) => (portsOf(env).match(/- "[^"]+"/g) || []).join(" ");
+const rtcOf = (env) => (/rtc: \{[^}]*\}/.exec(lkInterp(env)) || ["missing"])[0];
+
 ok("the media server is described at all", !!lkRaw, lkRaw ? "" : "no such service");
 ok("  · and is off unless asked for", /profiles: \["livekit"\]/.test(lkRaw));
-ok("its media port is published, as UDP", published.includes('"7882:7882/udp"'), published || "nothing");
-ok("  · with a TCP way in for networks that block UDP", published.includes('"7881:7881"'));
-ok("  · and signalling NOT published, because nginx carries it", !published.includes("7880"));
+ok("its media port is published, as UDP", publishedOf({}).includes('"7882:7882/udp"'),
+  publishedOf({}) || "nothing");
+ok("  · with a TCP way in for networks that block UDP", publishedOf({}).includes('"7881:7881"'));
+ok("  · and signalling NOT published, because nginx carries it", !publishedOf({}).includes("7880"));
+
+/**
+ * The media ports move together, config and publish.
+ *
+ * A network that filters everything but the well-known ports leaves 443 as the
+ * only way in, and the two halves have to agree about that: a server told to
+ * listen on 443 while the compose file publishes 7882 is a server nobody can
+ * reach, and it looks exactly like the media ports working.
+ */
+const on443 = { LIVEKIT_UDP_PORT: "443" };
+ok("the media port can be moved to one a firewall allows",
+  rtcOf(on443).includes("udp_port: 443"), rtcOf(on443));
+ok("  · and what is published moves with it",
+  publishedOf(on443).includes('"443:443/udp"') && !publishedOf(on443).includes("7882"),
+  publishedOf(on443));
 ok("it takes its key from the environment, not from this file",
   lkRaw.includes("${LIVEKIT_API_KEY") && !/keys: \{[A-Za-z0-9]/.test(lkRaw));
 /**
@@ -239,11 +266,6 @@ ok("it takes its key from the environment, not from this file",
  * dangling `node_ip:` with nothing after it is not valid YAML, and LiveKit
  * would fail to parse its own configuration.
  */
-const lkInterp = (env) => lkRaw.replace(/\$\{([A-Z_]+)(:[-+])([^}]*)\}/g, (_, name, op, word) => {
-  const set = env[name] !== undefined && env[name] !== "";
-  return op === ":-" ? (set ? env[name] : word) : (set ? word : "");
-});
-const rtcOf = (env) => (/rtc: \{[^}]*\}/.exec(lkInterp(env)) || ["missing"])[0];
 ok("the address is not looked up over STUN by default", rtcOf({}).includes("use_external_ip: false"),
   rtcOf({}));
 ok("  · an unset address leaves no dangling key", !/node_ip:\s*(,|\})/.test(rtcOf({})));

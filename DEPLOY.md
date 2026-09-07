@@ -399,6 +399,30 @@ sudo ufw allow 7882/udp
 sudo ufw allow 7881/tcp
 ```
 
+**A local firewall is not the only one.** Check from outside, on a network that
+is not the office — a phone on mobile data will do:
+
+```powershell
+Test-NetConnection <the server's address> -Port 7881
+```
+
+`PingSucceeded: True` with `TcpTestSucceeded: False` means something between
+the two is dropping it, and no amount of `ufw allow` will help: this host's
+provider filters everything but the well-known ports, and a corporate network
+commonly refuses to send to them either. Both ends have to allow it, and the
+media port is the one nobody thinks to check, because a call still connects
+without it and simply carries nothing.
+
+Where that cannot be arranged, move the media to a port that is already
+allowed. UDP 443 is a different channel from the TCP 443 a web server listens
+on, so the two never collide:
+
+```dotenv
+LIVEKIT_UDP_PORT="443"
+```
+
+The published port follows the setting, so there is nothing else to change.
+
 Cloudflare does not proxy UDP, so media reaches the server's real address
 directly — which is fine and expected, and is why `use_external_ip` is on: in a
 container the server only knows a `172.x` address, and would otherwise invite

@@ -130,8 +130,9 @@ services:
     #                   exposed on its own.
     #   rtc.udp_port    one muxed port for all media instead of a range of ten
     #                   thousand. Media cannot go through a reverse proxy, so
-    #                   this one MUST be open on the firewall or calls connect
-    #                   and carry nothing.
+    #                   this one MUST be reachable from outside or calls connect
+    #                   and carry nothing — which is what they do, in silence.
+    #                   LIVEKIT_UDP_PORT=443 where only well-known ports pass.
     #   rtc.tcp_port    the way through for a network that blocks UDP outright.
     #   node_ip         the address to invite browsers to. In a bridge network
     #                   the server only knows a 172.x address of its own, so it
@@ -149,10 +150,14 @@ services:
     # LIVEKIT_NODE_IP has to vanish completely, key and all, and that is the
     # same shape the relay's optional arguments already use below.
     environment:
-      - "LIVEKIT_CONFIG={port: 7880, rtc: {tcp_port: 7881, udp_port: 7882, use_external_ip: ${LIVEKIT_USE_STUN:-false}${LIVEKIT_NODE_IP:+, node_ip: }${LIVEKIT_NODE_IP:-}}, keys: {${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-devsecret-not-for-production}}, logging: {level: info}}"
+      - "LIVEKIT_CONFIG={port: 7880, rtc: {tcp_port: ${LIVEKIT_TCP_PORT:-7881}, udp_port: ${LIVEKIT_UDP_PORT:-7882}, use_external_ip: ${LIVEKIT_USE_STUN:-false}${LIVEKIT_NODE_IP:+, node_ip: }${LIVEKIT_NODE_IP:-}}, keys: {${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-devsecret-not-for-production}}, logging: {level: info}}"
+    # Whatever the media ports are set to, published as themselves. A network
+    # that filters everything but the well-known ports — this one does, in both
+    # directions — leaves 443 as the way through, and UDP 443 is a different
+    # channel from the TCP 443 a web server uses, so the two never collide.
     ports:
-      - "7881:7881"
-      - "7882:7882/udp"
+      - "${LIVEKIT_TCP_PORT:-7881}:${LIVEKIT_TCP_PORT:-7881}"
+      - "${LIVEKIT_UDP_PORT:-7882}:${LIVEKIT_UDP_PORT:-7882}/udp"
 
   # The relay itself. It only runs when the profile is switched on, so a
   # deployment without a TURN_SECRET is not left with a container that cannot
