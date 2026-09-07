@@ -225,8 +225,33 @@ ok("  · with a TCP way in for networks that block UDP", published.includes('"78
 ok("  · and signalling NOT published, because nginx carries it", !published.includes("7880"));
 ok("it takes its key from the environment, not from this file",
   lkRaw.includes("${LIVEKIT_API_KEY") && !/keys: \{[A-Za-z0-9]/.test(lkRaw));
-ok("  · and looks its public address up, seeing only a bridge address itself",
-  lkRaw.includes("use_external_ip: true"));
+/**
+ * It must be TOLD its public address, not go looking for one.
+ *
+ * `use_external_ip` asks a STUN server "what address do I look like from out
+ * there". On a host that blocks outbound UDP — which is the sort of host this
+ * runs on — that question never comes back, and LiveKit refuses to start at
+ * all rather than start with an unknown address: "could not resolve external
+ * IP", over and over, while nginx returns 502 to everyone.
+ *
+ * So the lookup is off unless explicitly asked for, and the address is given.
+ * Interpolated both ways, because an unset one has to vanish key and all: a
+ * dangling `node_ip:` with nothing after it is not valid YAML, and LiveKit
+ * would fail to parse its own configuration.
+ */
+const lkInterp = (env) => lkRaw.replace(/\$\{([A-Z_]+)(:[-+])([^}]*)\}/g, (_, name, op, word) => {
+  const set = env[name] !== undefined && env[name] !== "";
+  return op === ":-" ? (set ? env[name] : word) : (set ? word : "");
+});
+const rtcOf = (env) => (/rtc: \{[^}]*\}/.exec(lkInterp(env)) || ["missing"])[0];
+ok("the address is not looked up over STUN by default", rtcOf({}).includes("use_external_ip: false"),
+  rtcOf({}));
+ok("  · an unset address leaves no dangling key", !/node_ip:\s*(,|\})/.test(rtcOf({})));
+ok("  · a set one is passed through",
+  rtcOf({ LIVEKIT_NODE_IP: "203.0.113.10" }).includes("node_ip: 203.0.113.10"),
+  rtcOf({ LIVEKIT_NODE_IP: "203.0.113.10" }));
+ok("  · and STUN can still be asked for where it works",
+  rtcOf({ LIVEKIT_USE_STUN: "true" }).includes("use_external_ip: true"));
 
 // nginx has to carry the signalling socket, and carry it as a WebSocket.
 const NGINX = fileURLToPath(new URL("../apps/web/nginx.conf", import.meta.url));

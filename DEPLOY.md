@@ -359,6 +359,19 @@ on is a key and three ports.
 LIVEKIT_URL="wss://nexspace.xy789.click/lk"
 LIVEKIT_API_KEY="<any name, e.g. nexspace>"
 LIVEKIT_API_SECRET="<generate one, see below>"
+LIVEKIT_NODE_IP="<this machine's public address>"
+```
+
+`LIVEKIT_NODE_IP` is the one that is easy to skip and shouldn't be. Inside a
+container the server only knows a `172.x` address of its own, so it has to be
+told the public one or it invites browsers somewhere nobody can reach. It can
+ask a STUN server instead — `LIVEKIT_USE_STUN=true` — but this host blocks
+outbound UDP, and an unanswered lookup does not degrade: LiveKit refuses to
+start at all, logging `could not resolve external IP` in a loop while nginx
+returns 502 to everyone. Find the address with:
+
+```bash
+hostname -I | awk '{print $1}'
 ```
 
 Generate the secret on the server, and let it be the only place it exists:

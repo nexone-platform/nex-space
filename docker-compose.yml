@@ -133,11 +133,23 @@ services:
     #                   this one MUST be open on the firewall or calls connect
     #                   and carry nothing.
     #   rtc.tcp_port    the way through for a network that blocks UDP outright.
-    #   use_external_ip look the public address up over STUN. Required here: in
-    #                   a bridge network the server only knows a 172.x address,
-    #                   and would invite browsers to somewhere unreachable.
+    #   node_ip         the address to invite browsers to. In a bridge network
+    #                   the server only knows a 172.x address of its own, so it
+    #                   has to be told the public one or it hands out somewhere
+    #                   nobody can reach.
+    #   use_external_ip ask STUN for that address instead of being told it. Off
+    #                   by default, because a host that blocks outbound UDP —
+    #                   this one does — leaves the lookup to time out, and
+    #                   LiveKit does not start at all when it cannot answer the
+    #                   question: "could not resolve external IP", forever.
+    #                   Set LIVEKIT_USE_STUN=true on a host where it works and
+    #                   the address is not known in advance.
+    #
+    # Written as two flat substitutions rather than one clever one: an unset
+    # LIVEKIT_NODE_IP has to vanish completely, key and all, and that is the
+    # same shape the relay's optional arguments already use below.
     environment:
-      - "LIVEKIT_CONFIG={port: 7880, rtc: {tcp_port: 7881, udp_port: 7882, use_external_ip: true}, keys: {${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-devsecret-not-for-production}}, logging: {level: info}}"
+      - "LIVEKIT_CONFIG={port: 7880, rtc: {tcp_port: 7881, udp_port: 7882, use_external_ip: ${LIVEKIT_USE_STUN:-false}${LIVEKIT_NODE_IP:+, node_ip: }${LIVEKIT_NODE_IP:-}}, keys: {${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-devsecret-not-for-production}}, logging: {level: info}}"
     ports:
       - "7881:7881"
       - "7882:7882/udp"
