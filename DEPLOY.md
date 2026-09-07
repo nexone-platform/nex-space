@@ -340,6 +340,71 @@ everything else, so it is included in whatever backs that file up — and it is 
 part of the database that grows on its own, which makes it the first reason this
 deployment will eventually want Postgres.
 
+## More than two people in one conversation
+
+Without a media server every browser sends one copy of its audio to every other
+browser. Two people is one upload each; three is two; six is five. Audio alone
+is small, but a screen share is about 2.5 Mbit **per listener**, so three people
+watching one costs the sharer 7.5 Mbit of upload — and when the uplink
+saturates, the voice queues behind the picture. That is the delay people report
+as "the audio is behind", and it cannot be tuned away: it is what a mesh is.
+
+An SFU takes one copy from each person and fans it out, so what a browser
+uploads stops depending on how many people are listening.
+
+The client, the token endpoint and the nginx route are already here. Turning it
+on is a key and three ports.
+
+```dotenv
+LIVEKIT_URL="wss://nexspace.xy789.click/lk"
+LIVEKIT_API_KEY="<any name, e.g. nexspace>"
+LIVEKIT_API_SECRET="<generate one, see below>"
+```
+
+Generate the secret on the server, and let it be the only place it exists:
+
+```bash
+openssl rand -hex 32
+```
+
+Then deploy as usual. `deploy.sh` sees the key in `.env` and starts the media
+server with it; with no key it stays off and the app falls back to the mesh, so
+nothing has to be switched over by hand.
+
+**Open the media port, or nothing works and everything looks fine.** Signalling
+goes through nginx over 443 like the rest of the app, so a call will connect,
+show everyone, and carry no sound at all. Media is UDP straight to the machine:
+
+| port | | |
+|---|---|---|
+| **7882/udp** | required | all media, on one muxed port |
+| **7881/tcp** | strongly advised | the way in for a network that blocks UDP |
+| 7880/tcp | do not open | signalling; nginx reaches it privately |
+
+```bash
+sudo ufw allow 7882/udp
+sudo ufw allow 7881/tcp
+```
+
+Cloudflare does not proxy UDP, so media reaches the server's real address
+directly — which is fine and expected, and is why `use_external_ip` is on: in a
+container the server only knows a `172.x` address, and would otherwise invite
+browsers somewhere unreachable.
+
+**Check which backend a browser actually got.** The console says so on join:
+
+```
+[nexspace] media backend: LiveKit SFU     ← the SFU
+[nexspace] media backend: P2P mesh        ← still the mesh
+```
+
+If it says mesh, the game server did not see the three variables — they are read
+at start-up, and `docker compose restart` does not re-read `.env`; `up -d` does.
+
+**This is not TURN, and TURN is not this.** The relay answers "these two cannot
+reach each other at all"; the SFU answers "this does not scale past two". A
+deployment wants both, for different reasons.
+
 ## Invitations by email
 
 An owner or admin puts an address into the "คำเชิญ" tab beside the member list.

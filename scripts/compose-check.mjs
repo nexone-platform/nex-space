@@ -140,7 +140,11 @@ ok("every named volume is declared", undeclared.length === 0,
 // ---- 3. the file still has all of its parts ---------------------------------
 
 const services = Object.keys(doc.services ?? {});
-ok("the four services are present", services.length === 4, services.join(" "));
+const WANT = ["nexspace-web", "nexspace-game", "nexspace-api", "nexspace-livekit", "nexspace-turn"];
+const missing = WANT.filter((n) => !services.includes(n));
+// By name rather than by count: a count says "five" just as happily when one
+// has been renamed and another added.
+ok("every service is present", missing.length === 0, missing.join(" ") || services.join(" "));
 ok("the data volume is still there", declared.includes("nexspace-api-data"));
 
 // ---- 4. the relay is still fenced in ----------------------------------------
@@ -205,6 +209,35 @@ ok("with only a secret set, nothing optional is left dangling",
 
 const tls = relayArgs({ TURN_SECRET: "s", TURN_TLS_PORT: "443", TURN_CERT: "/certs/a.pem", TURN_KEY: "/certs/b.pem" });
 ok("TLS turns on as one piece", ["--tls-listening-port=443", "--cert=/certs/a.pem", "--pkey=/certs/b.pem"].every((a) => tls.includes(a)));
+
+// ---- 5. the media server, and the ports it cannot work without --------------
+// Media is UDP straight to the machine; signalling is the only half a proxy can
+// carry. Publishing the wrong one of those looks exactly like the SFU working
+// until somebody speaks.
+// The reader above folds list values away, so this one block is read as text —
+// which is also what these assertions are really about: what the file says.
+const lkRaw = /\n {2}nexspace-livekit:\n([\s\S]*?)(?=\n {2}[a-z#]|\nvolumes:)/.exec(raw)?.[1] ?? "";
+const published = (lkRaw.match(/- "\d+:[^"]+"/g) || []).join(" ");
+ok("the media server is described at all", !!lkRaw, lkRaw ? "" : "no such service");
+ok("  · and is off unless asked for", /profiles: \["livekit"\]/.test(lkRaw));
+ok("its media port is published, as UDP", published.includes('"7882:7882/udp"'), published || "nothing");
+ok("  · with a TCP way in for networks that block UDP", published.includes('"7881:7881"'));
+ok("  · and signalling NOT published, because nginx carries it", !published.includes("7880"));
+ok("it takes its key from the environment, not from this file",
+  lkRaw.includes("${LIVEKIT_API_KEY") && !/keys: \{[A-Za-z0-9]/.test(lkRaw));
+ok("  · and looks its public address up, seeing only a bridge address itself",
+  lkRaw.includes("use_external_ip: true"));
+
+// nginx has to carry the signalling socket, and carry it as a WebSocket.
+const NGINX = fileURLToPath(new URL("../apps/web/nginx.conf", import.meta.url));
+const conf = readFileSync(NGINX, "utf8");
+const lkBlock = /location \/lk\/ \{([\s\S]*?)\n {4}\}/.exec(conf)?.[1] ?? "";
+ok("nginx carries the signalling socket", !!lkBlock, lkBlock ? "" : "no /lk/ block");
+ok("  · to the media server", lkBlock.includes("proxy_pass http://nexspace-livekit:7880/;"));
+ok("  · as a WebSocket, or it closes on the first frame",
+  lkBlock.includes("Upgrade $http_upgrade") && lkBlock.includes('Connection "Upgrade"'));
+ok("  · and holds it open longer than a quiet participant stays quiet",
+  /proxy_read_timeout\s+(\d+)h/.test(lkBlock), (/proxy_read_timeout[^;]*/.exec(lkBlock) || ["none"])[0]);
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

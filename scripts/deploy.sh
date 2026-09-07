@@ -172,6 +172,14 @@ else
   GIT_SHA=$(git rev-parse HEAD)
   [ ${#GIT_SHA} -eq 40 ] || die "cannot read HEAD to stamp the images"
   export GIT_SHA
+  # The media server sits behind a profile, so that a deployment with no key
+  # configured is not left with a container that cannot start. Which means
+  # something has to switch the profile on, and doing it from .env is the only
+  # way the two cannot disagree: configure the key, and it runs.
+  if [ -f .env ] && grep -qE '^LIVEKIT_API_KEY=.+' .env; then
+    export COMPOSE_PROFILES="${COMPOSE_PROFILES:+$COMPOSE_PROFILES,}livekit"
+    ok "media server on — browsers send one copy each instead of one per listener"
+  fi
   # shellcheck disable=SC2086
   $DC up -d --build $SERVICES
 fi

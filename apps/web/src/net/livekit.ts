@@ -125,12 +125,27 @@ export class LiveKitManager implements MediaManager {
     return t && this.camOn ? new MediaStream([t]) : undefined;
   }
 
+  /**
+   * Pull down only what this person is close enough to be part of.
+   *
+   * The microphone is unsubscribed, not merely turned down. Turning it down
+   * left every browser downloading the voice of everyone in the space and
+   * throwing almost all of it away — a room of twenty is twenty streams each,
+   * which is the bandwidth an SFU was brought in to stop spending. It also made
+   * "too far away to hear you" a decision taken in the listener's own browser,
+   * where anybody willing to edit it could decide otherwise; unsubscribed, the
+   * server simply never sends it.
+   *
+   * The volume still follows distance — see setPeerVolume. This is the coarse
+   * cut, the fade is inside it.
+   */
   syncPeers(nearby: Set<string>, _forced?: Set<string>) {
     this.subscribed = new Set(nearby);
     this.room.remoteParticipants.forEach((p) => {
       const near = nearby.has(p.identity);
-      p.getTrackPublication(Track.Source.Camera)?.setSubscribed(near); // pull video only when near
-      if (!near) { p.setVolume(0); this.removeCamTile(p.identity); }   // far = silent, no video
+      p.getTrackPublication(Track.Source.Microphone)?.setSubscribed(near);
+      p.getTrackPublication(Track.Source.Camera)?.setSubscribed(near);
+      if (!near) { p.setVolume(0); this.removeCamTile(p.identity); }
     });
   }
   setPeerVolume(id: string, vol: number) {

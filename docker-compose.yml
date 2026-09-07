@@ -104,6 +104,44 @@ services:
       # same volume as before, mounted somewhere that shadows nothing in the image
       - nexspace-api-data:/app/apps/api/data
 
+  # The media server, which is what makes more than two people in a conversation
+  # work at all.
+  #
+  # Without it every browser sends one copy of its audio to every other browser:
+  # three people means two uploads each, six means five, and a screen share at
+  # 2.5 Mbit multiplies the same way until the uplink saturates and the voice
+  # queues up behind the picture. That is the delay. An SFU takes ONE copy from
+  # each person and fans it out, so what a browser uploads no longer depends on
+  # how many people are listening.
+  #
+  # Off unless asked for, like the relay: a deployment with no key configured
+  # should not be left with a container that cannot start.
+  #   docker compose --profile livekit up -d       (deploy.sh does this for you)
+  nexspace-livekit:
+    image: livekit/livekit-server:v1.9
+    container_name: nexspace-livekit
+    restart: always
+    profiles: ["livekit"]
+    # The whole configuration, as YAML on one line, so the secret lives in .env
+    # and nowhere else — there is no file here for it to be committed in.
+    #
+    #   port            signalling. NOT published: nginx reaches it over the
+    #                   compose network and terminates TLS, so it is never
+    #                   exposed on its own.
+    #   rtc.udp_port    one muxed port for all media instead of a range of ten
+    #                   thousand. Media cannot go through a reverse proxy, so
+    #                   this one MUST be open on the firewall or calls connect
+    #                   and carry nothing.
+    #   rtc.tcp_port    the way through for a network that blocks UDP outright.
+    #   use_external_ip look the public address up over STUN. Required here: in
+    #                   a bridge network the server only knows a 172.x address,
+    #                   and would invite browsers to somewhere unreachable.
+    environment:
+      - "LIVEKIT_CONFIG={port: 7880, rtc: {tcp_port: 7881, udp_port: 7882, use_external_ip: true}, keys: {${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-devsecret-not-for-production}}, logging: {level: info}}"
+    ports:
+      - "7881:7881"
+      - "7882:7882/udp"
+
   # The relay itself. It only runs when the profile is switched on, so a
   # deployment without a TURN_SECRET is not left with a container that cannot
   # start:  docker compose --profile turn up -d
