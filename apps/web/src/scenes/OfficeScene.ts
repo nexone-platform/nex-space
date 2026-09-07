@@ -745,7 +745,13 @@ export class OfficeScene extends Phaser.Scene {
     try {
       const cfg = await fetch(`${HTTP_URL}/livekit/config`).then((r) => r.json());
       if (cfg?.enabled) {
-        const name = (room.state.players.get(this.mySessionId) as any)?.name ?? this.mySessionId;
+        // Our own name, not the room's copy of it. This ran the moment the room
+        // was joined, before the first state patch had arrived, so
+        // `room.state.players` was undefined and reading `.get` off it threw —
+        // caught below and reported as "LiveKit unavailable", which is how a
+        // configured, healthy media server was quietly never used. It is the
+        // same string either way: this is what was sent to the server on join.
+        const name = this.myName || this.mySessionId;
         const tk = await fetch(
           // per-workspace LiveKit room, otherwise audio/video would carry across workspaces
           `${HTTP_URL}/livekit/token?room=${encodeURIComponent("office-" + WORKSPACE)}&identity=${this.mySessionId}&name=${encodeURIComponent(name)}`

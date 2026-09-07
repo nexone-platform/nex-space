@@ -120,9 +120,27 @@ export class LiveKitManager implements MediaManager {
   // `forced` is unused: the SFU auto-subscribes screen-share tracks room-wide already
   hasPeer(peerId: string) { return this.subscribed.has(peerId); }
 
+  /**
+   * One MediaStream per track, always the same object.
+   *
+   * The scene reuses a <video> when it is already showing this stream and only
+   * assigns srcObject when it differs — because assigning it restarts playback,
+   * and a tile that blinks every time somebody toggles their microphone is
+   * worse than no tile. Handing out a fresh MediaStream on every call defeats
+   * that comparison completely: it never matches, so every repaint restarts
+   * every picture. Nobody had seen it because nothing had ever run this path.
+   */
+  private wrapped = new WeakMap<MediaStreamTrack, MediaStream>();
+  private wrap(t?: MediaStreamTrack | null): MediaStream | undefined {
+    if (!t) return undefined;
+    let s = this.wrapped.get(t);
+    if (!s) { s = new MediaStream([t]); this.wrapped.set(t, s); }
+    return s;
+  }
+
   get cameraStream(): MediaStream | undefined {
     const t = this.room.localParticipant.getTrackPublication(Track.Source.Camera)?.track?.mediaStreamTrack;
-    return t && this.camOn ? new MediaStream([t]) : undefined;
+    return this.camOn ? this.wrap(t) : undefined;
   }
 
   /**
@@ -156,12 +174,12 @@ export class LiveKitManager implements MediaManager {
     if (t) t.style.display = hidden ? "none" : "block";
   }
   getPeerStream(id: string): MediaStream | undefined {
-    const t = this.room.remoteParticipants.get(id)?.getTrackPublication(Track.Source.ScreenShare)?.track?.mediaStreamTrack;
-    return t ? new MediaStream([t]) : undefined;
+    return this.wrap(this.room.remoteParticipants.get(id)
+      ?.getTrackPublication(Track.Source.ScreenShare)?.track?.mediaStreamTrack);
   }
   get screenMediaStream(): MediaStream | undefined {
-    const t = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track?.mediaStreamTrack;
-    return t ? new MediaStream([t]) : undefined;
+    return this.wrap(this.room.localParticipant
+      .getTrackPublication(Track.Source.ScreenShare)?.track?.mediaStreamTrack);
   }
 
   async devices() {

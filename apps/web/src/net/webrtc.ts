@@ -285,9 +285,15 @@ export class WebRTCManager implements MediaManager {
     this.renderSelfTile();
   }
 
+  /** the same object every time — see the note on wrap() in livekit.ts */
+  private wrapped = new WeakMap<MediaStreamTrack, MediaStream>();
+
   /** what our own camera is producing, if it is on at all */
   get cameraStream(): MediaStream | undefined {
-    return this.camTrack && this.camOn ? new MediaStream([this.camTrack]) : undefined;
+    if (!this.camTrack || !this.camOn) return undefined;
+    let s = this.wrapped.get(this.camTrack);
+    if (!s) { s = new MediaStream([this.camTrack]); this.wrapped.set(this.camTrack, s); }
+    return s;
   }
 
   /** current local screen-share stream (for rendering onto an in-scene screen) */

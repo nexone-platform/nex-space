@@ -404,6 +404,24 @@ directly — which is fine and expected, and is why `use_external_ip` is on: in 
 container the server only knows a `172.x` address, and would otherwise invite
 browsers somewhere unreachable.
 
+**Give the kernel a bigger UDP receive buffer.** The server says so itself on
+start-up, and the default is small enough to drop packets under load — which
+arrives as exactly the delay the media server was brought in to remove:
+
+```
+WARN  UDP receive buffer is too small for a production set-up
+      {"current": 425984, "suggested": 5000000}
+```
+
+```bash
+echo 'net.core.rmem_max=5000000' | sudo tee /etc/sysctl.d/99-livekit.conf
+echo 'net.core.wmem_max=5000000' | sudo tee -a /etc/sysctl.d/99-livekit.conf
+sudo sysctl --system
+```
+
+Then restart the media server so it picks the new size up:
+`docker compose up -d --force-recreate nexspace-livekit`.
+
 **Check which backend a browser actually got.** The console says so on join:
 
 ```
