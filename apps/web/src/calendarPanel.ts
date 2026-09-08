@@ -382,6 +382,16 @@ export function mountCalendarPanel(o: CalendarOptions) {
     bookings: () => all,
     /** open the form already pointed at a room, from the map */
     bookRoom: (roomId: string) => { if (form.hidden) openForm(undefined, roomId); },
+    /**
+     * The form itself, and the way to open it at a chosen time.
+     *
+     * Handed out rather than rebuilt, because the week view needs the same form
+     * and a second copy of it would be a second set of validation, a second
+     * save path and a second thing to keep in step. Its styling is by class
+     * rather than by where it sits, so it works wherever it is put.
+     */
+    form,
+    compose: (startAt?: Date, roomId?: string) => openForm(startAt, roomId),
     /** the subscribe row, filled in once the address is known */
     foot,
     dispose: () => { window.clearInterval(tick); window.clearInterval(poll); },

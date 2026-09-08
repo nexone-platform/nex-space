@@ -1,0 +1,129 @@
+<meta charset="utf-8">
+<title>week view probe</title>
+<!--
+  The week grid, drawn from stand-in bookings.
+
+  Open http://localhost:5173/calweek-probe.html with the web dev server running.
+  It builds the same shell index.html has and drives the real view, so what is
+  on screen is what the app draws — no server, no login, no room to walk to.
+-->
+<link rel="stylesheet" href="/calweek-probe.css">
+<div id="cal-view" hidden>
+  <header class="cw-head">
+    <button class="cw-btn" id="cw-prev">‹</button>
+    <button class="cw-btn" id="cw-next">›</button>
+    <button class="cw-btn" id="cw-today">วันนี้</button>
+    <b id="cw-month"></b>
+    <span class="sp"></span>
+    <button class="cw-btn cw-primary" id="cw-new">+ การประชุมใหม่</button>
+    <button class="cw-btn" id="cw-close">✕</button>
+  </header>
+  <div class="cw-days" id="cw-days"></div>
+  <div class="cw-scroll" id="cw-scroll"><div class="cw-grid" id="cw-grid"></div></div>
+  <div class="cw-foot" id="cw-foot"></div>
+  <div class="cw-modal" id="cw-modal" hidden><div class="cw-sheet" id="cw-sheet"></div></div>
+</div>
+<div id="home" style="display:none"><div id="fake-form" class="cal-form" hidden>ฟอร์มจอง</div></div>
+<pre id="out" style="font:13px/1.6 ui-monospace,monospace;padding:16px;white-space:pre-wrap"></pre>
+<script type="module">
+import { mountCalendarWeek } from "/src/calendarView.ts";
+
+const out = document.getElementById("out");
+const log = (s) => { out.textContent += s + "\n"; };
+let pass = 0, fail = 0;
+const ok = (n, c, x = "") => { c ? pass++ : fail++; log(`${c ? "  PASS" : "! FAIL"}  ${n}${x ? "  " + x : ""}`); };
+
+const at = (dayOffset, h, m = 0) => {
+  const d = new Date(); d.setHours(0,0,0,0);
+  d.setDate(d.getDate() - d.getDay() + dayOffset);
+  d.setHours(h, m, 0, 0);
+  return d.toISOString();
+};
+const BOOKINGS = [
+  { id: "a", room: "ห้องประชุมใหญ่", title: "รีวิวสปรินต์", host: "ชาลิสา", startsAt: at(2, 10), endsAt: at(2, 11), going: 3, mine: true, ics: "" },
+  { id: "b", room: "ห้องเล็ก", title: "คุยกับลูกค้า", host: "สมชาย", startsAt: at(3, 14, 30), endsAt: at(3, 15, 15), going: 2, mine: false, ics: "" },
+  { id: "c", room: "ห้องเกม", title: "เมื่อวานแล้ว", host: "อร", startsAt: at(1, 9), endsAt: at(1, 9, 30), going: 1, mine: false, ics: "" },
+  { id: "d", room: "ห้องเล็ก", title: "ตีห้า ไม่อยู่ในตาราง", host: "อร", startsAt: at(4, 5), endsAt: at(4, 6), going: 1, mine: false, ics: "" },
+];
+
+const form = document.getElementById("fake-form");
+let composedAt = null;
+const week = mountCalendarWeek({
+  bookings: () => BOOKINGS,
+  rooms: () => [{ id: "r1", label: "ห้องประชุมใหญ่" }],
+  form,
+  compose: (startAt) => { composedAt = startAt; form.hidden = false; },
+  foot: document.createElement("div"),
+  canBook: () => true,
+});
+
+week.open();
+log("the week, drawn from four stand-in bookings\n");
+
+const grid = document.getElementById("cw-grid");
+const evs = grid.querySelectorAll(".cw-ev");
+ok("bookings inside the hours drawn appear", evs.length === 3, `${evs.length} of 4 (05:00 one is outside)`);
+ok("  · and the one outside them does not", !Array.from(evs).some((e) => e.textContent.includes("ตีห้า")));
+ok("a 45-minute meeting is not drawn as an hour", (() => {
+  const e = Array.from(evs).find((x) => x.textContent.includes("คุยกับลูกค้า"));
+  const h = parseFloat(e.style.height);
+  return h > 30 && h < 45;
+})(), Array.from(evs).map((e) => e.style.height).join(" "));
+ok("  · and starts at half past, not on the hour", (() => {
+  const e = Array.from(evs).find((x) => x.textContent.includes("คุยกับลูกค้า"));
+  return parseFloat(e.style.top) % 52 !== 0;
+})());
+ok("mine is marked as mine", Array.from(evs).some((e) => e.classList.contains("mine")));
+ok("a meeting that already ended is faded", Array.from(evs).some((e) => e.classList.contains("over")));
+ok("the day strip names seven days", document.querySelectorAll(".cw-day").length === 7);
+ok("  · with today picked out", document.querySelectorAll(".cw-day.today").length === 1);
+ok("now is drawn once, on today only", grid.querySelectorAll(".cw-now").length === 1,
+  `${grid.querySelectorAll(".cw-now").length} lines`);
+ok("  · with the time beside it", grid.querySelector(".cw-now-chip")?.textContent?.includes(":"),
+  grid.querySelector(".cw-now-chip")?.textContent);
+
+// clicking an empty hour offers to book it
+const cells = grid.querySelectorAll(".cw-hour.free");
+ok("empty hours are clickable", cells.length > 0, `${cells.length} cells`);
+cells[20].click();
+ok("  · and open the form at that hour", composedAt instanceof Date && composedAt.getMinutes() === 0,
+  composedAt ? composedAt.toString().slice(0, 21) : "never opened");
+ok("  · the form moves into the sheet, rather than being rebuilt",
+  document.getElementById("cw-sheet").contains(form));
+form.hidden = true;                       // the panel closes its own form on save
+await new Promise((r) => setTimeout(r, 30));
+ok("  · and goes home when it closes", document.getElementById("home").contains(form));
+ok("  · leaving no modal behind", document.getElementById("cw-modal").hidden);
+
+// Where a thing IS on screen, not where the style says it should be. The grid
+// put two of these on a second implicit row once, several hundred pixels below
+// the hour they belong to, and nothing above noticed.
+const layerTop = grid.querySelector(".cw-layer").getBoundingClientRect().top;
+const ROW = 52, FIRST = 7;
+const wanted = (h, m = 0) => ((h - FIRST) * 60 + m) * (ROW / 60);
+const placed = (text) => {
+  const e = Array.from(grid.querySelectorAll(".cw-ev")).find((x) => x.textContent.includes(text));
+  return e ? Math.round(e.getBoundingClientRect().top - layerTop) : -1;
+};
+for (const [label, h, m] of [["รีวิวสปรินต์", 10, 0], ["คุยกับลูกค้า", 14, 30], ["เมื่อวานแล้ว", 9, 0]]) {
+  const got = placed(label), want = Math.round(wanted(h, m));
+  ok(`"${label}" is drawn at the hour it is booked for`, Math.abs(got - want) <= 1, `${got}px, wanted ${want}px`);
+}
+{
+  const chip = grid.querySelector(".cw-now-chip");
+  const [h, m] = chip.textContent.split(":").map(Number);
+  const got = Math.round(grid.querySelector(".cw-now").getBoundingClientRect().top - layerTop);
+  const want = Math.round(wanted(h, m));
+  ok("now is drawn at now", Math.abs(got - want) <= 2, `${got}px, wanted ${want}px for ${chip.textContent}`);
+}
+
+const before = document.getElementById("cw-month").textContent;
+document.getElementById("cw-next").click();
+const after = document.getElementById("cw-month").textContent;
+document.getElementById("cw-today").click();
+ok("the week can be paged", document.querySelectorAll(".cw-day").length === 7, `${before} → ${after}`);
+ok("  · and today brings it back", document.querySelectorAll(".cw-day.today").length === 1);
+
+log(`\n${pass} passed, ${fail} failed\n`);
+document.title = fail ? `FAIL ${fail}` : `PASS ${pass}`;
+</script>

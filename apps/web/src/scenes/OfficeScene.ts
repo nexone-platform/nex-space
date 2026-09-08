@@ -12,6 +12,7 @@ import { API as AUTH_API } from "../api";
 import { t, onLangChange, locale } from "../i18n";
 import { ACCEPT, type Attach, attachNode, humanSize, upload } from "../net/attach";
 import { type Booking, clock, mountCalendarPanel } from "../calendarPanel";
+import { mountCalendarWeek } from "../calendarView";
 import { setupPrefsModal } from "../prefsModal";
 import { roleLabel } from "../memberPanel";
 import { propPath, type Interactive } from "./mapThemes";
@@ -226,7 +227,9 @@ export class OfficeScene extends Phaser.Scene {
   private bookings: Booking[] = [];
   /** bookings already reminded about, so a poll every two minutes reminds once */
   private reminded = new Set<string>();
-  private calPanel?: { refresh: () => Promise<void>; bookRoom: (roomId: string) => void };
+  // Written out by hand once, and then it drifted from what the panel returns.
+  // Taking the type from the function means it cannot drift again.
+  private calPanel?: ReturnType<typeof mountCalendarPanel>;
   /** every area label on this map, so a booking can be written over its door */
   private areaLabels = new Map<string, Phaser.GameObjects.Text>();
   /**
@@ -1162,7 +1165,10 @@ export class OfficeScene extends Phaser.Scene {
       this.refreshMeetingGrid();
     });
 
-    document.getElementById("rail-cal")?.addEventListener("click", () => showView("cal"));
+    // The rail opens the week rather than the sidebar list. Somebody reaching
+    // for the calendar wants to see what the week looks like; the list answers
+    // a narrower question and is still where the map books a room from.
+    document.getElementById("rail-cal")?.addEventListener("click", () => this.calWeek?.open());
     document.getElementById("rail-notif")?.addEventListener("click", () => { showView("notif"); this.renderNotifs(true); });
     document.getElementById("nf-clear")?.addEventListener("click", () => { this.notifs = []; this.renderNotifs(true); });
     document.getElementById("nf-sound")?.addEventListener("click", () => {
@@ -1572,6 +1578,8 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
+  private calWeek?: ReturnType<typeof mountCalendarWeek>;
+
   private mountCalendar() {
     const host = document.getElementById("view-cal");
     if (!host) return;
@@ -1591,7 +1599,21 @@ export class OfficeScene extends Phaser.Scene {
         this.bookings = all;
         this.refreshRoomPlates();
         this.checkReminders();
+        // Redrawn from the same load, so the two can never disagree about what
+        // is booked — there is one list and both are looking at it.
+        if (this.calWeek?.isOpen()) this.calWeek.draw();
       },
+    });
+
+    const panel = this.calPanel;
+    this.calWeek = mountCalendarWeek({
+      bookings: () => panel.bookings(),
+      rooms: () => PRIVATE_AREAS.map((a) => ({ id: a.id, label: t(a.label) })),
+      form: panel.form,
+      compose: (at, roomId) => panel.compose(at, roomId),
+      foot: panel.foot,
+      canBook: () => this.myRole !== "guest",
+      onOpen: () => void panel.refresh(),
     });
   }
 

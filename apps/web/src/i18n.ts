@@ -379,6 +379,12 @@ const EN: Record<string, string> = {
   "ปฏิทินภายนอกจะดึงข้อมูลใหม่ทุกไม่กี่ชั่วโมง — การจองใหม่จะถูกส่งทางอีเมลให้คนที่กดว่าจะไปทันที":
     "An external calendar re-reads this every few hours — a new booking is emailed to whoever is coming straight away",
 
+  // ---- the week, drawn at the size a week needs ----
+  "จองห้องเวลานี้": "Book a room at this time",
+  "สัปดาห์ก่อนหน้า": "Previous week",
+  "สัปดาห์ถัดไป": "Next week",
+  "+ การประชุมใหม่": "+ New meeting",
+
   // ---- invitations addressed to one person ----
   "คำเชิญนี้ส่งไปที่ {email} — เข้าสู่ระบบด้วยอีเมลนั้นเพื่อเข้าร่วม": "This invitation was sent to {email} — sign in with that address to join",
   "คำเชิญนี้ถูกใช้ไปแล้ว": "This invitation has already been used",

@@ -346,6 +346,104 @@
 
 
 
+      /* ---- the week, at the size a week needs ----
+         The sidebar list answers "what is on today" in a column 320px wide. A
+         week does not fit in a column, so this is its own surface: seven days
+         across, hours down, and the bookings drawn where they actually fall. */
+      #cal-view {
+        position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column;
+        background: var(--bg); color: var(--text);
+      }
+      #cal-view[hidden] { display: none; }
+      .cw-head {
+        display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
+        padding: 10px 14px; border-bottom: 1px solid var(--border);
+        background: var(--surface);
+      }
+      .cw-head .sp { flex: 1; }
+      .cw-head b { font-size: 15px; font-weight: 600; }
+      .cw-btn {
+        display: grid; place-items: center; min-width: 32px; height: 32px; padding: 0 10px;
+        border: 1px solid var(--border-2); border-radius: 9px;
+        background: var(--surface); color: var(--text-2);
+        font: 500 13px "Segoe UI", sans-serif; cursor: pointer;
+      }
+      .cw-btn:hover { border-color: var(--accent-line); color: var(--accent); }
+      .cw-primary { border: none; background: var(--teal); color: #fff; font-weight: 600; }
+      .cw-primary:hover { background: var(--teal-hover, var(--teal)); filter: brightness(1.06); }
+
+      /* The day strip does not scroll with the hours — losing which column is
+         which after scrolling to the afternoon is losing the whole grid. */
+      .cw-days {
+        display: grid; flex: 0 0 auto;
+        border-bottom: 1px solid var(--border); background: var(--surface);
+      }
+      .cw-day { padding: 8px 4px; text-align: center; font-size: 12px; color: var(--text-3); }
+      .cw-day b { display: inline-grid; place-items: center; min-width: 24px; height: 24px;
+        margin-left: 6px; border-radius: 50%; font-size: 13px; color: var(--text); }
+      .cw-day.today b { background: var(--danger); color: #fff; }
+      .cw-day.today { color: var(--danger); }
+
+      .cw-scroll { flex: 1; min-height: 0; overflow: auto; }
+      .cw-grid { display: grid; position: relative; }
+      /* Bookings and the now line, over the hours rather than among them. As
+         grid items they claimed whole columns and the hour cells flowed around
+         them, which scattered the time labels across the middle of the week. */
+      .cw-layer { position: absolute; inset: 0; display: grid; pointer-events: none; }
+      .cw-layer > * { pointer-events: none; }
+      /* one cell per hour per day; the gutter is the first column */
+      .cw-hour { border-top: 1px dashed var(--border); position: relative; }
+      .cw-hour.free { cursor: pointer; }
+      .cw-hour.free:hover { background: var(--surface-2); }
+      .cw-gutter {
+        border-top: 1px solid transparent; padding-right: 8px;
+        text-align: right; font-size: 11px; color: var(--faint);
+        font-variant-numeric: tabular-nums; transform: translateY(-7px);
+      }
+      .cw-col { border-left: 1px solid var(--border); }
+
+      /* a booking, drawn where it falls */
+      .cw-ev {
+        position: absolute; left: 3px; right: 3px; overflow: hidden;
+        padding: 3px 6px; border-radius: 7px; border-left: 3px solid var(--teal);
+        background: color-mix(in srgb, var(--teal) 16%, var(--surface));
+        font-size: 11.5px; line-height: 1.35; cursor: pointer; text-align: left;
+      }
+      .cw-ev b { display: block; font-size: 12px; font-weight: 600;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .cw-ev small { color: var(--text-3); }
+      .cw-ev.mine { border-left-color: var(--accent); }
+      .cw-ev.over { opacity: .5; }
+
+      /* now, across today only — a line through every column would say that
+         every day is happening at once */
+      .cw-now { position: absolute; height: 0; border-top: 2px solid var(--danger); pointer-events: none; }
+      .cw-now-chip {
+        position: absolute; transform: translate(-100%, -50%); margin-left: -4px;
+        padding: 1px 6px; border-radius: 6px; background: var(--danger); color: #fff;
+        font: 600 10.5px "Segoe UI", sans-serif; white-space: nowrap; pointer-events: none;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* the booking form, borrowed from the sidebar and put in the middle */
+      .cw-modal {
+        position: fixed; inset: 0; z-index: 41; display: grid; place-items: start center;
+        padding-top: 8vh; background: #0006; backdrop-filter: blur(2px);
+      }
+      .cw-modal[hidden] { display: none; }
+      .cw-sheet {
+        width: min(92vw, 380px); border-radius: 14px; overflow: hidden;
+        background: var(--surface); box-shadow: 0 18px 50px #00000040;
+      }
+      .cw-sheet .cal-form { border: none; }
+      .cw-foot { flex: 0 0 auto; padding: 8px 14px; border-top: 1px solid var(--border);
+        display: flex; flex-direction: column; gap: 6px; background: var(--surface); }
+
+      @media (max-width: 760px) {
+        .cw-ev small { display: none; }
+        .cw-day span { display: none; }
+      }
+
       /* ---- the conversation you are standing in ----
          Tiles over the top of the map. Dark whatever the theme is: these hold
          video, and a light frame around a dark camera feed reads as a bug. */
@@ -2037,6 +2135,24 @@
          standing, and it goes away when you walk off. -->
     <div id="convo" hidden>
       <div id="convo-tiles"></div>
+    </div>
+
+    <!-- The week. Opened from the calendar in the rail; the sidebar list is
+         still where a single day lives. -->
+    <div id="cal-view" hidden>
+      <header class="cw-head">
+        <button class="cw-btn" id="cw-prev" title="สัปดาห์ก่อนหน้า">‹</button>
+        <button class="cw-btn" id="cw-next" title="สัปดาห์ถัดไป">›</button>
+        <button class="cw-btn" id="cw-today">วันนี้</button>
+        <b id="cw-month"></b>
+        <span class="sp"></span>
+        <button class="cw-btn cw-primary" id="cw-new">+ การประชุมใหม่</button>
+        <button class="cw-btn" id="cw-close" title="ปิด">✕</button>
+      </header>
+      <div class="cw-days" id="cw-days"></div>
+      <div class="cw-scroll" id="cw-scroll"><div class="cw-grid" id="cw-grid"></div></div>
+      <div class="cw-foot" id="cw-foot"></div>
+      <div class="cw-modal" id="cw-modal" hidden><div class="cw-sheet" id="cw-sheet"></div></div>
     </div>
 
     <div id="area-chip" hidden>
