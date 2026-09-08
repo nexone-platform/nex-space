@@ -41,6 +41,8 @@ model User {
   memberships   Membership[]
   sent          Message[]    @relation("MessagesSent")
   booked        Booking[]    @relation("BookingsHosted")
+  recorded      Recording[]      @relation("RecordingsStarted")
+  spoken        RecordingTrack[] @relation("RecordingsSpoken")
   invitesSent   Invite[]     @relation("InvitesSent")
   goingTo       BookingGoing[]
   received      Message[]    @relation("MessagesReceived")
@@ -72,6 +74,7 @@ model Workspace {
   messages    Message[]
   attachments Attachment[]
   bookings    Booking[]
+  recordings  Recording[]
   invites     Invite[]
   maps        WorkspaceMap[]
   visits      Visit[]
@@ -367,4 +370,88 @@ model Visit {
   areas       String?
 
   @@index([workspaceId, joinedAt])
+}
+
+/// A meeting somebody recorded.
+///
+/// The audio is not one file of the room. Each person's own browser records
+/// their own microphone and nothing else, which is what makes "who said this"
+/// answerable without ever comparing voices — attribution comes from the
+/// account that uploaded the track. Comparing voices to identify a speaker
+/// would be biometric data under PDPA s.26 and would need its own explicit
+/// consent; this design never creates any.
+model Recording {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  mapSlug       String    @default("main")
+  roomId        String
+  roomLabel     String
+  /// who pressed record. Null once their account is gone — the record of the
+  /// meeting belongs to the space, the personal data in it does not.
+  startedById   String?
+  startedBy     User?     @relation("RecordingsStarted", fields: [startedById], references: [id], onDelete: SetNull)
+  startedByName String
+  startedAt     DateTime  @default(now())
+  endedAt       DateTime?
+  /// When the audio is swept. Deliberately short and separate from the text:
+  /// the recording is the risky artefact and the summary is the useful one, so
+  /// they should not have the same life.
+  audioUntil    DateTime
+  /// waiting | transcribing | done | failed — what the queue has managed so far
+  state         String    @default("waiting")
+  /// the whole meeting, in one piece. Read by owners and admins only.
+  summary       String?
+  failure       String?
+  tracks        RecordingTrack[]
+  reads         RecordingRead[]
+
+  @@index([workspaceId, startedAt])
+  @@index([state])
+  @@index([audioUntil])
+}
+
+/// One person's own microphone, and what they agreed to.
+///
+/// A row exists as soon as somebody is asked, before they have answered, so
+/// that "asked and said no" is a different state from "never asked" — the
+/// second is a notice that failed to reach somebody, and it should be visible.
+model RecordingTrack {
+  id          String    @id @default(cuid())
+  recordingId String
+  recording   Recording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+  /// Required. A guest has no account to attribute speech to and cannot be
+  /// recorded here at all, which the notice says out loud.
+  userId      String
+  user        User      @relation("RecordingsSpoken", fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  /// asked | yes | no. Audio is refused for anything but "yes".
+  consent     String    @default("asked")
+  answeredAt  DateTime?
+  path        String?
+  bytes       Int       @default(0)
+  seconds     Int       @default(0)
+  /// what this person said, and their half of the summary
+  transcript  String?
+  digest      String?
+
+  @@unique([recordingId, userId])
+  @@index([recordingId])
+}
+
+/// Who opened a recording, and when.
+///
+/// Accountability is a requirement rather than a nicety: a controller has to be
+/// able to say who saw what. Written for reads of the audio and of the full
+/// summary — not for somebody looking at their own part, which is a right they
+/// exercise rather than an access worth policing.
+model RecordingRead {
+  id          String    @id @default(cuid())
+  recordingId String
+  recording   Recording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+  userId      String
+  what        String    @default("summary")
+  at          DateTime  @default(now())
+
+  @@index([recordingId, at])
 }

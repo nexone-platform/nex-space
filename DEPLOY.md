@@ -340,6 +340,60 @@ everything else, so it is included in whatever backs that file up — and it is 
 part of the database that grows on its own, which makes it the first reason this
 deployment will eventually want Postgres.
 
+## Recording a meeting
+
+**Every browser records its own microphone and nothing else.** That one choice
+is what makes the rest of this lawful and simple:
+
+- **Nobody is identified by their voice.** "Who said this" is answered by which
+  account uploaded the track. Comparing voices to work out who spoke would be
+  biometric data under PDPA s.26, needing its own explicit consent and its own
+  security obligations. None is ever created here.
+- **Consent means something.** Declining removes your voice and the meeting
+  carries on. With one mixed recording of the room, "no" would mean leaving.
+- **A refusal cannot be overridden by somebody else's device**, because no
+  device records anybody but its owner.
+- **The summary can be broken down by person** without any speaker separation,
+  because the tracks were already separate.
+
+```dotenv
+RECORDING_AUDIO_DAYS="7"      # the voices
+RECORDING_TEXT_DAYS="180"     # the notes
+RECORDING_MAX_MINUTES="240"
+```
+
+The two windows are deliberately different. The audio is the risky artefact —
+it is somebody's voice, it cannot be redacted, and nobody goes back to it. The
+text is the useful one. One window would force a choice between losing the
+notes and holding the voices.
+
+### What the code has to keep doing
+
+These are obligations, not preferences, and `test:rec` asks the running API
+about each of them:
+
+| | |
+|---|---|
+| Nobody is recorded before they answer | audio is refused while consent is `asked` |
+| A refusal is written down | so it can be told from a notice that never arrived |
+| Withdrawal reaches the disk | turning consent off **deletes** what was uploaded |
+| Everyone may read their own words | s.30 — staff read the meeting, you read your row |
+| Anyone may erase their own voice | leaving the rest of the meeting standing |
+| Audio expires on its own | a sweep, not a policy document |
+| Reads of the summary are logged | accountability, for staff reads only |
+
+Disabling the consent check, the withdrawal deletion and the summary access
+split fails seven of them.
+
+**Guests are not recorded at all** — there is no account to attribute speech
+to, and no way for them to exercise a right over it afterwards. The notice
+says so.
+
+**Nothing is sent abroad.** Transcription and summarising run on this machine,
+so there is no cross-border transfer to justify: the PDPC has designated no
+country as adequate, and every alternative would mean standard contractual
+clauses and a disclosure in the consent.
+
 ## Room bookings, in a real calendar
 
 Two ways out, and they are for different things.

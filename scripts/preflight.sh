@@ -180,7 +180,7 @@ done
 # failed when the dev stack is down.
 say "End-to-end suites"
 if curl -sf --max-time 2 http://localhost:3001/health >/dev/null 2>&1; then
-  for suite in roles desk guests totp ice chat dm profile presence areas map stats emote roles2 files calendar invite invited; do
+  for suite in roles desk guests totp ice chat dm profile presence areas map stats emote roles2 files calendar invite invited rec; do
     if out=$(npm run --silent "test:$suite" -w @nexspace/api 2>&1); then
       ok "$suite — $(echo "$out" | grep -oE '[0-9]+ passed, [0-9]+ failed' | tail -1)"
     else

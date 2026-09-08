@@ -11,6 +11,11 @@ import { sendLoginCode, mailEnabled, sendInvite, sendBooking, mailCheck } from "
 import { iceConfig, turnEnabled } from "./ice";
 import { mapDocProblem } from "./mapValidate";
 import {
+  AUDIO_KEEP_DAYS, TEXT_KEEP_DAYS, MAX_MINUTES as REC_MAX_MINUTES, TRACK_MAX_BYTES,
+  acceptsAudio, audioExt, dropRecordingDir, dropTrack, mayRecord, noticeFacts,
+  putTrack, trackPath,
+} from "./recordings.js";
+import {
   newTotpSecret, otpauthUri, qrDataUrl, checkTotp,
   newRecoveryCodes, hashRecoveryCodes, countRecoveryCodes, spendRecoveryCode,
 } from "./totp";
@@ -38,11 +43,15 @@ app.use(cors());
  */
 const jsonBody = express.json({ limit: "8mb" }); // maps can be large
 const UPLOAD_PATH = /^\/workspaces\/[^/]+\/uploads$/;
+// A recording track is audio bytes, not JSON, and it is far larger than a chat
+// attachment. Same reasoning as above: the exact route, not a suffix.
+const TRACK_PATH = /^\/workspaces\/[^/]+\/recordings\/[^/]+\/track$/;
 app.use((req, res, next) =>
   // The exact route, not "ends with /uploads": a space is free to be called
   // "uploads", and a suffix test would then skip JSON parsing for every
   // settings request that space ever makes.
-  req.method === "POST" && UPLOAD_PATH.test(req.path) ? next() : jsonBody(req, res, next));
+  req.method === "POST" && (UPLOAD_PATH.test(req.path) || TRACK_PATH.test(req.path))
+    ? next() : jsonBody(req, res, next));
 
 // Express 4 does not catch rejections thrown inside async handlers: a single
 // failing query would take the whole process down, and every request would 502
@@ -1750,6 +1759,330 @@ async function sweepOldBookings() {
   if (count) console.log(`[calendar] removed ${count} booking(s) older than the keep window`);
 }
 
+// ---- recording a meeting ------------------------------------------------------
+
+type RecordingRow = Awaited<ReturnType<typeof prisma.recording.findUniqueOrThrow>> & {
+  tracks: Awaited<ReturnType<typeof prisma.recordingTrack.findUniqueOrThrow>>[];
+};
+
+/**
+ * What a recording looks like to somebody allowed to see it.
+ *
+ * Two shapes, and the difference between them is the whole access rule. Staff
+ * get the meeting; anybody else gets their own row out of it and nothing else.
+ * PDPA s.30 gives a person the right to their own data, so "only admins may
+ * read any of it" would be refusing a right rather than withholding a
+ * permission — those are not the same thing and only one of them is allowed.
+ */
+function recordingView(r: RecordingRow, me: { id: string } | null, staff: boolean) {
+  const mine = r.tracks.find((t) => t.userId === me?.id);
+  return {
+    id: r.id,
+    room: r.roomLabel,
+    startedBy: r.startedByName,
+    startedAt: r.startedAt.toISOString(),
+    endedAt: r.endedAt?.toISOString() ?? null,
+    state: r.state,
+    audioUntil: r.audioUntil.toISOString(),
+    // Said out loud in every listing: a summary drawn from three voices out of
+    // five is a different document from one drawn from all five, and the person
+    // reading it is the one who needs to know that.
+    people: r.tracks.map((t) => ({
+      name: t.name,
+      consent: t.consent,
+      seconds: t.seconds,
+      recorded: t.consent === "yes" && t.seconds > 0,
+    })),
+    summary: staff ? r.summary : undefined,
+    mine: mine
+      ? { consent: mine.consent, transcript: mine.transcript, digest: mine.digest }
+      : undefined,
+    canRead: staff,
+  };
+}
+
+/**
+ * Start recording this room.
+ *
+ * Making the recording does not record anybody. Every person answers for
+ * themselves, and until they do there is nothing of theirs in it — the row that
+ * exists for them says "asked", which is neither "no" nor "never told".
+ */
+app.post("/workspaces/:slug/recordings", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can) return res.status(403).json({ error: "forbidden" });
+
+  const body = (req.body ?? {}) as Record<string, string>;
+  const mapSlug = body.mapSlug || "main";
+  const roomId = body.roomId || "";
+  const roomLabel = body.roomLabel || "";
+  if (!roomId || !roomLabel) return res.status(400).json({ error: "which room" });
+
+  // One at a time per room. Two recordings of one meeting is two half-records,
+  // and two sets of consent to keep straight afterwards.
+  const already = await prisma.recording.findFirst({
+    where: { workspaceId: w.id, mapSlug, roomId, endedAt: null },
+  });
+  if (already) return res.status(409).json({ error: "already recording", id: already.id });
+
+  const rec = await prisma.recording.create({
+    data: {
+      workspaceId: w.id, mapSlug, roomId, roomLabel,
+      startedById: can.me.id, startedByName: can.me.name,
+      audioUntil: new Date(Date.now() + AUDIO_KEEP_DAYS * DAY_MS),
+      // Whoever presses record is in it. Anything else is somebody holding a
+      // microphone to a room they have stepped out of.
+      tracks: { create: { userId: can.me.id, name: can.me.name, consent: "asked" } },
+    },
+    include: { tracks: true },
+  });
+  console.log(`[recording] ${rec.id} started in ${roomLabel} by ${can.me.name}`);
+  res.json({ recording: recordingView(rec as RecordingRow, can.me, true), notice: noticeFacts() });
+});
+
+/**
+ * Yes you may record me, or no you may not.
+ *
+ * Either answer writes the row, so a refusal can be told apart from a notice
+ * that never arrived. Changing your mind is allowed and takes effect at once:
+ * turning it to no deletes whatever was already uploaded, because withdrawing
+ * consent while the audio stays put is not withdrawal.
+ */
+app.post("/workspaces/:slug/recordings/:id/consent", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can) return res.status(403).json({ error: "forbidden" });
+
+  const rec = await prisma.recording.findUnique({ where: { id: req.params.id } });
+  if (!rec || rec.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
+
+  const yes = (req.body ?? {}).consent === true;
+  const consent = yes ? "yes" : "no";
+  const before = await prisma.recordingTrack.findUnique({
+    where: { recordingId_userId: { recordingId: rec.id, userId: can.me.id } },
+  });
+  const track = await prisma.recordingTrack.upsert({
+    where: { recordingId_userId: { recordingId: rec.id, userId: can.me.id } },
+    update: { consent, answeredAt: new Date() },
+    create: {
+      recordingId: rec.id, userId: can.me.id, name: can.me.name,
+      consent, answeredAt: new Date(),
+    },
+  });
+  if (!yes && before?.path) {
+    dropTrack(before.path);
+    await prisma.recordingTrack.update({
+      where: { id: track.id },
+      data: { path: null, bytes: 0, seconds: 0, transcript: null, digest: null },
+    });
+    console.log(`[recording] ${rec.id}: ${can.me.name} withdrew consent, their audio was deleted`);
+  }
+  res.json({ ok: true, consent, notice: noticeFacts() });
+});
+
+/**
+ * Stop it.
+ *
+ * The person who started it, or somebody who runs the space — a meeting whose
+ * recorder walked out should not stay recording until the retention sweep.
+ */
+app.post("/workspaces/:slug/recordings/:id/stop", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can) return res.status(403).json({ error: "forbidden" });
+
+  const rec = await prisma.recording.findUnique({ where: { id: req.params.id } });
+  if (!rec || rec.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
+  const staff = can.role === "owner" || can.role === "admin";
+  if (rec.startedById !== can.me.id && !staff) {
+    return res.status(403).json({ error: "not yours to stop" });
+  }
+  if (rec.endedAt) return res.json({ ok: true, already: true });
+
+  const done = await prisma.recording.update({
+    where: { id: rec.id },
+    data: { endedAt: new Date() },
+    include: { tracks: true },
+  });
+  res.json({ recording: recordingView(done as RecordingRow, can.me, staff) });
+});
+
+/**
+ * One person's own microphone, after the fact.
+ *
+ * Refused unless that person said yes, and refused once the meeting is long
+ * over: an upload arriving hours later is not the meeting anybody agreed to,
+ * whatever it happens to contain.
+ */
+app.post(
+  "/workspaces/:slug/recordings/:id/track",
+  // Raw bytes, like the uploads route. Skipping the JSON parser is not enough —
+  // something still has to read the body, and without this the handler sees
+  // nothing and reports an empty upload for a track that was sent in full.
+  express.raw({ type: () => true, limit: TRACK_MAX_BYTES + 1024 }),
+  ((err: { type?: string; status?: number }, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (err?.type === "entity.too.large" || err?.status === 413) {
+      return res.status(413).json({ error: `that is longer than one track may be` });
+    }
+    return next(err);
+  }) as express.ErrorRequestHandler,
+  async (req: express.Request, res: express.Response) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can) return res.status(403).json({ error: "forbidden" });
+
+  const rec = await prisma.recording.findUnique({ where: { id: req.params.id } });
+  if (!rec || rec.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
+
+  const track = await prisma.recordingTrack.findUnique({
+    where: { recordingId_userId: { recordingId: rec.id, userId: can.me.id } },
+  });
+  if (!track) return res.status(403).json({ error: "you were not asked" });
+  if (!mayRecord(track.consent)) {
+    return res.status(403).json({ error: "you did not agree to be recorded" });
+  }
+  if (track.path) return res.status(409).json({ error: "already uploaded" });
+  const age = Date.now() - +(rec.endedAt ?? rec.startedAt);
+  if (age > REC_MAX_MINUTES * 60_000) return res.status(410).json({ error: "too late" });
+
+  const mime = String(req.header("content-type") || "").split(";")[0].trim();
+  if (!acceptsAudio(mime)) return res.status(415).json({ error: "not an audio format we take" });
+  const bytes = req.body as Buffer;
+  if (!Buffer.isBuffer(bytes) || !bytes.length) return res.status(400).json({ error: "empty" });
+  if (bytes.length > TRACK_MAX_BYTES) return res.status(413).json({ error: "too long" });
+
+  const seconds = Math.max(0, Math.min(REC_MAX_MINUTES * 60, Number(req.query.seconds) || 0));
+  const rel = trackPath(rec.id, audioExt(mime));
+  putTrack(rel, bytes);
+    await prisma.recordingTrack.update({
+      where: { id: track.id },
+      data: { path: rel, bytes: bytes.length, seconds },
+    });
+    res.json({ ok: true, bytes: bytes.length, seconds });
+  },
+);
+
+/** the meetings this space has recorded */
+app.get("/workspaces/:slug/recordings", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can) return res.status(403).json({ error: "forbidden" });
+  const staff = can.role === "owner" || can.role === "admin";
+
+  // Staff see the space's meetings; everybody else sees the ones they were in.
+  // Not a listing of what other people said — a way to reach your own row.
+  const rows = await prisma.recording.findMany({
+    where: {
+      workspaceId: w.id,
+      ...(staff ? {} : { tracks: { some: { userId: can.me.id } } }),
+    },
+    include: { tracks: true },
+    orderBy: { startedAt: "desc" },
+    take: 100,
+  });
+  res.json({
+    recordings: rows.map((r) => recordingView(r as RecordingRow, can.me, staff)),
+    canRead: staff,
+    notice: noticeFacts(),
+  });
+});
+
+/** one meeting, and the read is written down */
+app.get("/workspaces/:slug/recordings/:id", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can) return res.status(403).json({ error: "forbidden" });
+
+  const rec = await prisma.recording.findUnique({
+    where: { id: req.params.id }, include: { tracks: true },
+  });
+  if (!rec || rec.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
+  const staff = can.role === "owner" || can.role === "admin";
+  const wasThere = rec.tracks.some((t) => t.userId === can.me.id);
+  if (!staff && !wasThere) return res.status(403).json({ error: "you were not in this meeting" });
+
+  // Only reading somebody else's words is worth writing down. Logging a person
+  // reading their own would make exercising a right look like an incident.
+  if (staff) {
+    await prisma.recordingRead.create({
+      data: { recordingId: rec.id, userId: can.me.id, what: "summary" },
+    });
+  }
+  res.json({ recording: recordingView(rec as RecordingRow, can.me, staff) });
+});
+
+/**
+ * Delete.
+ *
+ * Whoever runs the space may drop the whole meeting; anybody who was in it may
+ * drop their own voice out and leave the rest standing. The second is the
+ * erasure right, and it has to work without asking anybody's permission.
+ */
+app.delete("/workspaces/:slug/recordings/:id", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can) return res.status(403).json({ error: "forbidden" });
+
+  const rec = await prisma.recording.findUnique({
+    where: { id: req.params.id }, include: { tracks: true },
+  });
+  if (!rec || rec.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
+  const staff = can.role === "owner" || can.role === "admin";
+  const mineOnly = String(req.query.mine || "") === "1";
+
+  if (mineOnly || !staff) {
+    const mine = rec.tracks.find((t) => t.userId === can.me.id);
+    if (!mine) return res.status(403).json({ error: "you were not in this meeting" });
+    dropTrack(mine.path);
+    await prisma.recordingTrack.update({
+      where: { id: mine.id },
+      data: { path: null, bytes: 0, seconds: 0, transcript: null, digest: null, consent: "no" },
+    });
+    console.log(`[recording] ${rec.id}: ${can.me.name} removed their own voice`);
+    return res.json({ ok: true, mine: true });
+  }
+
+  for (const t of rec.tracks) dropTrack(t.path);
+  dropRecordingDir(rec.id);
+  await prisma.recording.delete({ where: { id: rec.id } });
+  res.json({ ok: true });
+});
+
+/**
+ * Audio goes first, and the notes outlive it.
+ *
+ * Two sweeps rather than one, because they answer two questions: how long a
+ * voice is worth keeping, and how long a meeting is worth remembering. Both
+ * are set in the environment, so a deployment can be stricter than this one.
+ */
+async function sweepRecordings() {
+  const now = new Date();
+  const stale = await prisma.recordingTrack.findMany({
+    where: { path: { not: null }, recording: { audioUntil: { lt: now } } },
+    select: { id: true, path: true, recordingId: true },
+  });
+  for (const t of stale) {
+    dropTrack(t.path);
+    await prisma.recordingTrack.update({ where: { id: t.id }, data: { path: null, bytes: 0 } });
+  }
+  for (const id of new Set(stale.map((t) => t.recordingId))) dropRecordingDir(id);
+  if (stale.length) {
+    console.log(`[recording] swept ${stale.length} audio track(s) past their keep window`);
+  }
+
+  const old = new Date(Date.now() - TEXT_KEEP_DAYS * DAY_MS);
+  const { count } = await prisma.recording.deleteMany({ where: { startedAt: { lt: old } } });
+  if (count) console.log(`[recording] removed ${count} recording(s) past the text keep window`);
+}
+
 // ---- files in the chat ------------------------------------------------------
 
 /**
@@ -2463,6 +2796,10 @@ void sweepOldInvites().catch((e) => console.error("[invite] sweep failed:", e));
 setInterval(() => void sweepOldInvites().catch((e) => console.error("[invite] sweep failed:", e)), DAY_MS).unref();
 void sweepOldBookings().catch((e) => console.error("[calendar] sweep failed:", e));
 setInterval(() => void sweepOldBookings().catch((e) => console.error("[calendar] sweep failed:", e)), DAY_MS).unref();
+// Retention is not a policy document, it is a timer. Run at start-up as well,
+// so a deployment that was off for a week does not keep last week's voices.
+void sweepRecordings().catch((e) => console.error("[recording] sweep failed:", e));
+setInterval(() => void sweepRecordings().catch((e) => console.error("[recording] sweep failed:", e)), 6 * 60 * 60 * 1000).unref();
 void sweepOrphanUploads().catch((e) => console.error("[uploads] sweep failed:", e));
 setInterval(() => void sweepOrphanUploads().catch((e) => console.error("[uploads] sweep failed:", e)), DAY_MS).unref();
 
