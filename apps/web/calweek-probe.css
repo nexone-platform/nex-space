@@ -1,10 +1,56 @@
+      :root {
+        --surface: #fff; --surface-2: #f7f8fa; --surface-3: #f2f3f6;
+        /* a pane that lets a tint through without taking the wrong side in dark mode */
+        --glass: #ffffffc4;
+        --border: #eceef2; --border-2: #e2e4ea; --border-3: #b9bcc4;
+        --text: #1c1b22; --text-2: #4b5563; --text-3: #6b7280;
+        /* --muted carries captions and secondary labels all over the app, and at
+           #8a8f98 every one of them sat at 3.06:1 on white — under the line for
+           text this size. Darkened once here rather than patched per panel. */
+        --muted: #6b7079; --faint: #9aa0a8; --fainter: #b9bec7;
+        --accent: #4f46e5; --accent-hover: #4338ca; --accent-2: #6f7ce0;
+        --accent-soft: #eef1fb; --accent-ink: #4348a8; --accent-line: #cdd4f5;
+        --teal: #2bb3a3; --teal-hover: #249e90; --teal-ink: #16897a; --teal-soft: #7fd8cc;
+        --danger: #e5484d; --danger-soft: #fdecec; --danger-ink: #c33b3f;
+        --warn-soft: #fff8e6; --warn-line: #f5e2b0; --warn-ink: #7a5b12;
+      }
+      html[data-theme="dark"] {
+        --surface: #1e1f26; --surface-2: #24262e; --surface-3: #2b2d36;
+        --glass: #1e1f26cc;
+        --border: #33353f; --border-2: #3c3f4a; --border-3: #565a66;
+        --text: #eceef2; --text-2: #c5c9d2; --text-3: #a7acb6;
+        --muted: #9298a2; --faint: #8b9098; --fainter: #70757f;
+        /* the accents are lifted a step: indigo at #4f46e5 sinks into a dark
+           ground, and the softs have to become tints rather than pastels */
+        --accent: #6d63ec; --accent-hover: #7d74f0; --accent-2: #8b95f0;
+        --accent-soft: #2c2f4d; --accent-ink: #b6bbf5; --accent-line: #494e7d;
+        --teal: #2bb3a3; --teal-hover: #35c7b5; --teal-ink: #4fd8c6; --teal-soft: #2f5f58;
+        --danger: #f2555a; --danger-soft: #3a2528; --danger-ink: #ff9297;
+        --warn-soft: #352c17; --warn-line: #5b4a20; --warn-ink: #e2c078;
+      }
+      /* Controls we never gave a background of their own fall back to the
+         browser's white — invisible in light mode, a white slab in dark. This
+         fills that gap only: :where() carries no specificity, so every rule
+         below still wins over it. */
+      :where(#auth-overlay, #spaces-overlay, #wiz-overlay, #ws-modal, #sec-modal, #prefs-modal, #sidebar)
+      :where(input, select, textarea, button) {
+        background: var(--surface); color: var(--text); border: 1px solid var(--border-2);
+        border-radius: 9px; font-family: "Segoe UI", sans-serif;
+      }
+      :where(input, textarea)::placeholder { color: var(--faint); }
+      /* Corner radii, as three steps rather than the sixteen different values
+         this file had grown. Cards and dialogs share one so the family looks
+         related; boxes nested inside them take the smaller one, which is what
+         keeps a rounded thing inside a rounded thing from looking wrong. */
+      :root { --r-card: 20px; --r-box: 14px; --r-ctl: 12px; }
+      html, body { margin: 0
       /* ---- the week, at the size a week needs ----
          The sidebar list answers "what is on today" in a column 320px wide. A
          week does not fit in a column, so this is its own surface: seven days
          across, hours down, and the bookings drawn where they actually fall. */
       #cal-view {
         position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column;
-        background: var(--bg); color: var(--text);
+        background: var(--surface-3); color: var(--text);
       }
       #cal-view[hidden] { display: none; }
       .cw-head {
@@ -77,6 +123,33 @@
         font-variant-numeric: tabular-nums;
       }
 
+      /* what a booking says when you click it */
+      .cw-pop {
+        position: fixed; z-index: 42; width: 268px; padding: 12px 13px;
+        border: 1px solid var(--border-2); border-radius: var(--r-box);
+        background: var(--surface); box-shadow: 0 14px 40px #00000026;
+        font-family: "Segoe UI", sans-serif; color: var(--text);
+      }
+      .cw-pop[hidden] { display: none; }
+      .cw-pop h4 { margin: 0 0 2px; font-size: 14.5px; font-weight: 600; }
+      .cw-pop dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px;
+        margin: 8px 0 0; font-size: 12.5px; }
+      .cw-pop dt { color: var(--muted); }
+      .cw-pop dd { margin: 0; }
+      .cw-pop-acts { display: flex; gap: 6px; margin-top: 12px; }
+      .cw-pop-acts button {
+        flex: 1; height: 30px; border-radius: 9px; cursor: pointer;
+        font: 500 12.5px "Segoe UI", sans-serif;
+        border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2);
+      }
+      .cw-pop-acts button:hover { border-color: var(--accent-line); color: var(--accent); }
+      .cw-pop-acts .on { border-color: var(--teal); background: var(--teal); color: #fff; }
+      .cw-pop-acts .drop { border-color: var(--danger); color: var(--danger); flex: 0 0 auto; padding: 0 12px; }
+      .cw-pop-acts .drop:hover { background: var(--danger); color: #fff; }
+      /* Asked in place rather than in a browser dialog, which cannot say which
+         booking it means and cannot be styled to look like it belongs here. */
+      .cw-pop-sure { margin-top: 10px; font-size: 12.5px; color: var(--danger-ink); }
+      .cw-pop-sure[hidden] { display: none; }
       /* the booking form, borrowed from the sidebar and put in the middle */
       .cw-modal {
         position: fixed; inset: 0; z-index: 41; display: grid; place-items: start center;
@@ -96,10 +169,18 @@
         .cw-day span { display: none; }
       }
 
-
-:root { --bg:#fbfbfd; --surface:#fff; --surface-2:#f4f5f8; --text:#1c1b22; --text-2:#4a4a55;
-  --text-3:#6b7280; --faint:#a3a7b0; --border:#e8e9ee; --border-2:#dcdde3;
-  --teal:#2bb3a3; --accent:#2bb3a3; --accent-line:#2bb3a3; --danger:#e05252; }
-body { margin:0; font-family:"Segoe UI",sans-serif; }
-#cal-view { position: static; height: 78vh; border-bottom: 2px solid #ccc; }
-.cal-form { padding: 18px; }
+      .cal-msg { min-height: 15px; font-size: 12px; color: var(--teal-ink); }
+      .cal-msg.err { color: var(--danger); }
+      .cal-form { display: flex; flex-direction: column; gap: 7px; padding: 10px;
+      .cal-form[hidden] { display: none; }
+      .cal-row { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--text-3); }
+      .cal-row input, .cal-row select {
+      .cal-row input:focus, .cal-row select:focus { border-color: var(--teal); }
+      .cal-actions { display: flex; gap: 7px; justify-content: flex-end; margin-top: 2px; }
+      .cal-save, .cal-cancel {
+      .cal-save { border: none; background: var(--teal); color: #fff; }
+      .cal-cancel { border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2); }
+body { margin: 0; font-family: "Segoe UI", sans-serif; background: var(--surface-3); }
+/* the only thing the probe changes: it is a page, not an overlay, so it can be
+   seen next to its own results */
+#cal-view { position: static; height: 78vh; border-bottom: 2px solid var(--border-3); }

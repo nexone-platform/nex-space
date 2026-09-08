@@ -100,6 +100,17 @@ else
   echo "$out" | grep -E '^! FAIL' | head -6 | sed 's/^/        /' >&2
 fi
 
+# A colour that does not exist is not an error anywhere — the declaration is
+# simply dropped, and whatever is behind shows through. The week view shipped a
+# transparent background that way, with the office map coming up through it.
+say "Stylesheet"
+if out=$(node scripts/css-vars-check.mjs 2>&1); then
+  ok "$out"
+else
+  bad "a colour is used and never defined"
+  echo "$out" | sed 's/^/        /' >&2
+fi
+
 # A few rules have to hold in more than one app, and the three apps build from
 # separate Docker contexts so none can import from another. Copies plus a guard.
 say "Duplicated files"

@@ -380,6 +380,11 @@ const EN: Record<string, string> = {
     "An external calendar re-reads this every few hours — a new booking is emailed to whoever is coming straight away",
 
   // ---- the week, drawn at the size a week needs ----
+  "เวลา": "Time",
+  "ผู้จอง": "Booked by",
+  "ยืนยันยกเลิก": "Yes, cancel it",
+  "ยกเลิกการประชุมนี้? คนที่จะไปจะได้รับอีเมลแจ้ง":
+    "Cancel this meeting? Everyone coming gets an email about it",
   "จองห้องเวลานี้": "Book a room at this time",
   "สัปดาห์ก่อนหน้า": "Previous week",
   "สัปดาห์ถัดไป": "Next week",

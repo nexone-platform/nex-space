@@ -48,6 +48,7 @@ const BOOKINGS = [
 
 const form = document.getElementById("fake-form");
 let composedAt = null;
+const cancelled = [], rsvp = [];
 const week = mountCalendarWeek({
   bookings: () => BOOKINGS,
   rooms: () => [{ id: "r1", label: "ห้องประชุมใหญ่" }],
@@ -55,6 +56,9 @@ const week = mountCalendarWeek({
   compose: (startAt) => { composedAt = startAt; form.hidden = false; },
   foot: document.createElement("div"),
   canBook: () => true,
+  canManage: () => true,
+  cancel: async (id) => { cancelled.push(id); return true; },
+  going: async (id, coming) => { rsvp.push(`${id}:${coming}`); return true; },
 });
 
 week.open();
@@ -116,6 +120,43 @@ for (const [label, h, m] of [["รีวิวสปรินต์", 10, 0], ["
   const want = Math.round(wanted(h, m));
   ok("now is drawn at now", Math.abs(got - want) <= 2, `${got}px, wanted ${want}px for ${chip.textContent}`);
 }
+
+// ---- clicking a booking ----------------------------------------------------
+const mine = Array.from(grid.querySelectorAll(".cw-ev")).find((e) => e.textContent.includes("รีวิวสปรินต์"));
+mine.click();
+const pop = document.querySelector(".cw-pop");
+ok("clicking a booking says what it is", pop && !pop.hidden, pop ? "shown" : "no card");
+ok("  · naming the room, the time and who booked it",
+  ["ห้องประชุมใหญ่", "10:00", "ชาลิสา"].every((x) => pop.textContent.includes(x)));
+{
+  const r = pop.getBoundingClientRect();
+  ok("  · on screen, not off the edge",
+    r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth + 1 && r.bottom <= window.innerHeight + 1,
+    `${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.right)}x${Math.round(r.bottom)} in ${window.innerWidth}x${window.innerHeight}`);
+}
+// cancelling asks first
+const drop = Array.from(pop.querySelectorAll("button")).find((b) => b.textContent === "ยกเลิก");
+ok("  · and offers to cancel it", !!drop);
+drop.click();
+ok("  · which asks before doing it", cancelled.length === 0 && !pop.querySelector(".cw-pop-sure").hidden);
+pop.querySelector(".cw-pop-sure button").click();
+await new Promise((r) => setTimeout(r, 30));
+ok("  · then cancels the one that was clicked", cancelled.join() === "a", cancelled.join() || "nothing");
+ok("  · and puts the card away", pop.hidden);
+
+// a booking that is not mine, with nothing to manage, offers no cancel
+const theirs = Array.from(grid.querySelectorAll(".cw-ev")).find((e) => e.textContent.includes("คุยกับลูกค้า"));
+theirs.click();
+ok("RSVP is offered on a meeting still to come",
+  Array.from(pop.querySelectorAll("button")).some((b) => b.textContent.startsWith("จะไป")));
+Array.from(pop.querySelectorAll("button")).find((b) => b.textContent.startsWith("จะไป")).click();
+await new Promise((r) => setTimeout(r, 30));
+ok("  · and says so to the panel, not to its own copy of anything", rsvp.join() === "b:true", rsvp.join() || "nothing");
+
+// clicking elsewhere puts it away
+theirs.click();
+document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+ok("clicking away closes the card", pop.hidden);
 
 const before = document.getElementById("cw-month").textContent;
 document.getElementById("cw-next").click();

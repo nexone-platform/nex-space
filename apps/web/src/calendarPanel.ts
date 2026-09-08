@@ -392,6 +392,26 @@ export function mountCalendarPanel(o: CalendarOptions) {
      */
     form,
     compose: (startAt?: Date, roomId?: string) => openForm(startAt, roomId),
+    /**
+     * The two things that change a booking, without the buttons around them.
+     *
+     * The week view needs both and should not carry its own copy of the fetch,
+     * the toast or the reload — a second one would drift, and the drift would
+     * be silent for whichever surface was used less.
+     */
+    cancel: async (id: string) => {
+      const r = await send("DELETE", `/${encodeURIComponent(id)}`);
+      if (r.ok) { say(t("ยกเลิกแล้ว")); await refresh(); return true; }
+      say(t("ยกเลิกไม่สำเร็จ"), true);
+      return false;
+    },
+    going: async (id: string, coming: boolean) => {
+      const r = await send("POST", `/${encodeURIComponent(id)}/going`, { going: coming });
+      if (r.ok) { await refresh(); return true; }
+      say(t("บันทึกไม่สำเร็จ"), true);
+      return false;
+    },
+    canManage: () => o.canManage?.() ?? false,
     /** the subscribe row, filled in once the address is known */
     foot,
     dispose: () => { window.clearInterval(tick); window.clearInterval(poll); },

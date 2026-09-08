@@ -352,7 +352,7 @@
          across, hours down, and the bookings drawn where they actually fall. */
       #cal-view {
         position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column;
-        background: var(--bg); color: var(--text);
+        background: var(--surface-3); color: var(--text);
       }
       #cal-view[hidden] { display: none; }
       .cw-head {
@@ -425,6 +425,33 @@
         font-variant-numeric: tabular-nums;
       }
 
+      /* what a booking says when you click it */
+      .cw-pop {
+        position: fixed; z-index: 42; width: 268px; padding: 12px 13px;
+        border: 1px solid var(--border-2); border-radius: var(--r-box);
+        background: var(--surface); box-shadow: 0 14px 40px #00000026;
+        font-family: "Segoe UI", sans-serif; color: var(--text);
+      }
+      .cw-pop[hidden] { display: none; }
+      .cw-pop h4 { margin: 0 0 2px; font-size: 14.5px; font-weight: 600; }
+      .cw-pop dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px;
+        margin: 8px 0 0; font-size: 12.5px; }
+      .cw-pop dt { color: var(--muted); }
+      .cw-pop dd { margin: 0; }
+      .cw-pop-acts { display: flex; gap: 6px; margin-top: 12px; }
+      .cw-pop-acts button {
+        flex: 1; height: 30px; border-radius: 9px; cursor: pointer;
+        font: 500 12.5px "Segoe UI", sans-serif;
+        border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2);
+      }
+      .cw-pop-acts button:hover { border-color: var(--accent-line); color: var(--accent); }
+      .cw-pop-acts .on { border-color: var(--teal); background: var(--teal); color: #fff; }
+      .cw-pop-acts .drop { border-color: var(--danger); color: var(--danger); flex: 0 0 auto; padding: 0 12px; }
+      .cw-pop-acts .drop:hover { background: var(--danger); color: #fff; }
+      /* Asked in place rather than in a browser dialog, which cannot say which
+         booking it means and cannot be styled to look like it belongs here. */
+      .cw-pop-sure { margin-top: 10px; font-size: 12.5px; color: var(--danger-ink); }
+      .cw-pop-sure[hidden] { display: none; }
       /* the booking form, borrowed from the sidebar and put in the middle */
       .cw-modal {
         position: fixed; inset: 0; z-index: 41; display: grid; place-items: start center;

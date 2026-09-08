@@ -1613,6 +1613,9 @@ export class OfficeScene extends Phaser.Scene {
       compose: (at, roomId) => panel.compose(at, roomId),
       foot: panel.foot,
       canBook: () => this.myRole !== "guest",
+      canManage: () => panel.canManage(),
+      cancel: (id) => panel.cancel(id),
+      going: (id, coming) => panel.going(id, coming),
       onOpen: () => void panel.refresh(),
     });
   }

@@ -46,6 +46,10 @@ export type WeekOptions = {
   /** the subscribe row, which belongs wherever the calendar is being read */
   foot: HTMLElement;
   canBook: () => boolean;
+  canManage?: () => boolean;
+  /** the panel's own actions, so this view carries no second copy of them */
+  cancel?: (id: string) => Promise<boolean>;
+  going?: (id: string, coming: boolean) => Promise<boolean>;
   onOpen?: () => void;
 };
 
@@ -97,6 +101,89 @@ export function mountCalendarWeek(o: WeekOptions) {
   }
   modalEl.addEventListener("click", (e) => { if (e.target === modalEl) release(); });
 
+
+  // ---- what a booking says when you click it --------------------------------
+  /**
+   * A card beside the booking, not a dialog in the middle.
+   *
+   * The week is the context — which day, what is next to it — and a modal takes
+   * that away to say less. It closes on the next click anywhere else, so it
+   * never has to be dismissed on purpose.
+   */
+  const pop = document.createElement("div");
+  pop.className = "cw-pop";
+  pop.hidden = true;
+  document.body.appendChild(pop);
+  const hidePop = () => { pop.hidden = true; };
+  document.addEventListener("pointerdown", (e) => {
+    if (!pop.hidden && !pop.contains(e.target as Node)) hidePop();
+  });
+
+  function showPop(b: Booking, near: HTMLElement) {
+    const from = new Date(b.startsAt), to = new Date(b.endsAt);
+    const over = +to < Date.now();
+    pop.innerHTML = "";
+
+    const h = document.createElement("h4");
+    h.textContent = b.title;
+    const dl = document.createElement("dl");
+    const row = (k: string, v: string) => {
+      const dt = document.createElement("dt"); dt.textContent = k;
+      const dd = document.createElement("dd"); dd.textContent = v;
+      dl.append(dt, dd);
+    };
+    row(t("ห้อง"), b.room);
+    row(t("เวลา"), `${from.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })} ${hhmm(from)}–${hhmm(to)}`);
+    row(t("ผู้จอง"), b.host);
+    row(t("จะไป"), String(b.going));
+    pop.append(h, dl);
+
+    const acts = document.createElement("div");
+    acts.className = "cw-pop-acts";
+    if (!over && o.going) {
+      const going = document.createElement("button");
+      going.className = b.imGoing ? "on" : "";
+      going.textContent = b.imGoing ? t("จะไป ✓") : t("จะไป");
+      going.onclick = async () => {
+        going.disabled = true;
+        await o.going!(b.id, !b.imGoing);
+        hidePop();
+      };
+      acts.appendChild(going);
+    }
+    if (o.cancel && (b.mine || o.canManage?.())) {
+      const drop = document.createElement("button");
+      drop.className = "drop";
+      drop.textContent = t("ยกเลิก");
+      const sure = document.createElement("div");
+      sure.className = "cw-pop-sure";
+      sure.hidden = true;
+      const yes = document.createElement("button");
+      yes.className = "drop";
+      yes.textContent = t("ยืนยันยกเลิก");
+      yes.onclick = async () => {
+        yes.disabled = true;
+        await o.cancel!(b.id);
+        hidePop();
+      };
+      sure.append(document.createTextNode(t("ยกเลิกการประชุมนี้? คนที่จะไปจะได้รับอีเมลแจ้ง") + " "), yes);
+      drop.onclick = () => { sure.hidden = !sure.hidden; };
+      acts.appendChild(drop);
+      pop.append(acts, sure);
+    } else {
+      pop.append(acts);
+    }
+
+    // Beside the booking, and never off the edge of the window.
+    pop.hidden = false;
+    const at = near.getBoundingClientRect();
+    const box = pop.getBoundingClientRect();
+    const left = Math.min(Math.max(8, at.right + 8), window.innerWidth - box.width - 8);
+    const top = Math.min(Math.max(8, at.top), window.innerHeight - box.height - 8);
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
+  }
+
   // ---- drawing --------------------------------------------------------------
   function draw() {
     const days = Array.from({ length: 7 }, (_, i) => addDays(anchor, i));
@@ -121,6 +208,7 @@ export function mountCalendarWeek(o: WeekOptions) {
 
     gridEl.style.gridTemplateColumns = cols;
     gridEl.style.gridTemplateRows = `repeat(${LAST_HOUR - FIRST_HOUR + 1}, ${ROW_PX}px)`;
+    hidePop();                      // it points at an element about to be replaced
     gridEl.innerHTML = "";
     for (let h = FIRST_HOUR; h <= LAST_HOUR; h++) {
       const label = document.createElement("div");
@@ -171,6 +259,7 @@ export function mountCalendarWeek(o: WeekOptions) {
       detail.textContent = `${hhmm(from)}–${hhmm(to)} · ${b.room}`;
       el.append(title, detail);
       el.title = `${b.title}\n${hhmm(from)}–${hhmm(to)} · ${b.room}\n${b.host}`;
+      el.onclick = (e) => { e.stopPropagation(); showPop(b, el); };
       column(over, col, el);
     }
 
@@ -239,6 +328,7 @@ export function mountCalendarWeek(o: WeekOptions) {
   };
   const close = () => {
     if (!modalEl.hidden) release();
+    hidePop();
     view.hidden = true;
   };
 
