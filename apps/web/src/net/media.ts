@@ -40,6 +40,14 @@ export interface MediaManager {
   readonly screenMediaStream: MediaStream | undefined;
   /** this user's own camera stream, for drawing yourself alongside the others */
   readonly cameraStream: MediaStream | undefined;
+  /**
+   * The microphone this call is using, for anything that needs to record it.
+   *
+   * The same track, not a second capture. A recording taken from its own
+   * getUserMedia would keep running while the person is muted here, which is a
+   * microphone that is off recording somebody who thinks it is off.
+   */
+  readonly micStream: MediaStream | undefined;
 
   devices(): Promise<{ mics: MediaDeviceInfo[]; cams: MediaDeviceInfo[]; speakers: MediaDeviceInfo[] }>;
   setMic(id: string): Promise<void> | void;

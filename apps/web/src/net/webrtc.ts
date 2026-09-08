@@ -288,6 +288,14 @@ export class WebRTCManager implements MediaManager {
   /** the same object every time — see the note on wrap() in livekit.ts */
   private wrapped = new WeakMap<MediaStreamTrack, MediaStream>();
 
+  /** the microphone this call is using — the same track, never a second capture */
+  get micStream(): MediaStream | undefined {
+    if (!this.micTrack) return undefined;
+    let s = this.wrapped.get(this.micTrack);
+    if (!s) { s = new MediaStream([this.micTrack]); this.wrapped.set(this.micTrack, s); }
+    return s;
+  }
+
   /** what our own camera is producing, if it is on at all */
   get cameraStream(): MediaStream | undefined {
     if (!this.camTrack || !this.camOn) return undefined;

@@ -1,0 +1,100 @@
+      :root {
+        --surface: #fff; --surface-2: #f7f8fa; --surface-3: #f2f3f6;
+        /* a pane that lets a tint through without taking the wrong side in dark mode */
+        --glass: #ffffffc4;
+        --border: #eceef2; --border-2: #e2e4ea; --border-3: #b9bcc4;
+        --text: #1c1b22; --text-2: #4b5563; --text-3: #6b7280;
+        /* --muted carries captions and secondary labels all over the app, and at
+           #8a8f98 every one of them sat at 3.06:1 on white — under the line for
+           text this size. Darkened once here rather than patched per panel. */
+        --muted: #6b7079; --faint: #9aa0a8; --fainter: #b9bec7;
+        --accent: #4f46e5; --accent-hover: #4338ca; --accent-2: #6f7ce0;
+        --accent-soft: #eef1fb; --accent-ink: #4348a8; --accent-line: #cdd4f5;
+        --teal: #2bb3a3; --teal-hover: #249e90; --teal-ink: #16897a; --teal-soft: #7fd8cc;
+        --danger: #e5484d; --danger-soft: #fdecec; --danger-ink: #c33b3f;
+        --warn-soft: #fff8e6; --warn-line: #f5e2b0; --warn-ink: #7a5b12;
+      }
+      html[data-theme="dark"] {
+        --surface: #1e1f26; --surface-2: #24262e; --surface-3: #2b2d36;
+        --glass: #1e1f26cc;
+        --border: #33353f; --border-2: #3c3f4a; --border-3: #565a66;
+        --text: #eceef2; --text-2: #c5c9d2; --text-3: #a7acb6;
+        --muted: #9298a2; --faint: #8b9098; --fainter: #70757f;
+        /* the accents are lifted a step: indigo at #4f46e5 sinks into a dark
+           ground, and the softs have to become tints rather than pastels */
+        --accent: #6d63ec; --accent-hover: #7d74f0; --accent-2: #8b95f0;
+        --accent-soft: #2c2f4d; --accent-ink: #b6bbf5; --accent-line: #494e7d;
+        --teal: #2bb3a3; --teal-hover: #35c7b5; --teal-ink: #4fd8c6; --teal-soft: #2f5f58;
+        --danger: #f2555a; --danger-soft: #3a2528; --danger-ink: #ff9297;
+        --warn-soft: #352c17; --warn-line: #5b4a20; --warn-ink: #e2c078;
+      }
+      /* Controls we never gave a background of their own fall back to the
+         browser's white — invisible in light mode, a white slab in dark. This
+         fills that gap only: :where() carries no specificity, so every rule
+         below still wins over it. */
+      :where(#auth-overlay, #spaces-overlay, #wiz-overlay, #ws-modal, #sec-modal, #prefs-modal, #sidebar)
+      :where(input, select, textarea, button) {
+        background: var(--surface); color: var(--text); border: 1px solid var(--border-2);
+        border-radius: 9px; font-family: "Segoe UI", sans-serif;
+      }
+      :where(input, textarea)::placeholder { color: var(--faint); }
+      /* Corner radii, as three steps rather than the sixteen different values
+         this file had grown. Cards and dialogs share one so the family looks
+         related; boxes nested inside them take the smaller one, which is what
+         keeps a rounded thing inside a rounded thing from looking wrong. */
+      :root { --r-card: 20px; --r-box: 14px; --r-ctl: 12px; }
+      /* ---- being recorded ----
+         Two pieces, and both of them are the law rather than the design. The
+         card has to be readable — a notice nobody can read is not a notice —
+         so it is a sheet of its own rather than the one-line nudge card. The
+         chip has to be impossible to miss for as long as it is true. */
+      #rec-ask {
+        position: fixed; inset: 0; z-index: 44; display: grid; place-items: start center;
+        padding-top: 10vh; background: #0007; backdrop-filter: blur(3px);
+      }
+      #rec-ask[hidden] { display: none; }
+      .rec-sheet {
+        width: min(92vw, 420px); padding: 22px 22px 18px; border-radius: var(--r-card);
+        background: var(--surface); color: var(--text);
+        box-shadow: 0 22px 60px #00000040; font-family: "Segoe UI", sans-serif;
+      }
+      .rec-sheet h3 { margin: 0 0 2px; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+      .rec-sheet h3 i { width: 10px; height: 10px; border-radius: 50%; background: var(--danger);
+        animation: rec-pulse 1.6s ease-in-out infinite; }
+      .rec-sheet > p { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+      .rec-facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px;
+        margin: 0 0 16px; padding: 12px; border-radius: var(--r-box);
+        background: var(--surface-2); font-size: 12.5px; }
+      .rec-facts dt { color: var(--muted); }
+      .rec-facts dd { margin: 0; }
+      .rec-note { margin: 0 0 14px; font-size: 12px; color: var(--warn-ink);
+        background: var(--warn-soft); border: 1px solid var(--warn-line);
+        border-radius: var(--r-box); padding: 8px 10px; }
+      .rec-note[hidden] { display: none; }
+      .rec-acts { display: flex; gap: 8px; }
+      .rec-acts button { flex: 1; height: 38px; border-radius: var(--r-ctl); cursor: pointer;
+        font: 600 13.5px "Segoe UI", sans-serif; }
+      .rec-yes { border: none; background: var(--teal); color: #fff; }
+      .rec-yes:hover { background: var(--teal-hover); }
+      .rec-no { border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2); }
+      .rec-no:hover { border-color: var(--danger); color: var(--danger); }
+
+      /* true for as long as it is true, and gone the moment it is not */
+      #rec-chip {
+        position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 43;
+        display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+        border-radius: 999px; background: var(--danger); color: #fff;
+        font: 600 12.5px "Segoe UI", sans-serif; box-shadow: 0 6px 20px #00000030;
+      }
+      #rec-chip[hidden] { display: none; }
+      #rec-chip i { width: 8px; height: 8px; border-radius: 50%; background: #fff;
+        animation: rec-pulse 1.6s ease-in-out infinite; }
+      #rec-chip button { border: none; background: #ffffff2e; color: #fff; cursor: pointer;
+        border-radius: 8px; padding: 3px 9px; font: 600 12px "Segoe UI", sans-serif; }
+      #rec-chip button:hover { background: #ffffff45; }
+      #rec-chip small { opacity: .85; font-weight: 500; font-variant-numeric: tabular-nums; }
+      body.has-screenshare #rec-chip, body.in-meeting #rec-chip { top: 58px; }
+      @keyframes rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+
+body { margin: 0; font-family: "Segoe UI", sans-serif; background: var(--surface-3); }

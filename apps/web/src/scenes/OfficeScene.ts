@@ -13,6 +13,7 @@ import { t, onLangChange, locale } from "../i18n";
 import { ACCEPT, type Attach, attachNode, humanSize, upload } from "../net/attach";
 import { type Booking, clock, mountCalendarPanel } from "../calendarPanel";
 import { mountCalendarWeek } from "../calendarView";
+import { mountRecording } from "../recordPanel";
 import { setupPrefsModal } from "../prefsModal";
 import { roleLabel } from "../memberPanel";
 import { propPath, type Interactive } from "./mapThemes";
@@ -969,6 +970,9 @@ export class OfficeScene extends Phaser.Scene {
       const tilesEl = document.getElementById("tiles");
       if (tilesEl) {
         this.webrtc = await this.createMedia(room, tilesEl);
+        // After the media manager, because it records the microphone that
+        // manager is using rather than opening a second one of its own.
+        this.mountRecording(room);
         this.wireAvButtons();
         // a device that will not open used to fail into console.warn, so the
         // button simply stayed dark and nobody knew why
@@ -1579,6 +1583,36 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private calWeek?: ReturnType<typeof mountCalendarWeek>;
+  private rec?: ReturnType<typeof mountRecording>;
+
+  /**
+   * The recording notice, and this browser's own microphone.
+   *
+   * Wired to the room rather than to the API alone, because the one thing only
+   * the room can do is tell everybody standing in it at the same moment. The
+   * API owns whether a recording exists and who agreed; this owns the asking.
+   */
+  private mountRecording(room: Room) {
+    this.rec = mountRecording({
+      api: AUTH_API,
+      workspace: WORKSPACE,
+      token: localStorage.getItem("nexspace-token") ?? undefined,
+      mic: () => this.webrtc?.micStream,
+      micOn: () => !!this.webrtc?.micOn,
+      // Only a private area is a room somebody can be recorded in. Standing on
+      // the open floor is not a meeting, and there is nobody to ask.
+      room: () => {
+        const a = this.myArea;
+        return a ? { id: a.id, label: t(a.label), mapSlug: MAP_KEY } : null;
+      },
+      announce: (msg) => { try { room.send("rec", msg); } catch { /* ws closing */ } },
+      say: (text, bad) => this.toast(text, bad ? "warn" : "info"),
+      me: () => this.myName,
+    });
+    room.onMessage("rec", (m: { on: boolean; id: string; roomId: string; by: string }) => {
+      this.rec?.told(m);
+    });
+  }
 
   private mountCalendar() {
     const host = document.getElementById("view-cal");
@@ -3033,6 +3067,7 @@ export class OfficeScene extends Phaser.Scene {
     callBtn?.addEventListener("click", () => this.setViewMode("call"));
     // the same switch, reachable from the map without hunting for the top bar
     document.getElementById("meet-enter")?.addEventListener("click", () => this.setViewMode("call"));
+    document.getElementById("meet-record")?.addEventListener("click", () => void this.rec?.start());
 
     document.getElementById("btn-fullscreen")?.addEventListener("click", () => {
       if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
@@ -3359,6 +3394,13 @@ export class OfficeScene extends Phaser.Scene {
     const now = this.areaOf(this.player.x, this.player.y);
     if (now?.id === this.myArea?.id) return;
     this.myArea = now;
+
+    // The offer to record follows the same rule as the offer to book: it
+    // appears when somebody is standing in a room, because that is when they
+    // decide they want it. A guest is never offered it — they cannot be
+    // recorded at all, so a button that starts one would be a lie.
+    const recBtn = document.getElementById("meet-record") as HTMLButtonElement | null;
+    if (recBtn) recBtn.hidden = !now || this.myRole === "guest" || !this.rec?.canRecord();
 
     const chip = document.getElementById("area-chip");
     if (chip) {

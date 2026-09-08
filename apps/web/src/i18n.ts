@@ -379,6 +379,41 @@ const EN: Record<string, string> = {
   "ปฏิทินภายนอกจะดึงข้อมูลใหม่ทุกไม่กี่ชั่วโมง — การจองใหม่จะถูกส่งทางอีเมลให้คนที่กดว่าจะไปทันที":
     "An external calendar re-reads this every few hours — a new booking is emailed to whoever is coming straight away",
 
+  // ---- being recorded ----
+  "บันทึกการประชุม": "Record the meeting",
+  "กำลังจะบันทึกเสียงการประชุม": "This meeting is about to be recorded",
+  "ไม่ยินยอม": "Do not record me",
+  "ยินยอมให้บันทึกเสียงของฉัน": "Record my microphone",
+  "กำลังบันทึกเสียง": "Recording",
+  "หยุดบันทึก": "Stop recording",
+  "ไมค์ของคุณปิดอยู่ ระหว่างที่ปิดจะไม่มีเสียงของคุณถูกบันทึก":
+    "Your microphone is off — nothing of yours is recorded while it stays off",
+  "{name} เริ่มบันทึกการประชุมนี้ — คุณเลือกได้ว่าจะให้บันทึกเสียงของคุณหรือไม่":
+    "{name} started recording this meeting — you choose whether your own voice is in it",
+  "{name} กำลังบันทึกการประชุมนี้": "{name} is recording this meeting",
+  "บันทึกอะไร": "What is recorded",
+  "เพื่ออะไร": "What for",
+  "ใครดูได้": "Who can read it",
+  "เก็บนานแค่ไหน": "Kept for",
+  "เสียง {a} วัน · ข้อความ {b} วัน": "audio {a} days · text {b} days",
+  "ส่งออกนอกประเทศ": "Sent abroad",
+  "มี": "Yes",
+  "ไม่มี — ประมวลผลบนเซิร์ฟเวอร์ขององค์กร": "No — processed on the organisation's own server",
+  "สิทธิ์ของคุณ": "Your rights",
+  "เสียงของคุณจะไม่ถูกบันทึก": "Your voice will not be recorded",
+  "ยินยอมแล้ว — เปิดไมค์เมื่อไหร่จึงจะเริ่มบันทึกเสียงของคุณ":
+    "Agreed — nothing of yours is recorded until you turn your microphone on",
+  "กำลังบันทึกเสียงของคุณ": "Recording your microphone",
+  "บันทึกคำตอบไม่สำเร็จ": "Could not save your answer",
+  "ส่งเสียงของคุณแล้ว": "Your recording has been sent",
+  "ส่งเสียงไม่สำเร็จ: {why}": "Could not send your recording: {why}",
+  "ยืนอยู่ในห้องประชุมก่อนจึงจะบันทึกได้": "Stand in a meeting room to record one",
+  "เบราว์เซอร์นี้บันทึกเสียงไม่ได้": "This browser cannot record audio",
+  "เริ่มบันทึกเสียงไม่สำเร็จ": "Could not start recording",
+  "ไม่มีเสียงให้บันทึก": "There was no audio to send",
+  "ห้องนี้กำลังถูกบันทึกอยู่แล้ว": "This room is already being recorded",
+  "เริ่มบันทึกไม่สำเร็จ": "Could not start the recording",
+
   // ---- the week, drawn at the size a week needs ----
   "เวลา": "Time",
   "ผู้จอง": "Booked by",

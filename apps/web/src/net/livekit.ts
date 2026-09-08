@@ -138,6 +138,11 @@ export class LiveKitManager implements MediaManager {
     return s;
   }
 
+  get micStream(): MediaStream | undefined {
+    return this.wrap(this.room.localParticipant
+      .getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack);
+  }
+
   get cameraStream(): MediaStream | undefined {
     const t = this.room.localParticipant.getTrackPublication(Track.Source.Camera)?.track?.mediaStreamTrack;
     return this.camOn ? this.wrap(t) : undefined;

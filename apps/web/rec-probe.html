@@ -1,0 +1,146 @@
+<meta charset="utf-8">
+<title>recording consent probe</title>
+<!--
+  The consent flow, driven through the real panel.
+
+  Open http://localhost:5173/rec-probe.html with the web dev server running.
+  The markup and the stylesheet are lifted out of index.html rather than
+  written again here — a probe that invents its own environment is how a
+  colour that did not exist shipped once already.
+
+  fetch is replaced, so nothing reaches an API and nothing is recorded. What is
+  being checked is the half that a mistake in would mean recording somebody who
+  said no: who is asked, what they are told, and what happens on each answer.
+-->
+<link rel="stylesheet" href="/rec-probe.css">
+<div id="stage"></div>
+<pre id="out" style="font:13px/1.6 ui-monospace,monospace;padding:16px;white-space:pre-wrap"></pre>
+<script type="module">
+const frag = await (await fetch("/rec-probe.frag.html")).text();
+document.getElementById("stage").innerHTML = frag;
+
+const { mountRecording } = await import("/src/recordPanel.ts");
+
+const out = document.getElementById("out");
+const log = (s) => { out.textContent += s + "\n"; };
+let pass = 0, fail = 0;
+const ok = (n, c, x = "") => { c ? pass++ : fail++; log(`${c ? "  PASS" : "! FAIL"}  ${n}${x ? "  " + x : ""}`); };
+const tick = () => new Promise((r) => setTimeout(r, 20));
+
+const NOTICE = {
+  what: "เสียงจากไมโครโฟนของคุณเท่านั้น ระบบไม่ได้อัดเสียงคนอื่นจากเครื่องคุณ",
+  why: "เพื่อถอดเป็นข้อความและสรุปการประชุม",
+  who: "สรุปทั้งฉบับเปิดดูได้เฉพาะเจ้าของพื้นที่และผู้ดูแล · คุณเปิดดูส่วนของคุณเองได้เสมอ",
+  audioDays: 7, textDays: 180, abroad: false,
+  rights: "ถอนความยินยอมและลบเสียงของคุณออกได้ทุกเมื่อ",
+};
+
+// what the API was asked to do
+const calls = [];
+globalThis.fetch = async (url, init = {}) => {
+  const u = String(url);
+  calls.push(`${init.method ?? "GET"} ${u.replace(/^.*\/workspaces\/[^/]+/, "")}`);
+  const body = u.endsWith("/recordings") && init.method === "POST"
+    ? { recording: { id: "rec_1" }, notice: NOTICE }
+    : u.endsWith("/recordings") ? { notice: NOTICE, recordings: [] }
+    : { ok: true };
+  return { ok: true, status: 200, json: async () => body };
+};
+
+// stand-ins for the room and the microphone
+let where = { id: "meeting-1", label: "ห้องประชุมใหญ่", mapSlug: "main" };
+let micIsOn = true;
+const announced = [];
+const said = [];
+const silentMic = () => {
+  const ac = new AudioContext(), d = ac.createMediaStreamDestination();
+  const o = ac.createOscillator(); o.connect(d); o.start();
+  return d.stream;
+};
+
+const rec = mountRecording({
+  api: "http://x", workspace: "test", token: "t",
+  mic: () => (micIsOn ? silentMic() : undefined),
+  micOn: () => micIsOn,
+  room: () => where,
+  announce: (m) => announced.push(m),
+  say: (text, bad) => said.push(`${bad ? "!" : " "}${text}`),
+  me: () => "ชาลิสา",
+});
+
+const ask = document.getElementById("rec-ask");
+const chip = document.getElementById("rec-chip");
+const facts = () => document.getElementById("rec-facts").textContent;
+
+log("\nasking to record a meeting\n");
+
+// ---- pressing record ---------------------------------------------------------
+await rec.start();
+await tick();
+ok("pressing record asks the person who pressed it too", !ask.hidden,
+  "starting one is not the same as agreeing to be in one");
+ok("  · and tells the room at the same moment", announced.length === 1 && announced[0].on === true,
+  JSON.stringify(announced[0] ?? null));
+ok("  · and the red chip is up", !chip.hidden);
+
+// ---- what the notice actually says -------------------------------------------
+ok("the notice says only your own microphone is recorded", facts().includes("ไมโครโฟนของคุณเท่านั้น"));
+ok("  · how long the audio is kept, separately from the text",
+  facts().includes("7") && facts().includes("180"), facts().replace(/\s+/g, " ").slice(0, 90));
+ok("  · that nothing leaves the country", facts().includes("ไม่มี"));
+ok("  · and that consent can be withdrawn", facts().includes("ถอนความยินยอม"));
+ok("  · all of it from the server, not written into the page",
+  calls.some((c) => c === "POST /recordings"), calls.join(" | "));
+
+// ---- saying no ---------------------------------------------------------------
+document.getElementById("rec-no").click();
+await tick();
+ok("saying no closes the sheet", ask.hidden);
+ok("  · tells the server", calls.includes("POST /recordings/rec_1/consent"), calls.join(" | "));
+ok("  · and says so plainly", said.some((s) => s.includes("จะไม่ถูกบันทึก")), said.join(" / "));
+
+// ---- being told by somebody else ---------------------------------------------
+calls.length = 0; said.length = 0;
+rec.told({ on: true, id: "rec_2", roomId: "meeting-1", by: "สมชาย" });
+await tick();
+ok("somebody else starting one asks you as well", !ask.hidden);
+ok("  · naming who started it", document.getElementById("rec-ask-sub").textContent.includes("สมชาย"),
+  document.getElementById("rec-ask-sub").textContent);
+
+// ---- and not asking people who are not there ---------------------------------
+document.getElementById("rec-no").click();
+await tick();
+where = { id: "kitchen", label: "ครัว", mapSlug: "main" };
+rec.told({ on: true, id: "rec_3", roomId: "meeting-1", by: "สมชาย" });
+await tick();
+ok("a recording in another room does not ask you anything", ask.hidden,
+  "you are not in that room and are not being recorded");
+where = { id: "meeting-1", label: "ห้องประชุมใหญ่", mapSlug: "main" };
+
+// ---- a muted microphone is said out loud, before the answer ------------------
+const micNote = document.getElementById("rec-mic-off");
+micIsOn = false;
+rec.told({ on: true, id: "rec_4", roomId: "meeting-1", by: "สมชาย" });
+await tick();
+ok("consenting while muted is warned about first", !micNote.hidden,
+  "recording silence is not what somebody thinks they agreed to");
+document.getElementById("rec-yes").click();
+await tick();
+ok("  · and saying yes with no microphone records nothing yet",
+  said.some((s) => s.includes("เปิดไมค์เมื่อไหร่")), said.join(" / "));
+micIsOn = true;
+rec.told({ on: false, id: "rec_4", roomId: "meeting-1", by: "สมชาย" });
+await tick();
+
+// ---- outside a room ----------------------------------------------------------
+said.length = 0;
+where = null;
+await rec.start();
+await tick();
+ok("standing on the open floor is not a meeting to record", said.some((s) => s.startsWith("!")),
+  said.join(" / "));
+ok("  · and nothing was told to the room", announced.every((m) => m.id !== undefined));
+
+log(`\n${pass} passed, ${fail} failed\n`);
+document.title = fail ? `FAIL ${fail}` : `PASS ${pass}`;
+</script>

@@ -512,6 +512,29 @@ export class OfficeRoom extends Room<OfficeState> {
       this.broadcast("screenshare", { from: client.sessionId, on: !!msg.on, screenId: msg.screenId });
     });
 
+    /**
+     * Somebody is recording a room, or has stopped.
+     *
+     * Relayed rather than decided here: the API owns whether a recording exists
+     * and who consented, and a second copy of that in this process would be a
+     * second answer to give when the two disagree. What this adds is the part
+     * only the room can do — telling everybody in it, at once, that it started.
+     *
+     * Broadcast to the whole space, not to the room, because this server does
+     * not track who is standing where with the precision the notice needs.
+     * Each client shows the card only if it is in that room, which it knows.
+     */
+    this.onMessage("rec", (client, msg: { on?: boolean; id?: string; roomId?: string; by?: string }) => {
+      if (!msg?.id || typeof msg.roomId !== "string") return;
+      this.broadcast("rec", {
+        from: client.sessionId,
+        on: !!msg.on,
+        id: String(msg.id),
+        roomId: msg.roomId,
+        by: String(msg.by ?? ""),
+      });
+    });
+
     // WebRTC signaling relay (P2P mesh) — forward offer/answer/ICE to the target peer
     this.onMessage("signal", (client, msg: { to: string; kind: string; payload: unknown }) => {
       if (!msg?.to) return;
