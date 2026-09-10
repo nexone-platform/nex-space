@@ -179,8 +179,15 @@ done
 # These talk to a running API and game server, so they are skipped rather than
 # failed when the dev stack is down.
 say "End-to-end suites"
-if curl -sf --max-time 2 http://localhost:3001/health >/dev/null 2>&1; then
-  for suite in roles desk guests totp ice chat dm profile presence areas map stats emote roles2 files calendar invite invited rec; do
+# Both, not just the API. Several of these speak to the game server, and gating
+# on the API alone ran them against a port with nothing on it — four suites
+# reported as failures for a reason that had nothing to do with the change being
+# checked, which is worse than not running them.
+api_up=0; game_up=0
+curl -sf --max-time 2 http://localhost:3001/health >/dev/null 2>&1 && api_up=1
+curl -sf --max-time 2 http://localhost:2567 >/dev/null 2>&1 && game_up=1
+if [ "$api_up" = 1 ] && [ "$game_up" = 1 ]; then
+  for suite in roles desk guests totp ice chat dm profile presence areas map stats emote roles2 files calendar invite invited rec summary; do
     if out=$(npm run --silent "test:$suite" -w @nexspace/api 2>&1); then
       ok "$suite — $(echo "$out" | grep -oE '[0-9]+ passed, [0-9]+ failed' | tail -1)"
     else
@@ -188,8 +195,12 @@ if curl -sf --max-time 2 http://localhost:3001/health >/dev/null 2>&1; then
       echo "$out" | grep -E '^! FAIL|passed,' | head -8 | sed 's/^/        /' >&2
     fi
   done
+elif [ "$api_up" = 0 ] && [ "$game_up" = 0 ]; then
+  warn "skipped — the dev stack is down (npm run dev)"
+elif [ "$api_up" = 0 ]; then
+  warn "skipped — no API on :3001 (npm run dev)"
 else
-  warn "skipped — no API on :3001 (start it with npm run dev)"
+  warn "skipped — no game server on :2567 (npm run dev); several suites need it"
 fi
 
 # ------------------------------------------------------------------ repo state

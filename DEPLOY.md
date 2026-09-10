@@ -367,6 +367,40 @@ it is somebody's voice, it cannot be redacted, and nobody goes back to it. The
 text is the useful one. One window would force a choice between losing the
 notes and holding the voices.
 
+### Turning it into a summary
+
+Two HTTP calls to something else, in the shapes everybody already implements —
+`/v1/audio/transcriptions` and `/v1/chat/completions`. That is the one decision
+that keeps this from being about a vendor: faster-whisper-server or whisper.cpp
+serves the first, Ollama the second, and **where they run is a line in `.env`**.
+
+```dotenv
+ASR_URL="http://10.0.0.9:8000"
+ASR_MODEL="typhoon-asr-realtime"
+LLM_URL="http://10.0.0.9:11434"
+LLM_MODEL="scb10x/llama3.2-typhoon2-1b-instruct"
+```
+
+Unset, and recordings are still made and simply not summarised — the same shape
+mail takes. `GET /workspaces/<slug>/summary-check` (owner or admin) says whether
+both answer, because "configured" and "working" look identical from a settings
+page.
+
+**Do not point these at this machine.** It carries the company's authentication
+and attendance servers alongside the app, and is already swapping: `dockerd`
+alone holds about 3.5 GB to run containers that together use 118 MB. A model
+belongs on a host of its own, which is what the setting is for.
+
+**One call per person, then one for the meeting** — not one call returning
+everybody in a structured block. A small model asked for JSON describing five
+speakers produces something that parses about as often as not, and the failure
+is silent: a summary that has quietly lost somebody. Short prompts with one job
+each are what a small model is good at, and a small model is what fits here.
+
+Nothing is picked up until every consented track has arrived or enough time has
+passed that one is not coming. Starting earlier would summarise a meeting with
+a person missing from it and call that finished.
+
 ### What the code has to keep doing
 
 These are obligations, not preferences, and `test:rec` asks the running API

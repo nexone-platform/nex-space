@@ -15,6 +15,7 @@ import {
   acceptsAudio, audioExt, dropRecordingDir, dropTrack, mayRecord, noticeFacts,
   putTrack, trackPath,
 } from "./recordings.js";
+import { runSummaryQueue, summariesReady, summaryCheck } from "./summarise.js";
 import {
   newTotpSecret, otpauthUri, qrDataUrl, checkTotp,
   newRecoveryCodes, hashRecoveryCodes, countRecoveryCodes, spendRecoveryCode,
@@ -167,6 +168,20 @@ app.get("/auth/config", (_req, res) =>
  * Owner and admin only: the answer names the relay host and repeats its refusal
  * verbatim, and neither is anybody else's business.
  */
+/**
+ * Is transcription and summarising configured, and does it answer?
+ *
+ * The same shape as the mail check, for the same reason: "it is set up" and "it
+ * works" are different states that look identical from a settings page.
+ */
+app.get("/workspaces/:slug/summary-check", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const staff = await inviteStaff(req, w);
+  if (!staff) return res.status(403).json({ error: "forbidden" });
+  res.json(await summaryCheck());
+});
+
 app.get("/workspaces/:slug/mail-check", async (req, res) => {
   const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
   if (!w) return res.status(404).json({ error: "not found" });
@@ -2799,6 +2814,15 @@ setInterval(() => void sweepOldBookings().catch((e) => console.error("[calendar]
 // Retention is not a policy document, it is a timer. Run at start-up as well,
 // so a deployment that was off for a week does not keep last week's voices.
 void sweepRecordings().catch((e) => console.error("[recording] sweep failed:", e));
+// One meeting at a time, and only when something is configured to do the work.
+// Off by default: an unconfigured deployment records perfectly well and simply
+// has no summary, which is the same shape mail takes.
+if (summariesReady) {
+  console.log("[summary] queue on");
+  setInterval(() => void runSummaryQueue(), 30_000).unref();
+} else {
+  console.log("[summary] no transcription service configured — recordings are kept, not summarised");
+}
 setInterval(() => void sweepRecordings().catch((e) => console.error("[recording] sweep failed:", e)), 6 * 60 * 60 * 1000).unref();
 void sweepOrphanUploads().catch((e) => console.error("[uploads] sweep failed:", e));
 setInterval(() => void sweepOrphanUploads().catch((e) => console.error("[uploads] sweep failed:", e)), DAY_MS).unref();
