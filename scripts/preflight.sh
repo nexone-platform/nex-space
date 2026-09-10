@@ -183,9 +183,13 @@ say "End-to-end suites"
 # on the API alone ran them against a port with nothing on it — four suites
 # reported as failures for a reason that had nothing to do with the change being
 # checked, which is worse than not running them.
+# Answering at all, not answering 200: the game server has no route at / and
+# returns 404 there, which -f treats as failure. That gate was therefore never
+# once satisfied, and every suite below it had been quietly skipping.
+listening() { [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "$1")" != "000" ]; }
 api_up=0; game_up=0
-curl -sf --max-time 2 http://localhost:3001/health >/dev/null 2>&1 && api_up=1
-curl -sf --max-time 2 http://localhost:2567 >/dev/null 2>&1 && game_up=1
+listening http://localhost:3001/health && api_up=1
+listening http://localhost:2567/ && game_up=1
 if [ "$api_up" = 1 ] && [ "$game_up" = 1 ]; then
   for suite in roles desk guests totp ice chat dm profile presence areas map stats emote roles2 files calendar invite invited rec summary; do
     if out=$(npm run --silent "test:$suite" -w @nexspace/api 2>&1); then

@@ -7,6 +7,13 @@
       "runtimeArgs": ["run", "dev"],
       "port": 5173,
       "cwd": "apps/web"
+    },
+    {
+      "name": "game-server",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 2567,
+      "cwd": "apps/game-server"
     }
   ]
 }
