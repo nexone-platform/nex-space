@@ -379,6 +379,37 @@ const EN: Record<string, string> = {
   "ปฏิทินภายนอกจะดึงข้อมูลใหม่ทุกไม่กี่ชั่วโมง — การจองใหม่จะถูกส่งทางอีเมลให้คนที่กดว่าจะไปทันที":
     "An external calendar re-reads this every few hours — a new booking is emailed to whoever is coming straight away",
 
+  // ---- reading a summary ----
+  "สรุปการประชุม": "Meeting summaries",
+  "สรุปแล้ว": "Summarised",
+  "กำลังถอดเสียง": "Transcribing",
+  "สรุปไม่สำเร็จ": "Could not summarise",
+  "รอสรุป": "Waiting",
+  "ยังไม่มีการประชุมที่บันทึกไว้": "No meetings have been recorded yet",
+  "การประชุมที่บันทึกไว้จะมาอยู่ที่นี่": "Recorded meetings will appear here",
+  "{n} คน": "{n} people",
+  "เริ่มโดย {name}": "started by {name}",
+  "ไม่มีเสียงของ {names} ในบันทึกนี้ — สรุปจึงไม่ครบทุกคนที่อยู่ในห้อง":
+    "{names} are not in this recording — the summary does not cover everybody who was in the room",
+  "สรุปไม่สำเร็จ — ผู้ดูแลระบบตรวจสอบได้จากบันทึกของเซิร์ฟเวอร์":
+    "Summarising failed — an administrator can see why in the server log",
+  "ยังถอดเสียงไม่เสร็จ กลับมาดูใหม่อีกครั้ง": "Still transcribing — come back shortly",
+  "แยกตามคน": "By person",
+  "บันทึกไว้": "recorded",
+  "ไม่ได้บันทึก": "not recorded",
+  "ยังไม่มีสรุปของคนนี้": "No summary for this person yet",
+  "ส่วนของคุณ": "Your part",
+  "ยังไม่มีสรุปส่วนของคุณ": "Your part has not been summarised yet",
+  "ถ้อยคำของคุณ": "What you said",
+  "ลบเสียงและถ้อยคำของฉันออก": "Remove my voice and my words",
+  "ลบการประชุมนี้ทั้งหมด": "Delete this whole meeting",
+  "ลบเสียงและถ้อยคำของคุณออกจากการประชุมนี้? ส่วนของคนอื่นจะยังอยู่":
+    "Remove your voice and words from this meeting? Everybody else's stays.",
+  "ลบการประชุมนี้ทั้งหมด รวมทุกเสียงและทุกสรุป?":
+    "Delete this whole meeting, every voice and every summary in it?",
+  "เปิดสรุปไม่สำเร็จ": "Could not open that summary",
+  "ลบแล้ว": "Deleted",
+
   // ---- being recorded ----
   "บันทึกการประชุม": "Record the meeting",
   "กำลังจะบันทึกเสียงการประชุม": "This meeting is about to be recorded",

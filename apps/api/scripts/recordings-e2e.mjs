@@ -216,6 +216,21 @@ await post(`${REC}/${rec.id}/stop`, {}, owner.token);
   ok("  · and somebody who was in none sees none", (strangerList.recordings ?? []).length === 0);
 }
 {
+  // Each person's summary is for the people whose job it is; each person's
+  // transcript stays with the person who said it.
+  const staffSees = await get(`${REC}/${rec.id}`, admin.token);
+  const mateSees = await get(`${REC}/${rec.id}`, mate.token);
+  ok("staff are given each person's summary",
+    staffSees.recording.people.every((p) => "digest" in p),
+    JSON.stringify(staffSees.recording.people[0]));
+  ok("  · but not each person's transcript",
+    !staffSees.recording.people.some((p) => "transcript" in p));
+  ok("  · and a participant is given neither for anybody else",
+    mateSees.recording.people.every((p) => !("digest" in p)),
+    JSON.stringify(mateSees.recording.people[0]));
+  ok("  · only their own", "transcript" in (mateSees.recording.mine ?? {}));
+}
+{
   const r = await get(`${REC}/${rec.id}`, owner.token);
   const people = r.recording.people;
   ok("the listing says who declined, rather than quietly leaving them out",

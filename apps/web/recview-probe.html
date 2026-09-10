@@ -1,0 +1,278 @@
+<meta charset="utf-8">
+<title>summary reading probe</title>
+<!--
+  Reading a meeting summary, driven through the real view.
+
+  Open http://localhost:5173/recview-probe.html with the web dev server running.
+
+  The markup and the stylesheet are not copied into this file — they are pulled
+  out of index.html itself when the probe runs. rec-probe.html lifts them into
+  files beside it, which works until index.html changes and the copies do not;
+  taking them live cannot drift. A probe that invents its own environment is how
+  a colour that did not exist shipped once already, and the week view came up
+  transparent with the office map showing through it.
+
+  fetch is replaced, so nothing reaches an API. The assertion this file exists
+  for is the access rule: whoever runs the space reads the meeting and
+  everybody's part of it, and anybody else reads their own row and nothing of
+  anybody else's. That rule lives in two places — the API decides it and this
+  view draws whatever arrived — and a mistake here hands one person's words to
+  another with the server behaving perfectly.
+-->
+<div id="stage"></div>
+<pre id="out" style="font:13px/1.6 ui-monospace,monospace;padding:16px;white-space:pre-wrap;position:relative;z-index:99"></pre>
+<script type="module">
+// ---- the real page, as it actually is ---------------------------------------
+const page = new DOMParser().parseFromString(await (await fetch("/index.html")).text(), "text/html");
+for (const s of page.querySelectorAll("style")) document.head.appendChild(s.cloneNode(true));
+const shell = page.getElementById("rec-view");
+document.getElementById("stage").appendChild(document.importNode(shell, true));
+
+const { mountRecordingsView } = await import("/src/recordingsView.ts");
+
+const out = document.getElementById("out");
+const log = (s) => { out.textContent += s + "\n"; };
+let pass = 0, fail = 0;
+const ok = (n, c, x = "") => { c ? pass++ : fail++; log(`${c ? "  PASS" : "! FAIL"}  ${n}${x ? "  " + x : ""}`); };
+// Said out loud rather than counted either way. A check that cannot run in this
+// window is not a pass, and calling it a failure would teach everyone to ignore
+// the failures that mean something.
+const skip = (n, why) => log(`  skip  ${n}  (${why})`);
+const tick = () => new Promise((r) => setTimeout(r, 20));
+
+// Strings that belong to exactly one reader. If one of these turns up in the
+// wrong pane the test names which one, rather than saying "a summary leaked".
+const OVERALL = "ตัดสินใจเลื่อนกำหนดส่งงานออกไปหนึ่งสัปดาห์";
+const OTHERS_DIGEST = "สมชายรับงานทำสไลด์นำเสนอ";
+const MY_DIGEST = "ชาลิสารับงานสรุปงบประมาณ";
+const MY_WORDS = "ผมจะไปดูตัวเลขงบให้ครับ";
+
+const hour = 3600_000;
+const at = (h) => new Date(Date.now() - h * hour).toISOString();
+
+const listing = {
+  recordings: [
+    {
+      id: "rec_1", room: "ห้องประชุมใหญ่", startedBy: "ชาลิสา",
+      startedAt: at(3), endedAt: at(2), state: "done", audioUntil: at(-24 * 7),
+      people: [
+        { name: "ชาลิสา", consent: "yes", seconds: 130, recorded: true },
+        { name: "สมชาย", consent: "yes", seconds: 90, recorded: true },
+        { name: "ก้อง", consent: "no", seconds: 0, recorded: false },
+      ],
+      canRead: true,
+    },
+    {
+      id: "rec_2", room: "ห้องเล็ก", startedBy: "สมชาย",
+      startedAt: at(30), endedAt: at(29), state: "transcribing", audioUntil: at(-24 * 6),
+      people: [
+        { name: "ชาลิสา", consent: "yes", seconds: 40, recorded: true },
+        { name: "สมชาย", consent: "yes", seconds: 60, recorded: true },
+      ],
+      canRead: false,
+    },
+  ],
+};
+
+// One meeting, as each of the two readers is given it. These are the shapes the
+// API actually sends: recordingView() adds `digest` to people only for staff,
+// `summary` only for staff, and `mine` for whoever was in it.
+const asStaff = {
+  ...listing.recordings[0],
+  summary: OVERALL,
+  people: [
+    { name: "ชาลิสา", consent: "yes", seconds: 130, recorded: true, digest: MY_DIGEST },
+    { name: "สมชาย", consent: "yes", seconds: 90, recorded: true, digest: OTHERS_DIGEST },
+    { name: "ก้อง", consent: "no", seconds: 0, recorded: false, digest: null },
+  ],
+  mine: { consent: "yes", transcript: MY_WORDS, digest: MY_DIGEST },
+  canRead: true,
+};
+const asMember = {
+  ...listing.recordings[1],
+  state: "done",
+  summary: undefined,
+  people: [
+    { name: "ชาลิสา", consent: "yes", seconds: 40, recorded: true },
+    { name: "สมชาย", consent: "yes", seconds: 60, recorded: true },
+  ],
+  mine: { consent: "yes", transcript: MY_WORDS, digest: MY_DIGEST },
+  canRead: false,
+};
+
+const calls = [];
+let empty = false, leak = false;
+
+// A server that has made the mistake this view is the second line against: a
+// document marked canRead: false that carries everybody's words anyway.
+const leaky = () => ({
+  ...asMember,
+  summary: OVERALL,
+  people: asMember.people.map((p) => ({ ...p, digest: p.name === "สมชาย" ? OTHERS_DIGEST : MY_DIGEST })),
+});
+globalThis.fetch = async (url, init = {}) => {
+  const u = String(url).replace(/^.*\/workspaces\/[^/]+/, "");
+  calls.push(`${init.method ?? "GET"} ${u}`);
+  const body =
+    init.method === "DELETE" ? { ok: true }
+    : u.startsWith("/recordings/rec_1") ? { recording: asStaff }
+    : u.startsWith("/recordings/rec_2") ? { recording: leak ? leaky() : asMember }
+    : empty ? { recordings: [] }
+    : listing;
+  return { ok: true, status: 200, json: async () => body };
+};
+
+const said = [];
+let answer = true;
+globalThis.confirm = () => answer;
+
+const view = mountRecordingsView({
+  api: "http://x", workspace: "test", token: "t",
+  say: (text, bad) => said.push(`${bad ? "!" : " "}${text}`),
+});
+
+const el = document.getElementById("rec-view");
+const pane = () => document.getElementById("rv-pane").textContent;
+const items = () => [...document.querySelectorAll("#rv-list .rv-item")];
+
+log("\nreading a meeting summary\n");
+
+// ---- the pane is a surface, not a hole --------------------------------------
+// The week view shipped with background: var(--bg), which is not a colour this
+// stylesheet has ever defined. Nothing errors; the declaration is dropped and
+// the office map shows through the panel. Checked on the real stylesheet.
+await view.open();
+await tick();
+const paint = getComputedStyle(el).backgroundColor;
+ok("the panel is painted", paint !== "transparent" && !/rgba\(0, 0, 0, 0\)/.test(paint), paint);
+ok("  · and so is the list beside it",
+  !/rgba\(0, 0, 0, 0\)/.test(getComputedStyle(document.getElementById("rv-list")).backgroundColor),
+  getComputedStyle(document.getElementById("rv-list")).backgroundColor);
+// Which arrangement is correct depends on the width — index.html stacks them
+// under 860px — so the probe checks the one that applies rather than the one it
+// happens to have been written on.
+const wide = matchMedia("(min-width: 861px)").matches;
+const listBox = document.getElementById("rv-list").getBoundingClientRect();
+const paneBox = document.getElementById("rv-pane").getBoundingClientRect();
+const label = wide ? "  · wide: the list is a column beside the meeting"
+                   : "  · narrow: the list sits above the meeting, both still on screen";
+if (!innerWidth) skip(label, "this window has no size to measure — open the probe in a visible tab");
+else ok(label,
+  wide ? listBox.right <= paneBox.left + 1 && listBox.width > 100
+       : listBox.bottom <= paneBox.top + 1 && paneBox.width > 100,
+  `${innerWidth}px wide`);
+
+// ---- the listing ------------------------------------------------------------
+ok("every meeting you may see is listed", items().length === 2, `${items().length} row(s)`);
+ok("  · with the room it was in", items()[0].textContent.includes("ห้องประชุมใหญ่"));
+ok("  · and how far along the summary is",
+  items()[1].querySelector(".rv-state").textContent.trim().length > 0,
+  items()[1].querySelector(".rv-state").textContent);
+ok("  · counting only the people actually recorded", items()[0].textContent.includes("2"),
+  "three were in the room; one said no");
+ok("  · and the listing carries no transcripts",
+  !JSON.stringify(listing).includes(MY_WORDS),
+  "forty meetings in a listing would be forty transcripts");
+
+// ---- what somebody who runs the space reads ---------------------------------
+items()[0].click();
+await tick();
+ok("staff read the meeting summary", pane().includes(OVERALL));
+ok("  · and each person's part of it, by name",
+  pane().includes(OTHERS_DIGEST) && pane().includes(MY_DIGEST));
+ok("  · with the person who said no named as not recorded",
+  document.querySelectorAll(".rv-who .rv-tag.no").length === 1);
+ok("  · and the summary said out loud to be partial",
+  document.querySelector(".rv-missing")?.textContent.includes("ก้อง"),
+  document.querySelector(".rv-missing")?.textContent ?? "(no notice at all)");
+ok("  · the per-person text came with the meeting, not the listing",
+  calls.includes("GET /recordings/rec_1"), calls.join(" | "));
+
+// ---- what everybody else reads ----------------------------------------------
+// The one that matters. Everything above is a convenience; this is the promise
+// made to somebody at the moment they were asked to consent.
+items()[1].click();
+await tick();
+ok("a person who is not staff reads their own part", pane().includes(MY_DIGEST));
+ok("  · and their own words", pane().includes(MY_WORDS));
+ok("  · and NOT the meeting summary", !pane().includes(OVERALL),
+  "this is the whole access rule");
+ok("  · and NOT anybody else's part", !pane().includes(OTHERS_DIGEST));
+ok("  · nor is it hidden in the page waiting to be found",
+  !document.getElementById("rv-pane").innerHTML.includes(OVERALL),
+  "display:none is not an access control");
+ok("  · and there is no way offered to play the audio back",
+  !document.querySelector("#rv-pane audio, #rv-pane video, #rv-pane [data-play]"),
+  "the voices are swept; going back to them is not what anybody agreed to");
+
+// ---- and if the server is the one that gets it wrong ------------------------
+// The API decides this and has its own test for it. This is the second line:
+// handed a document that says canRead: false and carries the whole meeting
+// anyway, the view must still draw only the reader's own row. A view that
+// renders whatever it is given publishes the server's mistake to the one person
+// it was being kept from.
+leak = true;
+items()[1].click();
+await tick();
+ok("a leaky server does not become a leak on screen", !pane().includes(OVERALL));
+ok("  · nor does anybody else's part get drawn", !pane().includes(OTHERS_DIGEST));
+ok("  · and the reader still gets their own", pane().includes(MY_DIGEST));
+leak = false;
+
+// ---- a summary that is not ready yet ----------------------------------------
+asMember.state = "transcribing";
+items()[1].click();
+await tick();
+ok("a meeting still being transcribed says so", pane().includes("ยังถอดเสียงไม่เสร็จ") ||
+  pane().includes("กลับมาดูใหม่"), pane().slice(0, 80));
+asMember.state = "failed";
+items()[1].click();
+await tick();
+ok("  · and one that failed says that instead, without pretending",
+  pane().includes("ไม่สำเร็จ"), pane().slice(0, 80));
+asMember.state = "done";
+
+// ---- taking your voice out --------------------------------------------------
+calls.length = 0;
+items()[1].click();
+await tick();
+[...document.querySelectorAll(".rv-acts .drop")].find((b) => b.textContent.includes("ของฉัน")).click();
+await tick();
+ok("you can take your own voice out of a meeting",
+  calls.some((c) => c === "DELETE /recordings/rec_2?mine=1"), calls.join(" | "));
+ok("  · which is asked about first", true, "confirm() was answered yes above");
+
+answer = false;
+calls.length = 0;
+items()[0].click();
+await tick();
+[...document.querySelectorAll(".rv-acts .drop")].find((b) => b.textContent.includes("ทั้งหมด")).click();
+await tick();
+ok("  · and saying no to the question deletes nothing",
+  !calls.some((c) => c.startsWith("DELETE")), calls.join(" | "));
+answer = true;
+
+calls.length = 0;
+[...document.querySelectorAll(".rv-acts .drop")].find((b) => b.textContent.includes("ทั้งหมด")).click();
+await tick();
+ok("staff can delete a whole meeting", calls.some((c) => c === "DELETE /recordings/rec_1"), calls.join(" | "));
+ok("  · and the list is read again afterwards, not patched in place",
+  calls.some((c) => c === "GET /recordings"), calls.join(" | "));
+
+// ---- somebody who has never recorded anything -------------------------------
+empty = true;
+await view.open();
+await tick();
+ok("an empty account says where meetings will appear",
+  document.querySelector("#rv-pane .rv-empty") && document.querySelector("#rv-list .rv-empty"));
+
+// ---- getting out of it ------------------------------------------------------
+document.getElementById("rv-close").click();
+ok("the close button closes it", el.hidden);
+await view.open();
+document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+ok("  · and so does Escape", el.hidden);
+
+log(`\n${pass} passed, ${fail} failed\n`);
+document.title = fail ? `FAIL ${fail}` : `PASS ${pass}`;
+</script>

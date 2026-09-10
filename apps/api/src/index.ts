@@ -1807,6 +1807,11 @@ function recordingView(r: RecordingRow, me: { id: string } | null, staff: boolea
       consent: t.consent,
       seconds: t.seconds,
       recorded: t.consent === "yes" && t.seconds > 0,
+      // Staff get each person's summary, which is what a meeting summary
+      // broken down by person means. Not each person's transcript: that is a
+      // great deal more of somebody than the job needs, and the person whose
+      // words they are can already read their own.
+      ...(staff ? { digest: t.digest } : {}),
     })),
     summary: staff ? r.summary : undefined,
     mine: mine

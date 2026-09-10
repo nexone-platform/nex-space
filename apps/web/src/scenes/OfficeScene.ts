@@ -14,6 +14,7 @@ import { ACCEPT, type Attach, attachNode, humanSize, upload } from "../net/attac
 import { type Booking, clock, mountCalendarPanel } from "../calendarPanel";
 import { mountCalendarWeek } from "../calendarView";
 import { mountRecording } from "../recordPanel";
+import { mountRecordingsView } from "../recordingsView";
 import { setupPrefsModal } from "../prefsModal";
 import { roleLabel } from "../memberPanel";
 import { propPath, type Interactive } from "./mapThemes";
@@ -973,6 +974,16 @@ export class OfficeScene extends Phaser.Scene {
         // After the media manager, because it records the microphone that
         // manager is using rather than opening a second one of its own.
         this.mountRecording(room);
+        // Reading them is a separate thing from making them, and reachable
+        // without standing in a room — the meeting is over by then.
+        this.recView = mountRecordingsView({
+          api: AUTH_API,
+          workspace: WORKSPACE,
+          token: localStorage.getItem("nexspace-token") ?? undefined,
+          say: (text, bad) => this.toast(text, bad ? "warn" : "info"),
+        });
+        document.getElementById("cw-recordings")
+          ?.addEventListener("click", () => void this.recView?.open());
         this.wireAvButtons();
         // a device that will not open used to fail into console.warn, so the
         // button simply stayed dark and nobody knew why
@@ -1584,6 +1595,7 @@ export class OfficeScene extends Phaser.Scene {
 
   private calWeek?: ReturnType<typeof mountCalendarWeek>;
   private rec?: ReturnType<typeof mountRecording>;
+  private recView?: ReturnType<typeof mountRecordingsView>;
 
   /**
    * The recording notice, and this browser's own microphone.
