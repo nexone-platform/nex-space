@@ -1,5 +1,5 @@
 import { t } from "./i18n";
-import type { Booking, Room } from "./calendarPanel";
+import { nextSlot, type Booking, type Room } from "./calendarPanel";
 
 /**
  * The week, drawn at the size a week needs.
@@ -42,6 +42,14 @@ export type WeekOptions = {
   rooms: () => Room[];
   /** the panel's own form, and the way to open it at a chosen time */
   form: HTMLElement;
+  /**
+   * The line the form talks back on, which has to come with it.
+   *
+   * Not optional. A caller that hands over the form and keeps the message line
+   * has built the bug this option exists to fix, and the compiler is a better
+   * guard against that than a comment asking nicely.
+   */
+  note: HTMLElement;
   compose: (startAt?: Date, roomId?: string) => void;
   /** the subscribe row, which belongs wherever the calendar is being read */
   foot: HTMLElement;
@@ -73,6 +81,7 @@ export function mountCalendarWeek(o: WeekOptions) {
 
   let anchor = startOfWeek(new Date());
   const home = o.form.parentElement;
+  const noteHome = o.note.parentElement;
 
   // ---- the form, borrowed ---------------------------------------------------
   /**
@@ -91,12 +100,16 @@ export function mountCalendarWeek(o: WeekOptions) {
   function borrow(startAt?: Date) {
     if (!o.canBook()) return;
     sheetEl.appendChild(o.form);
+    // Under the form, next to the button that was pressed, which is where
+    // somebody is looking when they find out it did not work.
+    sheetEl.appendChild(o.note);
     modalEl.hidden = false;
     o.compose(startAt);
   }
   function release() {
     modalEl.hidden = true;
     home?.appendChild(o.form);
+    noteHome?.appendChild(o.note);
     draw();
   }
   modalEl.addEventListener("click", (e) => { if (e.target === modalEl) release(); });
@@ -217,12 +230,30 @@ export function mountCalendarWeek(o: WeekOptions) {
       gridEl.appendChild(label);
       for (let i = 0; i < 7; i++) {
         const cell = document.createElement("div");
-        cell.className = "cw-hour cw-col" + (o.canBook() ? " free" : "");
-        if (o.canBook()) {
-          const at = new Date(days[i]);
-          at.setHours(h, 0, 0, 0);
+        const at = new Date(days[i]);
+        at.setHours(h, 0, 0, 0);
+        /**
+         * An hour that is over is not on offer.
+         *
+         * The week always opens on the week containing today, so on any day but
+         * Sunday morning there are hours on screen that have already happened.
+         * Every one of them used to be a bookable-looking cell that filled the
+         * form in with a time the server would refuse — and the refusal was
+         * being written behind this very view, so it read as a form that simply
+         * would not save.
+         *
+         * The hour in progress stays open, because a room is bookable for the
+         * rest of it. It just does not start at the top: clicking 09:00 at 09:40
+         * offers the next half hour, which is what somebody means.
+         */
+        const gone = +at + 60 * 60 * 1000 <= Date.now();
+        const started = +at <= Date.now();
+        cell.className = "cw-hour cw-col" + (gone ? " gone" : o.canBook() ? " free" : "");
+        if (o.canBook() && !gone) {
           cell.title = t("จองห้องเวลานี้");
-          cell.onclick = () => borrow(at);
+          cell.onclick = () => borrow(started ? nextSlot() : at);
+        } else if (gone) {
+          cell.title = t("เวลานี้ผ่านไปแล้ว");
         }
         gridEl.appendChild(cell);
       }

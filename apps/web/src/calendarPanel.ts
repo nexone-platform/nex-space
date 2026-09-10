@@ -69,8 +69,35 @@ const localValue = (d: Date) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
+/**
+ * Why the server refused a time, in the reader's own language.
+ *
+ * The API answers with a code and an English sentence. Showing the sentence is
+ * what the booking form used to do, and a Thai user filling in a Thai form was
+ * told "that time has already passed" — if they saw it at all.
+ *
+ * Every code checkWhen can return has to be here; scripts/copies-check.mjs
+ * refuses a build where one is missing, because a code with no case falls
+ * through to the English and the failure is invisible until somebody hits it.
+ */
+const WHY: Record<string, (n?: number) => string> = {
+  "not-times": () => t("เวลาที่กรอกไม่ถูกต้อง"),
+  "backwards": () => t("เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม"),
+  "too-short": (n) => t("การประชุมต้องยาวอย่างน้อย {n} นาที").replace("{n}", String(n ?? "")),
+  "too-long": (n) => t("การประชุมต้องยาวไม่เกิน {n} ชั่วโมง").replace("{n}", String(n ?? "")),
+  "past": () => t("เวลานั้นผ่านไปแล้ว เลือกเวลาข้างหน้า"),
+  "too-far": (n) => t("จองล่วงหน้าได้ไม่เกิน {n} วัน").replace("{n}", String(n ?? "")),
+};
+
+/** the refusal to show, translated where it can be and passed through where it cannot */
+const refusal = (r: Record<string, unknown>) => {
+  const say = typeof r.why === "string" ? WHY[r.why] : undefined;
+  if (say) return say(typeof r.n === "number" ? r.n : undefined);
+  return String(r.error || t("จองไม่สำเร็จ"));
+};
+
 /** the next half hour, which is when a meeting booked now almost always starts */
-const nextSlot = (from = new Date()) => {
+export const nextSlot = (from = new Date()) => {
   const d = new Date(from);
   d.setSeconds(0, 0);
   d.setMinutes(d.getMinutes() + (30 - (d.getMinutes() % 30)));
@@ -194,7 +221,7 @@ export function mountCalendarPanel(o: CalendarOptions) {
           : t("ห้องไม่ว่างช่วงนั้น"), true);
         return;
       }
-      if (!r.ok) { say(String(r.error || t("จองไม่สำเร็จ")), true); return; }
+      if (!r.ok) { say(refusal(r), true); return; }
       closeForm();
       // jump to the day it lands on, or the booking would vanish into a day
       // nobody is looking at
@@ -391,6 +418,16 @@ export function mountCalendarPanel(o: CalendarOptions) {
      * rather than by where it sits, so it works wherever it is put.
      */
     form,
+    /**
+     * The line the form talks back on.
+     *
+     * Handed out with the form, and for the same reason: while the week view has
+     * the form, the panel is behind a fixed, full-screen surface. Every refusal
+     * was still being written here — correctly, invisibly, three hundred
+     * pixels under the week grid — and a booking that failed looked to the
+     * person filling in the form like a button that did nothing.
+     */
+    note: msg,
     compose: (startAt?: Date, roomId?: string) => openForm(startAt, roomId),
     /**
      * The two things that change a booking, without the buttons around them.

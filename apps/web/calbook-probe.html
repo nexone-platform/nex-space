@@ -1,0 +1,203 @@
+<meta charset="utf-8">
+<title>booking a room probe</title>
+<!--
+  Booking a room from the week grid, driven through the real panel and the real
+  week view — the two together, because the bug this file was written for lives
+  in the seam between them and neither one can show it alone.
+
+  Open http://localhost:5173/calbook-probe.html with the web dev server running.
+
+  The markup and the stylesheet are pulled out of index.html when the probe
+  runs rather than copied beside it. fetch is replaced: the POST answers the
+  way the API answers, including its refusals.
+
+  What is checked: that an hour nobody can book is not offered, and that when
+  the server does refuse, the person who filled in the form can read why.
+-->
+<div id="stage"></div>
+<pre id="out" style="font:13px/1.6 ui-monospace,monospace;padding:16px;white-space:pre-wrap;position:relative;z-index:99"></pre>
+<script type="module">
+// ---- the real page, as it actually is ---------------------------------------
+const page = new DOMParser().parseFromString(await (await fetch("/index.html")).text(), "text/html");
+for (const s of page.querySelectorAll("style")) document.head.appendChild(s.cloneNode(true));
+document.getElementById("stage").appendChild(document.importNode(page.getElementById("cal-view"), true));
+// The panel lives in a sidebar tab in the app. Here it gets the same id and the
+// same place in the stacking order: behind the week view, which is fixed and
+// covers the screen.
+const side = document.createElement("div");
+side.id = "view-cal";
+side.style.cssText = "position:fixed;left:0;top:0;width:320px;height:100%;overflow:auto";
+document.body.appendChild(side);
+
+const { mountCalendarPanel } = await import("/src/calendarPanel.ts");
+const { mountCalendarWeek } = await import("/src/calendarView.ts");
+
+const out = document.getElementById("out");
+const log = (s) => { out.textContent += s + "\n"; };
+let pass = 0, fail = 0;
+const ok = (n, c, x = "") => { c ? pass++ : fail++; log(`${c ? "  PASS" : "! FAIL"}  ${n}${x ? "  " + x : ""}`); };
+const tick = () => new Promise((r) => setTimeout(r, 20));
+
+// ---- an API that refuses the way the API refuses -----------------------------
+// These are the sentences apps/api/src/calendar.ts actually returns. They are
+// English on the wire, which is the second half of this bug: they were being
+// shown to the person as they arrived.
+const posts = [];
+let refuseWith = null;   // { why, error } — the shape the API answers with
+globalThis.fetch = async (url, init = {}) => {
+  const u = String(url);
+  if ((init.method ?? "GET") === "GET") {
+    return { ok: true, status: 200, json: async () => ({ bookings: [] }) };
+  }
+  posts.push(JSON.parse(init.body));
+  if (refuseWith) {
+    return { ok: false, status: 400, json: async () => refuseWith };
+  }
+  return { ok: true, status: 200, json: async () => ({ booking: { id: "b1" } }) };
+};
+
+const panel = mountCalendarPanel({
+  host: side, api: "http://x", workspace: "test", token: "t", mapSlug: "main",
+  rooms: () => [{ id: "lounge", label: "โซนพักผ่อน" }, { id: "big", label: "ห้องประชุมใหญ่" }],
+  canBook: () => true, canManage: () => true,
+});
+const week = mountCalendarWeek({
+  bookings: () => panel.bookings(),
+  rooms: () => [{ id: "lounge", label: "โซนพักผ่อน" }, { id: "big", label: "ห้องประชุมใหญ่" }],
+  form: panel.form,
+  note: panel.note,
+  compose: (at, roomId) => panel.compose(at, roomId),
+  foot: panel.foot ?? document.createElement("div"),
+  canBook: () => true, canManage: () => true,
+  cancel: (id) => panel.cancel(id),
+  going: (id, coming) => panel.going(id, coming),
+  onOpen: () => void panel.refresh(),
+});
+
+week.open();
+await tick();
+
+const grid = document.getElementById("cw-grid");
+const modal = document.getElementById("cw-modal");
+const cells = () => [...grid.querySelectorAll(".cw-hour")];
+const startIn = () => panel.form.querySelector('input[type="datetime-local"]');
+const ends = () => panel.form.querySelectorAll('input[type="datetime-local"]')[1];
+const titleIn = () => panel.form.querySelector('input[type="text"]');
+const submit = () => panel.form.querySelector("button.cal-save");
+
+log("\nbooking a room from the week grid\n");
+
+// ---- an hour that cannot be booked --------------------------------------------
+// The week always opens on the week containing today, so on any day but Sunday
+// there are hours on screen that have already happened. Clicking one filled the
+// form in with them, and the only thing that ever said no was the server.
+const FIRST_HOUR = 7, DAYS = 7;
+const now = new Date();
+const past = cells().filter((c) => !c.classList.contains("cw-gutter")).findIndex((c, i) => {
+  const day = i % DAYS, hour = FIRST_HOUR + Math.floor(i / DAYS);
+  const at = new Date(now); at.setHours(0, 0, 0, 0);
+  at.setDate(at.getDate() - at.getDay() + day); at.setHours(hour, 0, 0, 0);
+  return +at < Date.now() - 6 * 60 * 60 * 1000;   // safely past, not the current hour
+});
+const hours = cells().filter((c) => !c.classList.contains("cw-gutter"));
+if (past < 0) {
+  log("  skip  no hour on screen is in the past (the week opened on a Sunday morning)");
+} else {
+  const cell = hours[past];
+  ok("an hour that has already gone is not offered as free",
+    !cell.classList.contains("free"), cell.className);
+  /**
+   * And looks different from one that is.
+   *
+   * The first version of this marked past hours var(--surface-3), which is the
+   * colour the view behind them already was: a class that did nothing visible.
+   * A cell paints nothing of its own when it is free, so what has to differ is
+   * the gone cell against whatever shows through a free one.
+   */
+  const free = hours.find((c) => c.classList.contains("free"));
+  const behind = (el) => {
+    for (let n = el; n; n = n.parentElement) {
+      const c = getComputedStyle(n).backgroundColor;
+      if (c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c)) return c;
+    }
+    return "none";
+  };
+  ok("  · and is a different colour from one that is free",
+    behind(cell) !== behind(free), `${behind(cell)} vs ${behind(free)}`);
+  cell.click();
+  await tick();
+  ok("  · and clicking it does not open a form pointed at the past",
+    modal.hidden || +new Date(startIn().value) > Date.now() - 6 * 60 * 60 * 1000,
+    modal.hidden ? "(no form opened)" : startIn().value);
+  if (!modal.hidden) document.getElementById("cw-modal").click();
+  await tick();
+}
+
+// ---- when the server does refuse --------------------------------------------
+// It still can: two people can fill the same form at the same minute, and the
+// grace period is only five minutes wide. What must not happen is a 400 that
+// the person who pressed the button cannot see.
+const future = hours.findIndex((c, i) => {
+  const day = i % DAYS, hour = FIRST_HOUR + Math.floor(i / DAYS);
+  const at = new Date(now); at.setHours(0, 0, 0, 0);
+  at.setDate(at.getDate() - at.getDay() + day); at.setHours(hour, 0, 0, 0);
+  return +at > Date.now() + 24 * 60 * 60 * 1000;
+});
+hours[future].click();
+await tick();
+ok("a free hour ahead opens the form on that hour", !modal.hidden && !!startIn().value, startIn()?.value);
+
+titleIn().value = "ทดสอบ";
+refuseWith = { why: "past", error: "that time has already passed" };
+submit().click();
+await tick(); await tick();
+
+ok("the booking was actually attempted", posts.length === 1, JSON.stringify(posts[0] ?? null).slice(0, 120));
+
+// The message element is the panel's own, and the panel is behind the week view.
+const msg = side.querySelector(".cal-msg") ?? document.querySelector(".cal-msg");
+const wrote = (msg?.textContent ?? "").trim();
+ok("a refusal is said somewhere at all", wrote.length > 0, JSON.stringify(wrote));
+ok("  · where the form the person filled in actually is",
+  !!document.getElementById("cw-sheet").contains(msg) || (() => {
+    // covered counts as not said: the week view is fixed and over the sidebar
+    const b = msg.getBoundingClientRect();
+    if (!b.width || !b.height) return false;
+    const on = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+    return msg.contains(on) || msg === on;
+  })(),
+  "the panel sits behind a fixed, full-screen week view");
+ok("  · in the reader's language, not the wire's",
+  wrote.length > 0 && !/[a-z]{4}/.test(wrote), JSON.stringify(wrote));
+ok("  · and the form is still there to correct, not closed",
+  !modal.hidden && !panel.form.hidden);
+
+// A refusal this build has never heard of — an older or newer server — must
+// still say something rather than nothing.
+refuseWith = { why: "something-invented-later", error: "no bookings on Tuesdays" };
+submit().click();
+await tick(); await tick();
+ok("  · a reason with no translation is passed through, not swallowed",
+  (side.querySelector(".cal-msg") ?? document.querySelector(".cal-msg")).textContent.includes("Tuesdays"),
+  document.querySelector(".cal-msg").textContent);
+
+// And the numbers in a refusal come from the server, because they are settings.
+refuseWith = { why: "too-long", error: "a booking is at most 8 hours", n: 8 };
+submit().click();
+await tick(); await tick();
+ok("  · and a limit is quoted as the server's number, not a hard-coded one",
+  document.querySelector(".cal-msg").textContent.includes("8"),
+  document.querySelector(".cal-msg").textContent);
+
+// ---- and when it works ------------------------------------------------------
+refuseWith = null;
+posts.length = 0;
+submit().click();
+await tick(); await tick();
+ok("a booking the server accepts closes the form", panel.form.hidden || modal.hidden);
+ok("  · and was sent as UTC, whatever the reader's clock says",
+  /Z$/.test(posts[0]?.startsAt ?? ""), posts[0]?.startsAt);
+
+log(`\n${pass} passed, ${fail} failed\n`);
+document.title = fail ? `FAIL ${fail}` : `PASS ${pass}`;
+</script>

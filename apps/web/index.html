@@ -496,7 +496,11 @@
       .cw-day.today b { background: var(--danger); color: #fff; }
       .cw-day.today { color: var(--danger); }
 
-      .cw-scroll { flex: 1; min-height: 0; overflow: auto; }
+      /* The week is a white sheet, and the hours already gone are the grey ones.
+         Both used to be var(--surface-3) — the same colour as the view behind
+         them — so marking an hour as past painted it exactly the shade it
+         already was, and changed nothing anybody could see. */
+      .cw-scroll { flex: 1; min-height: 0; overflow: auto; background: var(--surface); }
       .cw-grid { display: grid; position: relative; }
       /* Bookings and the now line, over the hours rather than among them. As
          grid items they claimed whole columns and the hour cells flowed around
@@ -507,6 +511,10 @@
       .cw-hour { border-top: 1px dashed var(--border); position: relative; }
       .cw-hour.free { cursor: pointer; }
       .cw-hour.free:hover { background: var(--surface-2); }
+      /* An hour already gone. Not hidden — the week has to keep its shape, and
+         "Tuesday morning was busy" is worth seeing — but visibly not on offer,
+         because it was being offered and then refused by the server. */
+      .cw-hour.gone { background: var(--surface-3); cursor: default; }
       .cw-gutter {
         border-top: 1px solid transparent; padding-right: 8px;
         text-align: right; font-size: 11px; color: var(--faint);
@@ -575,6 +583,11 @@
         background: var(--surface); box-shadow: 0 18px 50px #00000040;
       }
       .cw-sheet .cal-form { border: none; }
+      /* The form talks back inside the sheet. It is the panel's own element,
+         borrowed along with the form: while this view is up, the panel is
+         behind it and anything written there cannot be read. */
+      .cw-sheet .cal-msg { padding: 0 14px 12px; min-height: 0; }
+      .cw-sheet .cal-msg:empty { display: none; }
       .cw-foot { flex: 0 0 auto; padding: 8px 14px; border-top: 1px solid var(--border);
         display: flex; flex-direction: column; gap: 6px; background: var(--surface); }
 

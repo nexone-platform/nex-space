@@ -1575,7 +1575,7 @@ app.post("/workspaces/:slug/bookings", async (req, res) => {
   const startsAt = new Date(String(body.startsAt ?? ""));
   const endsAt = new Date(String(body.endsAt ?? ""));
   const wrong = checkWhen(startsAt, endsAt);
-  if (wrong) return res.status(400).json({ error: wrong });
+  if (wrong) return res.status(400).json(wrong);
 
   // Everything already in this room that could touch the new span. Read and
   // checked here rather than left to a unique constraint, because "overlapping"

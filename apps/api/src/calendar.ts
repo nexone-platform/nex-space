@@ -30,22 +30,42 @@ const MIN_MS = 60 * 1000;
 export type When = { startsAt: Date; endsAt: Date };
 
 /**
+ * Why a time was refused.
+ *
+ * A code and a sentence, not one or the other. The sentence is English and is
+ * what anything reading the API directly gets; the code is what the browser
+ * translates, because the app is Thai first and a Thai reader should not be
+ * handed the wire's English. `n` carries the number in the sentence — the
+ * limits are settings, so the client cannot hard-code them.
+ *
+ * It used to be the sentence alone, and the sentence alone is what the booking
+ * form showed a Thai user when their time was refused.
+ */
+export type Refusal = { why: RefusalCode; error: string; n?: number };
+export type RefusalCode =
+  | "not-times" | "backwards" | "too-short" | "too-long" | "past" | "too-far";
+
+/**
  * Is this a time somebody may hold a room for?
  *
- * Returns the complaint, or null when it is fine. A sentence rather than a
- * code, because every one of these is shown to the person who typed it.
+ * Returns the complaint, or null when it is fine.
  */
-export function checkWhen(startsAt: Date, endsAt: Date, now = Date.now()): string | null {
-  if (isNaN(+startsAt) || isNaN(+endsAt)) return "those are not times";
-  if (+endsAt <= +startsAt) return "it has to end after it starts";
+export function checkWhen(startsAt: Date, endsAt: Date, now = Date.now()): Refusal | null {
+  if (isNaN(+startsAt) || isNaN(+endsAt))
+    return { why: "not-times", error: "those are not times" };
+  if (+endsAt <= +startsAt)
+    return { why: "backwards", error: "it has to end after it starts" };
 
   const minutes = (+endsAt - +startsAt) / MIN_MS;
-  if (minutes < MIN_MINUTES) return `a booking is at least ${MIN_MINUTES} minutes`;
-  if (minutes > MAX_MINUTES) return `a booking is at most ${MAX_MINUTES / 60} hours`;
+  if (minutes < MIN_MINUTES)
+    return { why: "too-short", error: `a booking is at least ${MIN_MINUTES} minutes`, n: MIN_MINUTES };
+  if (minutes > MAX_MINUTES)
+    return { why: "too-long", error: `a booking is at most ${MAX_MINUTES / 60} hours`, n: MAX_MINUTES / 60 };
 
-  if (+startsAt < now - GRACE_MS) return "that time has already passed";
+  if (+startsAt < now - GRACE_MS)
+    return { why: "past", error: "that time has already passed" };
   if (+startsAt > now + MAX_DAYS_AHEAD * 24 * 60 * MIN_MS)
-    return `you can book up to ${MAX_DAYS_AHEAD} days ahead`;
+    return { why: "too-far", error: `you can book up to ${MAX_DAYS_AHEAD} days ahead`, n: MAX_DAYS_AHEAD };
   return null;
 }
 

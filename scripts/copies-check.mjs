@@ -94,5 +94,41 @@ for (const { what, a, b } of LISTS) {
   if (only(y, x).length) console.error(`    only in ${b.file}: ${only(y, x).join(" ")}`);
 }
 
+// ---- refusals the browser has to be able to say ----------------------------
+//
+// The API refuses a booking with a code and an English sentence; the browser
+// translates the code. A code with no case in the browser falls through to the
+// English, and a Thai user filling in a Thai form is shown the wire — which is
+// exactly what happened, and what nothing noticed.
+
+const refusalCodes = () => {
+  const src = readFileSync(join(ROOT, "apps/api/src/calendar.ts"), "utf8");
+  const m = /export type RefusalCode\s*=([^;]+);/.exec(src);
+  if (!m) throw new Error("apps/api/src/calendar.ts: could not find RefusalCode");
+  return [...m[1].matchAll(/"([a-z-]+)"/g)].map((x) => x[1]).sort();
+};
+const refusalCases = () => {
+  const src = readFileSync(join(ROOT, "apps/web/src/calendarPanel.ts"), "utf8");
+  const m = /const WHY[^{]*\{([\s\S]*?)\n\};/.exec(src);
+  if (!m) throw new Error("apps/web/src/calendarPanel.ts: could not find the WHY table");
+  return [...m[1].matchAll(/^\s*"([a-z-]+)":/gm)].map((x) => x[1]).sort();
+};
+
+try {
+  const api = refusalCodes(), web = refusalCases();
+  if (JSON.stringify(api) === JSON.stringify(web)) {
+    console.log(`  booking refusals: all ${api.length} have something to say in Thai`);
+  } else {
+    bad++;
+    const only = (p, q) => p.filter((v) => !q.includes(v));
+    console.error("! booking refusals: the API can say things the browser cannot translate");
+    if (only(api, web).length) console.error(`    no case in calendarPanel.ts for: ${only(api, web).join(" ")}`);
+    if (only(web, api).length) console.error(`    calendarPanel.ts translates codes the API never sends: ${only(web, api).join(" ")}`);
+  }
+} catch (e) {
+  bad++;
+  console.error(`! booking refusals: ${e.message}`);
+}
+
 if (!bad) console.log(`copies: ${PAIRS.length} duplicated files and ${LISTS.length} shared lists all agree`);
 process.exit(bad ? 1 : 0);

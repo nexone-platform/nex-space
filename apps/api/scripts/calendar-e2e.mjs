@@ -178,22 +178,34 @@ let first;
 {
   const r = await book({ ...ROOM, title: "ย้อนเวลา", startsAt: at(3), endsAt: at(2) });
   ok("ending before it starts is refused", r.status === 400, `status ${r.status}`);
+  // The code, not only the sentence. The browser translates the code, and a
+  // refusal with none of it reaches a Thai reader in English.
+  ok("  · with a code the browser can translate", r.why === "backwards", JSON.stringify(r.why));
 }
 {
   const r = await book({ ...ROOM, title: "แวบเดียว", startsAt: at(3), endsAt: new Date(+base + 3 * H + 60_000).toISOString() });
   ok("a one-minute booking is refused", r.status === 400, `status ${r.status}`);
+  ok("  · saying how short is too short", r.why === "too-short" && typeof r.n === "number",
+    `${r.why} n=${r.n}`);
 }
 {
   const r = await book({ ...ROOM, title: "ทั้งวันทั้งคืน", startsAt: at(3), endsAt: at(15) });
   ok("a twelve-hour booking is refused", r.status === 400, `status ${r.status}`);
+  // The limit is a setting, so the number comes from the server or the client
+  // would quote one that is not in force.
+  ok("  · and quoting the limit in force", r.why === "too-long" && typeof r.n === "number",
+    `${r.why} n=${r.n}`);
 }
 {
   const r = await book({ ...ROOM, title: "เมื่อวาน", startsAt: at(-48), endsAt: at(-47) });
   ok("a time that has passed is refused", r.status === 400, `status ${r.status}`);
+  ok("  · as past, which is the one the week grid now prevents", r.why === "past", JSON.stringify(r.why));
 }
 {
   const r = await book({ ...ROOM, title: "ปีหน้า", startsAt: at(24 * 200), endsAt: at(24 * 200 + 1) });
   ok("a booking two hundred days out is refused", r.status === 400, `status ${r.status}`);
+  ok("  · as too far ahead, with how far is allowed", r.why === "too-far" && typeof r.n === "number",
+    `${r.why} n=${r.n}`);
 }
 {
   const r = await book({ ...ROOM, title: "", startsAt: at(3), endsAt: at(4) });

@@ -23,7 +23,11 @@
   <div class="cw-foot" id="cw-foot"></div>
   <div class="cw-modal" id="cw-modal" hidden><div class="cw-sheet" id="cw-sheet"></div></div>
 </div>
-<div id="home" style="display:none"><div id="fake-form" class="cal-form" hidden>ฟอร์มจอง</div></div>
+<div id="home" style="display:none">
+  <div id="fake-form" class="cal-form" hidden>ฟอร์มจอง</div>
+  <!-- the form's message line, which travels with it -->
+  <div id="fake-note" class="cal-msg"></div>
+</div>
 <pre id="out" style="font:13px/1.6 ui-monospace,monospace;padding:16px;white-space:pre-wrap"></pre>
 <script type="module">
 import { mountCalendarWeek } from "/src/calendarView.ts";
@@ -39,11 +43,29 @@ const at = (dayOffset, h, m = 0) => {
   d.setHours(h, m, 0, 0);
   return d.toISOString();
 };
+/**
+ * A meeting that is always still ahead, whatever day this is run on.
+ *
+ * The fixtures below are pinned to weekdays, which is what the placement
+ * assertions need — and it made the RSVP assertion fail every Thursday, because
+ * the Wednesday meeting it borrowed had already happened by then. A probe that
+ * fails on a day of the week teaches everybody to ignore it.
+ */
+const LAST_HOUR = 21;
+const ahead = (() => {
+  const d = new Date();
+  d.setMinutes(0, 0, 0);
+  d.setHours(d.getHours() + 1);
+  return d.getHours() < LAST_HOUR ? d : null;
+})();
+const aheadEnd = ahead && new Date(+ahead + 60 * 60 * 1000);
+
 const BOOKINGS = [
   { id: "a", room: "ห้องประชุมใหญ่", title: "รีวิวสปรินต์", host: "ชาลิสา", startsAt: at(2, 10), endsAt: at(2, 11), going: 3, mine: true, ics: "" },
   { id: "b", room: "ห้องเล็ก", title: "คุยกับลูกค้า", host: "สมชาย", startsAt: at(3, 14, 30), endsAt: at(3, 15, 15), going: 2, mine: false, ics: "" },
   { id: "c", room: "ห้องเกม", title: "เมื่อวานแล้ว", host: "อร", startsAt: at(1, 9), endsAt: at(1, 9, 30), going: 1, mine: false, ics: "" },
   { id: "d", room: "ห้องเล็ก", title: "ตีห้า ไม่อยู่ในตาราง", host: "อร", startsAt: at(4, 5), endsAt: at(4, 6), going: 1, mine: false, ics: "" },
+  ...(ahead ? [{ id: "e", room: "ห้องเล็ก", title: "อีกหน่อยก็เริ่ม", host: "อร", startsAt: ahead.toISOString(), endsAt: aheadEnd.toISOString(), going: 2, mine: false, ics: "" }] : []),
 ];
 
 const form = document.getElementById("fake-form");
@@ -53,6 +75,7 @@ const week = mountCalendarWeek({
   bookings: () => BOOKINGS,
   rooms: () => [{ id: "r1", label: "ห้องประชุมใหญ่" }],
   form,
+  note: document.getElementById("fake-note"),
   compose: (startAt) => { composedAt = startAt; form.hidden = false; },
   foot: document.createElement("div"),
   canBook: () => true,
@@ -66,7 +89,11 @@ log("the week, drawn from four stand-in bookings\n");
 
 const grid = document.getElementById("cw-grid");
 const evs = grid.querySelectorAll(".cw-ev");
-ok("bookings inside the hours drawn appear", evs.length === 3, `${evs.length} of 4 (05:00 one is outside)`);
+// Counted from the fixtures rather than written down, so adding one does not
+// fail an assertion that has nothing to do with it.
+const drawable = BOOKINGS.filter((b) => new Date(b.startsAt).getHours() >= 7).length;
+ok("bookings inside the hours drawn appear", evs.length === drawable,
+  `${evs.length} of ${BOOKINGS.length} (the 05:00 one is outside the hours drawn)`);
 ok("  · and the one outside them does not", !Array.from(evs).some((e) => e.textContent.includes("ตีห้า")));
 ok("a 45-minute meeting is not drawn as an hour", (() => {
   const e = Array.from(evs).find((x) => x.textContent.includes("คุยกับลูกค้า"));
@@ -145,16 +172,20 @@ ok("  · then cancels the one that was clicked", cancelled.join() === "a", cance
 ok("  · and puts the card away", pop.hidden);
 
 // a booking that is not mine, with nothing to manage, offers no cancel
-const theirs = Array.from(grid.querySelectorAll(".cw-ev")).find((e) => e.textContent.includes("คุยกับลูกค้า"));
-theirs.click();
-ok("RSVP is offered on a meeting still to come",
-  Array.from(pop.querySelectorAll("button")).some((b) => b.textContent.startsWith("จะไป")));
-Array.from(pop.querySelectorAll("button")).find((b) => b.textContent.startsWith("จะไป")).click();
-await new Promise((r) => setTimeout(r, 30));
-ok("  · and says so to the panel, not to its own copy of anything", rsvp.join() === "b:true", rsvp.join() || "nothing");
+const theirs = Array.from(grid.querySelectorAll(".cw-ev")).find((e) => e.textContent.includes("อีกหน่อยก็เริ่ม"));
+if (!theirs) {
+  log("  skip  RSVP — no hour left on the clock today to put a future meeting in");
+} else {
+  theirs.click();
+  ok("RSVP is offered on a meeting still to come",
+    Array.from(pop.querySelectorAll("button")).some((b) => b.textContent.startsWith("จะไป")));
+  Array.from(pop.querySelectorAll("button")).find((b) => b.textContent.startsWith("จะไป")).click();
+  await new Promise((r) => setTimeout(r, 30));
+  ok("  · and says so to the panel, not to its own copy of anything", rsvp.join() === "e:true", rsvp.join() || "nothing");
+}
 
 // clicking elsewhere puts it away
-theirs.click();
+(theirs ?? grid.querySelector(".cw-ev")).click();
 document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
 ok("clicking away closes the card", pop.hidden);
 

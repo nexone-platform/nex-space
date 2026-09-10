@@ -1656,6 +1656,7 @@ export class OfficeScene extends Phaser.Scene {
       bookings: () => panel.bookings(),
       rooms: () => PRIVATE_AREAS.map((a) => ({ id: a.id, label: t(a.label) })),
       form: panel.form,
+      note: panel.note,
       compose: (at, roomId) => panel.compose(at, roomId),
       foot: panel.foot,
       canBook: () => this.myRole !== "guest",
