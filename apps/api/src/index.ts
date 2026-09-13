@@ -1509,7 +1509,13 @@ async function tellAboutBooking(
   method: "REQUEST" | "CANCEL",
   only?: string,
 ) {
-  if (!mailEnabled) return;
+  // Out loud, because silence here is indistinguishable from a mail that went.
+  // "Did booking send an email?" was unanswerable on a deployment with no
+  // transport: nothing was logged, nothing was sent, and nothing said so.
+  if (!mailEnabled) {
+    console.log(`[calendar] ${method} for "${b.title}" told nobody — no mail transport is configured`);
+    return;
+  }
   try {
     const going = await prisma.bookingGoing.findMany({
       where: { bookingId: b.id, ...(only ? { userId: only } : {}) },
@@ -1526,11 +1532,21 @@ async function tellAboutBooking(
     const url = `${appOriginOf(req)}/?w=${encodeURIComponent(w.slug)}&m=${encodeURIComponent(b.mapSlug)}`;
 
     for (const p of people) {
+      // Said on the way out as well as on the way wrong. Only failures were
+      // logged, so a working send and a send that never happened looked exactly
+      // the same from the server — and "did the booking email go?" had no
+      // answer short of asking the recipient.
       await sendBooking({
         to: p.email, toName: p.name || p.email,
         space: w.name, booking: b, method, url,
         organizer: host?.email ? { name: b.hostName, email: host.email } : undefined,
-      }).catch((e) => console.warn(`[calendar] ${method} to ${p.email} did not go:`, e));
+      })
+        .then((sent) => console.log(
+          sent
+            ? `[calendar] ${method} for "${b.title}" sent to ${p.email}`
+            : `[calendar] ${method} for "${b.title}" not sent to ${p.email} — no mail transport is configured`,
+        ))
+        .catch((e) => console.warn(`[calendar] ${method} to ${p.email} did not go:`, e));
     }
   } catch (e) {
     console.warn("[calendar] could not tell anybody about the booking:", e);
@@ -1544,7 +1560,11 @@ async function tellTheseAboutBooking(
   b: BookingRow,
   people: { email: string; name: string }[],
 ) {
-  if (!mailEnabled || !people.length) return;
+  if (!people.length) return;
+  if (!mailEnabled) {
+    console.log(`[calendar] CANCEL for "${b.title}" told nobody — no mail transport is configured`);
+    return;
+  }
   const host = b.userId
     ? await prisma.user.findUnique({ where: { id: b.userId }, select: { email: true } })
     : null;
@@ -1554,7 +1574,9 @@ async function tellTheseAboutBooking(
       to: p.email, toName: p.name || p.email,
       space: w.name, booking: b, method: "CANCEL", url,
       organizer: host?.email ? { name: b.hostName, email: host.email } : undefined,
-    }).catch((e) => console.warn(`[calendar] cancellation to ${p.email} did not go:`, e));
+    })
+      .then((sent) => { if (sent) console.log(`[calendar] CANCEL for "${b.title}" sent to ${p.email}`); })
+      .catch((e) => console.warn(`[calendar] cancellation to ${p.email} did not go:`, e));
   }
 }
 
