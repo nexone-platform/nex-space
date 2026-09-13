@@ -7,7 +7,7 @@ import {
   hashPassword, verifyPassword, createSession, activateSession, sessionFromToken,
   requireAuth, userFromToken, type AuthedRequest,
 } from "./auth";
-import { sendLoginCode, mailEnabled, sendInvite, sendBooking, mailCheck } from "./mailer";
+import { sendLoginCode, mailEnabled, mailTransport, sendInvite, sendBooking, mailCheck } from "./mailer";
 import { iceConfig, turnEnabled } from "./ice";
 import { mapDocProblem } from "./mapValidate";
 import {
@@ -2855,4 +2855,21 @@ void sweepOrphanUploads().catch((e) => console.error("[uploads] sweep failed:", 
 setInterval(() => void sweepOrphanUploads().catch((e) => console.error("[uploads] sweep failed:", e)), DAY_MS).unref();
 
 if (!turnEnabled) console.warn("[ice] no TURN relay configured — calls will fail for anyone behind a strict firewall (set TURN_SECRET and TURN_HOST)");
+
+/**
+ * Whether mail works, said once at boot.
+ *
+ * The same question as /mail-check, asked without a token and answered in the
+ * deploy log — "is mail on?" should not require signing in as an admin and
+ * pasting a fetch into a console. It sends nothing: the check opens the
+ * connection, or reads a key, and stops.
+ */
+if (!mailEnabled) {
+  console.warn(`[mail] no transport configured — sign-in codes, invitations and booking invitations go nowhere (set RESEND_API_KEY, or SMTP_HOST/USER/PASS)`);
+} else {
+  console.log(`[mail] transport: ${mailTransport} — checking it answers...`);
+  void mailCheck()
+    .then((r) => (r.ok ? console.log(`[mail] ${r.detail}`) : console.error(`[mail] NOT working — ${r.detail}`)))
+    .catch((e) => console.error("[mail] check failed:", e));
+}
 app.listen(port, () => console.log(`[api] NexSpace API on http://localhost:${port}  (db: ${process.env.DATABASE_URL})`));
