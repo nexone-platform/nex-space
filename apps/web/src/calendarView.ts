@@ -15,9 +15,16 @@ import { nextSlot, type Booking, type Room } from "./calendarPanel";
  * keep in step, and they would not stay in step.
  */
 
-/** the hours drawn. Outside these a booking is still shown, clamped to the edge. */
-const FIRST_HOUR = 7;
-const LAST_HOUR = 21;
+/**
+ * The hours drawn on an ordinary week.
+ *
+ * Only a starting point: the range is widened to cover whatever is actually
+ * booked, because the alternative is a meeting the calendar does not draw. A
+ * booking at 04:00 used to be skipped outright — the grid was empty, the day
+ * looked free, and the only sign the meeting existed was the email.
+ */
+const USUAL_FIRST = 7;
+const USUAL_LAST = 21;
 const ROW_PX = 52;
 
 const startOfWeek = (d: Date) => {
@@ -198,8 +205,36 @@ export function mountCalendarWeek(o: WeekOptions) {
   }
 
   // ---- drawing --------------------------------------------------------------
+  /**
+   * The hours this particular week has to show.
+   *
+   * Never narrower than the working day, so a quiet week looks like every other
+   * week; wider whenever something is booked outside it. An end exactly on the
+   * hour does not pull in the row after it: a meeting ending at 22:00 needs the
+   * 21:00 row, not an empty 22:00 one.
+   */
+  function hoursFor(days: Date[]) {
+    let first = USUAL_FIRST, last = USUAL_LAST;
+    // Now, whenever now is on screen. Opening the calendar at twenty past four
+    // and finding no line for the current time is the grid quietly disagreeing
+    // with the clock.
+    const now = new Date();
+    if (days.some((d) => sameDay(d, now))) {
+      first = Math.min(first, now.getHours());
+      last = Math.max(last, now.getHours());
+    }
+    for (const b of o.bookings()) {
+      const from = new Date(b.startsAt), to = new Date(b.endsAt);
+      if (!days.some((d) => sameDay(d, from))) continue;
+      first = Math.min(first, from.getHours());
+      last = Math.max(last, to.getMinutes() ? to.getHours() : to.getHours() - 1);
+    }
+    return { first: Math.max(0, first), last: Math.min(23, Math.max(last, first)) };
+  }
+
   function draw() {
     const days = Array.from({ length: 7 }, (_, i) => addDays(anchor, i));
+    const { first: FIRST_HOUR, last: LAST_HOUR } = hoursFor(days);
     const today = new Date();
     const cols = `56px repeat(7, minmax(0, 1fr))`;
 
@@ -221,6 +256,7 @@ export function mountCalendarWeek(o: WeekOptions) {
 
     gridEl.style.gridTemplateColumns = cols;
     gridEl.style.gridTemplateRows = `repeat(${LAST_HOUR - FIRST_HOUR + 1}, ${ROW_PX}px)`;
+    gridEl.dataset.firstHour = String(FIRST_HOUR);
     hidePop();                      // it points at an element about to be replaced
     gridEl.innerHTML = "";
     for (let h = FIRST_HOUR; h <= LAST_HOUR; h++) {
@@ -294,7 +330,7 @@ export function mountCalendarWeek(o: WeekOptions) {
       column(over, col, el);
     }
 
-    drawNow(over, days, today);
+    drawNow(over, days, today, FIRST_HOUR, LAST_HOUR);
   }
 
   /**
@@ -327,11 +363,11 @@ export function mountCalendarWeek(o: WeekOptions) {
     on.appendChild(holder);
   }
 
-  function drawNow(on: HTMLElement, days: Date[], today: Date) {
+  function drawNow(on: HTMLElement, days: Date[], today: Date, first: number, last: number) {
     const col = days.findIndex((d) => sameDay(d, today));
     if (col < 0) return;
-    const mins = (today.getHours() - FIRST_HOUR) * 60 + today.getMinutes();
-    if (mins < 0 || mins > (LAST_HOUR - FIRST_HOUR + 1) * 60) return;
+    const mins = (today.getHours() - first) * 60 + today.getMinutes();
+    if (mins < 0 || mins > (last - first + 1) * 60) return;
 
     const y = mins * (ROW_PX / 60);
     const line = document.createElement("div");
@@ -354,7 +390,10 @@ export function mountCalendarWeek(o: WeekOptions) {
     footEl.appendChild(o.foot);
     draw();
     // Land on the working day rather than at midnight.
-    scroll.scrollTop = Math.max(0, (new Date().getHours() - FIRST_HOUR - 1) * ROW_PX);
+    // Relative to whatever the grid starts at this week, which is not always
+    // USUAL_FIRST any more.
+    const startedAt = Number(gridEl.dataset.firstHour ?? USUAL_FIRST);
+    scroll.scrollTop = Math.max(0, (new Date().getHours() - startedAt - 1) * ROW_PX);
     o.onOpen?.();
   };
   const close = () => {

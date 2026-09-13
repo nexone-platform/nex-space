@@ -11,7 +11,7 @@ import { WORKSPACE, IS_DEFAULT_WORKSPACE, workspaceLabel, inviteLink, wsKey,
 import { API as AUTH_API } from "../api";
 import { t, onLangChange, locale } from "../i18n";
 import { ACCEPT, type Attach, attachNode, humanSize, upload } from "../net/attach";
-import { type Booking, clock, mountCalendarPanel } from "../calendarPanel";
+import { type Booking, clock, dayName, freshBookings, mountCalendarPanel } from "../calendarPanel";
 import { mountCalendarWeek } from "../calendarView";
 import { mountRecording } from "../recordPanel";
 import { mountRecordingsView } from "../recordingsView";
@@ -1643,6 +1643,7 @@ export class OfficeScene extends Phaser.Scene {
       canBook: () => this.myRole !== "guest",
       onChange: (all) => {
         this.bookings = all;
+        this.noticeNewBookings(all);
         this.refreshRoomPlates();
         this.checkReminders();
         // Redrawn from the same load, so the two can never disagree about what
@@ -1665,6 +1666,34 @@ export class OfficeScene extends Phaser.Scene {
       going: (id, coming) => panel.going(id, coming),
       onOpen: () => void panel.refresh(),
     });
+  }
+
+  /**
+   * Somebody else booked a room.
+   *
+   * Until this, a booking told nobody but the person who made it: the email
+   * goes to whoever said they are coming, and at the moment a room is booked
+   * that is the host alone. Everybody else found out by walking past the door.
+   *
+   * Not a toast on the first load — joining a space is not news about forty
+   * meetings — so the first list seen is remembered rather than announced.
+   */
+  private knownBookings?: Set<string>;
+
+  private noticeNewBookings(all: Booking[]) {
+    const { fresh, known } = freshBookings(this.knownBookings, all);
+    this.knownBookings = known;
+    for (const b of fresh) {
+      const line = t("{name} จองห้อง {room}")
+        .replace("{name}", b.host)
+        .replace("{room}", b.room);
+      this.toast(line, "info");
+      this.notify("📅", line,
+        `${b.title} · ${dayName(new Date(b.startsAt))} ${clock(b.startsAt)}`,
+        // Into the week, where the meeting can be read and said yes to. The
+        // rail goes to the same place, which is the surface people use.
+        () => this.calWeek?.open());
+    }
   }
 
   /** the booking happening in a room right now, if any */

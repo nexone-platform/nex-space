@@ -452,6 +452,7 @@ const EN: Record<string, string> = {
   "ยกเลิกการประชุมนี้? คนที่จะไปจะได้รับอีเมลแจ้ง":
     "Cancel this meeting? Everyone coming gets an email about it",
   "จองห้องเวลานี้": "Book a room at this time",
+  "{name} จองห้อง {room}": "{name} booked {room}",
   "เวลานี้ผ่านไปแล้ว": "That hour has already gone",
   // why the server refused a time — a code on the wire, a sentence here
   "เวลาที่กรอกไม่ถูกต้อง": "Those are not times",

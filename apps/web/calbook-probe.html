@@ -29,7 +29,7 @@ side.id = "view-cal";
 side.style.cssText = "position:fixed;left:0;top:0;width:320px;height:100%;overflow:auto";
 document.body.appendChild(side);
 
-const { mountCalendarPanel } = await import("/src/calendarPanel.ts");
+const { mountCalendarPanel, freshBookings } = await import("/src/calendarPanel.ts");
 const { mountCalendarWeek } = await import("/src/calendarView.ts");
 
 const out = document.getElementById("out");
@@ -197,6 +197,37 @@ await tick(); await tick();
 ok("a booking the server accepts closes the form", panel.form.hidden || modal.hidden);
 ok("  · and was sent as UTC, whatever the reader's clock says",
   /Z$/.test(posts[0]?.startsAt ?? ""), posts[0]?.startsAt);
+
+// ---- being told that somebody else booked a room ----------------------------
+// Until this, a booking told nobody but the person who made it: the invitation
+// goes to whoever said they are coming, and at the moment a room is booked that
+// is the host alone. Everybody else found out by walking past the door.
+log("");
+{
+  const soon = new Date(Date.now() + 2 * 3600e3).toISOString();
+  const ended = new Date(Date.now() - 3600e3).toISOString();
+  const row = (id, mine, endsAt = new Date(Date.now() + 3 * 3600e3).toISOString()) =>
+    ({ id, mine, startsAt: soon, endsAt, title: "t", room: "r", host: "h" });
+
+  const first = freshBookings(undefined, [row("a", false), row("b", false)]);
+  ok("joining a space announces nothing", first.fresh.length === 0,
+    "forty meetings already in the calendar are not forty notifications");
+
+  const next = freshBookings(first.known, [row("a", false), row("b", false), row("c", false)]);
+  ok("  · a booking that appears afterwards is announced",
+    next.fresh.map((b) => b.id).join() === "c", next.fresh.map((b) => b.id).join() || "nothing");
+
+  const mine = freshBookings(next.known, [row("a", false), row("b", false), row("c", false), row("d", true)]);
+  ok("  · your own is not news to you", mine.fresh.length === 0,
+    mine.fresh.map((b) => b.id).join() || "nothing");
+
+  const past = freshBookings(mine.known, [row("a", false), row("e", false, ended)]);
+  ok("  · nor is one that has already finished", past.fresh.length === 0,
+    "the listing reaches a day back; that is history, not an announcement");
+
+  const again = freshBookings(past.known, [row("a", false), row("e", false, ended)]);
+  ok("  · and nothing is announced twice", again.fresh.length === 0);
+}
 
 log(`\n${pass} passed, ${fail} failed\n`);
 document.title = fail ? `FAIL ${fail}` : `PASS ${pass}`;

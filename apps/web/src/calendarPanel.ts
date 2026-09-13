@@ -96,6 +96,30 @@ const refusal = (r: Record<string, unknown>) => {
   return String(r.error || t("จองไม่สำเร็จ"));
 };
 
+/**
+ * Which of these has appeared since the last look, and is worth saying.
+ *
+ * Pulled out of the scene because the scene is Phaser and cannot be driven by a
+ * probe, while every rule that matters lives here: nothing on the first look
+ * (joining a space is not news about forty meetings), nothing of your own, and
+ * nothing already finished — the listing reaches a day back, and a meeting that
+ * is over is history rather than something to be told about.
+ *
+ * `known` is undefined on the first call and the set to keep afterwards.
+ */
+export function freshBookings(
+  known: Set<string> | undefined,
+  all: Booking[],
+  now = Date.now(),
+): { fresh: Booking[]; known: Set<string> } {
+  const ids = new Set(all.map((b) => b.id));
+  if (!known) return { fresh: [], known: ids };
+  const fresh = all.filter(
+    (b) => !known.has(b.id) && !b.mine && +new Date(b.endsAt) > now,
+  );
+  return { fresh, known: ids };
+}
+
 /** the next half hour, which is when a meeting booked now almost always starts */
 export const nextSlot = (from = new Date()) => {
   const d = new Date(from);

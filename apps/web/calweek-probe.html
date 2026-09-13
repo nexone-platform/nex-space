@@ -60,12 +60,22 @@ const ahead = (() => {
 })();
 const aheadEnd = ahead && new Date(+ahead + 60 * 60 * 1000);
 
+/** and one that is always over, as long as this week has an hour behind it */
+const behindEnd = (() => {
+  const d = new Date();
+  d.setMinutes(0, 0, 0);
+  const week = new Date(); week.setHours(0, 0, 0, 0); week.setDate(week.getDate() - week.getDay());
+  return +d > +week ? d : null;
+})();
+const behind = behindEnd && new Date(+behindEnd - 60 * 60 * 1000);
+
 const BOOKINGS = [
   { id: "a", room: "ห้องประชุมใหญ่", title: "รีวิวสปรินต์", host: "ชาลิสา", startsAt: at(2, 10), endsAt: at(2, 11), going: 3, mine: true, ics: "" },
   { id: "b", room: "ห้องเล็ก", title: "คุยกับลูกค้า", host: "สมชาย", startsAt: at(3, 14, 30), endsAt: at(3, 15, 15), going: 2, mine: false, ics: "" },
   { id: "c", room: "ห้องเกม", title: "เมื่อวานแล้ว", host: "อร", startsAt: at(1, 9), endsAt: at(1, 9, 30), going: 1, mine: false, ics: "" },
   { id: "d", room: "ห้องเล็ก", title: "ตีห้า ไม่อยู่ในตาราง", host: "อร", startsAt: at(4, 5), endsAt: at(4, 6), going: 1, mine: false, ics: "" },
   ...(ahead ? [{ id: "e", room: "ห้องเล็ก", title: "อีกหน่อยก็เริ่ม", host: "อร", startsAt: ahead.toISOString(), endsAt: aheadEnd.toISOString(), going: 2, mine: false, ics: "" }] : []),
+  ...(behind ? [{ id: "f", room: "ห้องเกม", title: "จบไปแล้ว", host: "อร", startsAt: behind.toISOString(), endsAt: behindEnd.toISOString(), going: 1, mine: false, ics: "" }] : []),
 ];
 
 const form = document.getElementById("fake-form");
@@ -91,10 +101,28 @@ const grid = document.getElementById("cw-grid");
 const evs = grid.querySelectorAll(".cw-ev");
 // Counted from the fixtures rather than written down, so adding one does not
 // fail an assertion that has nothing to do with it.
-const drawable = BOOKINGS.filter((b) => new Date(b.startsAt).getHours() >= 7).length;
-ok("bookings inside the hours drawn appear", evs.length === drawable,
-  `${evs.length} of ${BOOKINGS.length} (the 05:00 one is outside the hours drawn)`);
-ok("  · and the one outside them does not", !Array.from(evs).some((e) => e.textContent.includes("ตีห้า")));
+// Every one of them, including the 05:00. This used to assert the opposite —
+// that a booking outside 07:00–21:00 is not drawn — which is how a meeting at
+// 04:00 came to exist only in the email that announced it. The grid now widens
+// to cover whatever the week holds.
+ok("every booking in the week is drawn", evs.length === BOOKINGS.length,
+  `${evs.length} of ${BOOKINGS.length}`);
+ok("  · including one before the working day starts",
+  Array.from(evs).some((e) => e.textContent.includes("ตีห้า")),
+  "a calendar that silently drops a meeting is worse than no calendar");
+// Worked out the same way the view does — the earliest thing on this week's
+// grid, or the working day, whichever is earlier. Written down as a number it
+// would be right only at certain times of day.
+const inWeek = (iso) => {
+  const d = new Date(iso), w = new Date(); w.setHours(0, 0, 0, 0); w.setDate(w.getDate() - w.getDay());
+  return +d >= +w && +d < +w + 7 * 86400_000;
+};
+const earliest = Math.min(
+  7, new Date().getHours(),
+  ...BOOKINGS.filter((b) => inWeek(b.startsAt)).map((b) => new Date(b.startsAt).getHours()),
+);
+ok("  · and the grid starts early enough to hold it",
+  Number(grid.dataset.firstHour) === earliest, `${grid.dataset.firstHour}, wanted ${earliest}`);
 ok("a 45-minute meeting is not drawn as an hour", (() => {
   const e = Array.from(evs).find((x) => x.textContent.includes("คุยกับลูกค้า"));
   const h = parseFloat(e.style.height);
@@ -105,7 +133,10 @@ ok("  · and starts at half past, not on the hour", (() => {
   return parseFloat(e.style.top) % 52 !== 0;
 })());
 ok("mine is marked as mine", Array.from(evs).some((e) => e.classList.contains("mine")));
-ok("a meeting that already ended is faded", Array.from(evs).some((e) => e.classList.contains("over")));
+if (!behind) log("  skip  faded — this week has no hour behind it yet (it is Sunday, early)");
+else ok("a meeting that already ended is faded",
+  Array.from(evs).some((e) => e.textContent.includes("จบไปแล้ว") && e.classList.contains("over")),
+  Array.from(evs).map((e) => e.className).join(" | "));
 ok("the day strip names seven days", document.querySelectorAll(".cw-day").length === 7);
 ok("  · with today picked out", document.querySelectorAll(".cw-day.today").length === 1);
 ok("now is drawn once, on today only", grid.querySelectorAll(".cw-now").length === 1,
@@ -130,7 +161,10 @@ ok("  · leaving no modal behind", document.getElementById("cw-modal").hidden);
 // put two of these on a second implicit row once, several hundred pixels below
 // the hour they belong to, and nothing above noticed.
 const layerTop = grid.querySelector(".cw-layer").getBoundingClientRect().top;
-const ROW = 52, FIRST = 7;
+// Read from the grid rather than written down: the first hour moves with what
+// is booked, and an expectation pinned to 07:00 would fail for the right reason
+// in the wrong place.
+const ROW = 52, FIRST = Number(grid.dataset.firstHour);
 const wanted = (h, m = 0) => ((h - FIRST) * 60 + m) * (ROW / 60);
 const placed = (text) => {
   const e = Array.from(grid.querySelectorAll(".cw-ev")).find((x) => x.textContent.includes(text));
@@ -157,7 +191,10 @@ ok("  · naming the room, the time and who booked it",
   ["ห้องประชุมใหญ่", "10:00", "ชาลิสา"].every((x) => pop.textContent.includes(x)));
 {
   const r = pop.getBoundingClientRect();
-  ok("  · on screen, not off the edge",
+  // Nothing to measure against in a window with no size — a hidden tab, a
+  // thumbnail pass. Said out loud rather than counted as either result.
+  if (!window.innerWidth) log("  skip  the card is on screen  (this window has no size to measure)");
+  else ok("  · on screen, not off the edge",
     r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth + 1 && r.bottom <= window.innerHeight + 1,
     `${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.right)}x${Math.round(r.bottom)} in ${window.innerWidth}x${window.innerHeight}`);
 }
