@@ -28,9 +28,6 @@ type Recording = {
   summary?: string;
   mine?: { consent: string; transcript: string | null; digest: string | null };
   canRead: boolean;
-  /** staff only: when this went into the group chat, and who sent it */
-  sharedAt?: string | null;
-  sharedByName?: string | null;
 };
 
 export type RecordingsOptions = {
@@ -174,31 +171,38 @@ export function mountRecordingsView(o: RecordingsOptions) {
     }
 
     /**
-     * Into the group chat, by hand.
+     * Take it out of here.
      *
-     * Only for whoever runs the space, and only once the summary is finished:
-     * what a small model has just written is a draft, and the person whose job
-     * this is reads it before the company does. Sending twice is possible and
-     * has to be asked for — a group chat with the same meeting in it twice is
-     * the kind of mistake a button makes on its own.
+     * The summary goes wherever the company already talks — a chat, an email,
+     * a document — and the person whose job that is carries it across. Which
+     * is a selection across a dozen cards unless there is a button, so: one
+     * button, and what it copies is exactly what this reader may read. Staff
+     * take the meeting and everybody's part of it; anybody else takes their
+     * own row, because a clipboard is not an access rule of its own.
      */
-    if (r.canRead && r.state === "done") {
-      const share = document.createElement("div");
-      share.className = "rv-share";
-      const go = document.createElement("button");
-      go.className = "rv-send";
-      go.textContent = r.sharedAt ? t("ส่งซ้ำเข้าแชทรวม") : t("ส่งสรุปเข้าแชทรวม");
-      go.onclick = () => void post(r, !!r.sharedAt, go);
-      share.appendChild(go);
-      if (r.sharedAt) {
-        const said = document.createElement("small");
-        said.textContent = t("ส่งแล้วเมื่อ {when} โดย {name}")
-          .replace("{when}", when(r.sharedAt))
-          .replace("{name}", r.sharedByName || "—");
-        share.appendChild(said);
+    const take = document.createElement("div");
+    take.className = "rv-share";
+    const copy = document.createElement("button");
+    copy.className = "rv-send";
+    copy.textContent = t("คัดลอกสรุป");
+    copy.onclick = async () => {
+      const text = asText(r);
+      try {
+        await navigator.clipboard.writeText(text);
+        o.say(t("คัดลอกแล้ว — วางในแชทได้เลย"));
+      } catch {
+        // A clipboard a browser will not open is not a dead end: the text is
+        // put on screen, selected, for the person to copy the ordinary way.
+        o.say(t("คัดลอกอัตโนมัติไม่ได้ — เลือกข้อความแล้วกด Ctrl+C"), true);
+        show(text);
       }
-      paneEl.appendChild(share);
-    }
+    };
+    const hint = document.createElement("small");
+    hint.textContent = r.canRead
+      ? t("ได้สรุปทั้งการประชุมพร้อมส่วนของทุกคน")
+      : t("ได้เฉพาะส่วนของคุณ");
+    take.append(copy, hint);
+    paneEl.appendChild(take);
 
     const acts = document.createElement("div");
     acts.className = "rv-acts";
@@ -242,39 +246,49 @@ export function mountRecordingsView(o: RecordingsOptions) {
   }
 
   /**
-   * Post it, and say what came back.
+   * The meeting as plain text, in the order somebody reads it out.
    *
-   * The reasons a send fails are all things the person pressing can act on —
-   * no chat configured, a summary that is not finished, one that has already
-   * gone, or Lark's own refusal — so each of them is said rather than turned
-   * into "could not send".
+   * Plain text rather than anything richer because it is going to be pasted
+   * into a chat box, and every chat box on earth takes plain text. Built from
+   * the same document the pane drew, so what is copied cannot contain more
+   * than what was on screen.
    */
-  async function post(r: Recording, again: boolean, btn: HTMLButtonElement) {
-    if (again && !confirm(t("การประชุมนี้ส่งเข้าแชทรวมไปแล้ว ส่งซ้ำอีกครั้ง?"))) return;
-    btn.disabled = true;
-    const res = await api(`/recordings/${encodeURIComponent(r.id)}/share${again ? "?again=1" : ""}`,
-      { method: "POST" });
-    btn.disabled = false;
-    const d = (await res.json().catch(() => ({}))) as
-      { recording?: Recording; error?: string; why?: string };
-    if (!res.ok) {
-      o.say(
-        d.why === "no-lark" ? t("ยังไม่ได้ตั้งค่าแชทรวม — ผู้ดูแลระบบต้องใส่ LARK_WEBHOOK ก่อน")
-        : d.why === "not-done" ? t("ยังสรุปไม่เสร็จ ส่งไม่ได้")
-        : d.why === "already" ? t("การประชุมนี้ส่งไปแล้ว")
-        : String(d.error || t("ส่งเข้าแชทรวมไม่สำเร็จ")),
-        true,
-      );
-      return;
-    }
-    o.say(t("ส่งสรุปเข้าแชทรวมแล้ว"));
-    if (d.recording) {
-      perPerson.clear();
-      for (const p of (d.recording.people ?? []) as (Person & { digest?: string })[]) {
-        if (p.digest) perPerson.set(p.name, p.digest);
+  function asText(r: Recording) {
+    const out: string[] = [
+      `${t("สรุปการประชุม")} — ${r.room}`,
+      `${when(r.startedAt)}${r.endedAt ? ` – ${new Date(r.endedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}` : ""}`,
+      "",
+    ];
+    if (r.canRead && r.summary) out.push(r.summary.trim(), "");
+    if (r.canRead) {
+      const spoke = r.people.filter((p) => p.recorded && perPerson.get(p.name));
+      if (spoke.length) {
+        out.push(t("แยกตามคน"), "");
+        for (const p of spoke) out.push(`${p.name}`, perPerson.get(p.name)!.trim(), "");
       }
-      drawOne(d.recording);
+    } else if (r.mine) {
+      out.push(r.mine.digest?.trim() || t("ยังไม่มีสรุปส่วนของคุณ"), "");
     }
+    // The same sentence the pane shows, because a summary drawn from three
+    // voices out of five is a different document pasted anywhere.
+    const declined = r.people.filter((p) => !p.recorded);
+    if (declined.length) {
+      out.push(t("ไม่มีเสียงของ {names} ในบันทึกนี้ — สรุปจึงไม่ครบทุกคนที่อยู่ในห้อง")
+        .replace("{names}", declined.map((p) => p.name).join(", ")));
+    }
+    return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  /** the fallback when the browser will not open the clipboard */
+  function show(text: string) {
+    const box = document.createElement("textarea");
+    box.className = "rv-copybox";
+    box.readOnly = true;
+    box.value = text;
+    paneEl.querySelector(".rv-copybox")?.remove();
+    paneEl.querySelector(".rv-share")?.after(box);
+    box.focus();
+    box.select();
   }
 
   async function remove(id: string, mineOnly: boolean) {

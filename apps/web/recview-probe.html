@@ -101,7 +101,7 @@ const asMember = {
 };
 
 const calls = [];
-let empty = false, leak = false, shareAnswer = null;
+let empty = false, leak = false;
 
 // A server that has made the mistake this view is the second line against: a
 // document marked canRead: false that carries everybody's words anyway.
@@ -114,19 +114,24 @@ globalThis.fetch = async (url, init = {}) => {
   const u = String(url).replace(/^.*\/workspaces\/[^/]+/, "");
   calls.push(`${init.method ?? "GET"} ${u}`);
   const body =
-    u.endsWith("/share") || u.includes("/share?") ? (shareAnswer ?? { recording: { ...asStaff, sharedAt: new Date().toISOString(), sharedByName: "ชาลิสา" } })
-    : init.method === "DELETE" ? { ok: true }
+    init.method === "DELETE" ? { ok: true }
     : u.startsWith("/recordings/rec_1") ? { recording: asStaff }
     : u.startsWith("/recordings/rec_2") ? { recording: leak ? leaky() : asMember }
     : empty ? { recordings: [] }
     : listing;
-  const bad = shareAnswer?.error && (u.endsWith("/share") || u.includes("/share?"));
-  return { ok: !bad, status: bad ? (shareAnswer.status ?? 409) : 200, json: async () => body };
+  return { ok: true, status: 200, json: async () => body };
 };
 
 const said = [];
 let answer = true;
 globalThis.confirm = () => answer;
+
+// What the clipboard was handed, without touching the real one.
+let copied = null;
+Object.defineProperty(navigator, "clipboard", {
+  configurable: true,
+  value: { writeText: async (x) => { copied = x; } },
+});
 
 const view = mountRecordingsView({
   api: "http://x", workspace: "test", token: "t",
@@ -275,86 +280,52 @@ await view.open();
 document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
 ok("  · and so does Escape", el.hidden);
 
-// ---- putting it in the group chat --------------------------------------------
-// The one action on this page that leaves the building. Whoever may not read
-// the whole summary may not publish it, and a draft nothing has finished
-// writing must not go out at all.
+// ---- carrying it somewhere else ----------------------------------------------
+// The summary goes wherever the company already talks, carried across by the
+// person whose job that is. A clipboard is not an access rule of its own: what
+// it is handed has to be exactly what the reader was allowed to read.
 log("");
 {
-  // The section above left the account empty and the view closed.
   empty = false;
   await view.open();
   await tick();
-  const share = () => document.getElementById("rv-pane").querySelector(".rv-send");
+  const copy = () => document.getElementById("rv-pane").querySelector(".rv-send");
 
   items()[0].click();
   await tick();
-  ok("staff are offered a way to post the summary", !!share(), share()?.textContent ?? "no button");
+  copy().click();
+  await tick();
+  ok("staff copy the whole meeting", copied?.includes(OVERALL), (copied ?? "").slice(0, 60));
+  ok("  · with everybody's part of it, by name",
+    copied.includes(OTHERS_DIGEST) && copied.includes(MY_DIGEST) && copied.includes("สมชาย"));
+  ok("  · saying who is not in it",
+    copied.includes("ก้อง") && copied.includes("ไม่มีเสียงของ"),
+    "a summary from two voices out of three is a different document, pasted anywhere");
+  ok("  · and nobody's transcript", !copied.includes(MY_WORDS),
+    "what is copied is what was on screen, and that never included the words");
+  ok("  · as plain text a chat box will take", !/[<>]/.test(copied));
 
-  // Non-staff: the same meeting, read as somebody who was merely in it.
+  copied = null;
   items()[1].click();
   await tick();
-  ok("  · and nobody else is", !share(),
-    "publishing a summary is not something a reader of their own row can do");
-
-  // Not finished: nothing to publish yet.
-  asStaff.state = "transcribing";
-  items()[0].click();
+  copy().click();
   await tick();
-  ok("  · nor is a summary still being written", !share(), "a draft is not a thing to send");
-  asStaff.state = "done";
+  ok("everybody else copies their own part", copied?.includes(MY_DIGEST), (copied ?? "").slice(0, 60));
+  ok("  · and NOT the meeting summary", !copied.includes(OVERALL), "the access rule again");
+  ok("  · and NOT anybody else's", !copied.includes(OTHERS_DIGEST));
 
-  // Pressing it.
-  calls.length = 0; said.length = 0;
-  items()[0].click();
-  await tick();
-  share().click();
-  await tick(); await tick();
-  ok("pressing it posts the meeting, once",
-    calls.filter((c) => c.includes("/share")).join() === "POST /recordings/rec_1/share",
-    calls.join(" | "));
-  ok("  · and says so", said.some((x) => x.includes("ส่งสรุปเข้าแชทรวมแล้ว")), said.join(" / "));
-  ok("  · then shows when it went and who sent it",
-    document.getElementById("rv-pane").textContent.includes("ชาลิสา")
-    && !!document.querySelector(".rv-share small"),
-    document.querySelector(".rv-share small")?.textContent ?? "nothing said");
-  ok("  · and offers only to send it again, deliberately",
-    share().textContent.includes("ส่งซ้ำ"), share().textContent);
-
-  // Sending twice is a group chat with the meeting in it twice.
-  answer = false;
-  calls.length = 0;
-  share().click();
-  await tick();
-  ok("  · sending again asks first", !calls.some((c) => c.includes("/share")), calls.join(" | "));
-  answer = true;
-
-  calls.length = 0;
-  share().click();
-  await tick(); await tick();
-  ok("  · and says out loud that it is a repeat",
-    calls.some((c) => c.includes("/share?again=1")), calls.join(" | "));
-
-  // What the server can refuse with, each said in words somebody can act on.
-  for (const [why, expect] of [
-    ["no-lark", "LARK_WEBHOOK"],
-    ["not-done", "ยังสรุปไม่เสร็จ"],
-    ["already", "ส่งไปแล้ว"],
-  ]) {
-    said.length = 0;
-    shareAnswer = { error: "nope", why, status: why === "no-lark" ? 503 : 409 };
-    share().click();
-    await tick(); await tick();
-    ok(`  · "${why}" is said in words, not as a status code`,
-      said.some((x) => x.includes(expect)), said.join(" / ") || "nothing said");
-  }
-  shareAnswer = { error: "Lark refused it (code 19021): sign match fail", why: "refused", status: 502 };
+  // A browser that will not open the clipboard is not a dead end.
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: async () => { throw new Error("denied"); } },
+  });
   said.length = 0;
-  share().click();
-  await tick(); await tick();
-  ok("  · and Lark's own refusal is repeated rather than summarised",
-    said.some((x) => x.includes("19021")), said.join(" / ") || "nothing said");
-  shareAnswer = null;
+  copy().click();
+  await tick();
+  ok("a refused clipboard puts the text on screen to be copied by hand",
+    !!document.querySelector("#rv-pane .rv-copybox")
+    && document.querySelector("#rv-pane .rv-copybox").value.includes(MY_DIGEST),
+    said.join(" / "));
 }
 
 log(`\n${pass} passed, ${fail} failed\n`);
