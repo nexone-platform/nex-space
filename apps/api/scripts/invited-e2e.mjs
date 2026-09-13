@@ -104,6 +104,10 @@ let invite;
   ok("  · and admits the email did not go", invite?.emailed === false, String(invite?.emailed));
   ok("  · and hands over a link to pass on by hand",
     typeof invite?.link === "string" && invite.link.includes("invite="), String(invite?.link));
+  // APP_URL is written by a person, and a person writes the trailing slash the
+  // browser shows them. Every caller appends "/?w=..." to it.
+  ok("  · with no doubled slash, however APP_URL was written",
+    !/[^:]\/\//.test(String(invite?.link)), String(invite?.link));
 }
 {
   const r = await get(`/workspaces/${ws.slug}/invites`, owner.token);

@@ -633,8 +633,13 @@ const appOriginOf = (req: express.Request) =>
   // nginx serves the app and proxies this API on one host — and wrong the moment
   // they are two hosts, which in development they always are: the invite link
   // came out pointing at the API's own port, where there is no app to open it.
-  process.env.APP_URL
-  || `${req.header("x-forwarded-proto") || req.protocol}://${req.header("x-forwarded-host") || req.get("host")}`;
+  // Trailing slash trimmed, because every caller appends "/?w=..." to this and
+  // an APP_URL written the natural way — with the slash a browser shows — came
+  // out as https://host//?w=... in the invitation email and in the URL inside
+  // the .ics. Legal, and it looks like a mistake to the person reading it.
+  (process.env.APP_URL
+    || `${req.header("x-forwarded-proto") || req.protocol}://${req.header("x-forwarded-host") || req.get("host")}`
+  ).replace(/\/+$/, "");
 
 const wsView = (w: any, role?: string) => ({
   slug: w.slug, name: w.name, allowGuests: w.allowGuests,
