@@ -408,6 +408,18 @@ const EN: Record<string, string> = {
   "ลบการประชุมนี้ทั้งหมด รวมทุกเสียงและทุกสรุป?":
     "Delete this whole meeting, every voice and every summary in it?",
   "เปิดสรุปไม่สำเร็จ": "Could not open that summary",
+  // ---- posting a summary into the group chat ----
+  "ส่งสรุปเข้าแชทรวม": "Post the summary to the group chat",
+  "{name} เริ่มบันทึกเสียงการประชุมนี้ — เสียงจากไมค์ของคุณจะถูกบันทึกด้วย": "{name} started recording this meeting — your microphone is being recorded too",
+  "ส่งซ้ำเข้าแชทรวม": "Post it to the group chat again",
+  "ส่งแล้วเมื่อ {when} โดย {name}": "Posted {when} by {name}",
+  "การประชุมนี้ส่งเข้าแชทรวมไปแล้ว ส่งซ้ำอีกครั้ง?": "This meeting has already been posted. Post it again?",
+  "ส่งสรุปเข้าแชทรวมแล้ว": "Posted to the group chat",
+  "ส่งเข้าแชทรวมไม่สำเร็จ": "Could not post it to the group chat",
+  "ยังไม่ได้ตั้งค่าแชทรวม — ผู้ดูแลระบบต้องใส่ LARK_WEBHOOK ก่อน":
+    "No group chat is set up yet — an administrator has to set LARK_WEBHOOK",
+  "ยังสรุปไม่เสร็จ ส่งไม่ได้": "The summary is not finished yet",
+  "การประชุมนี้ส่งไปแล้ว": "This meeting has already been posted",
   "ลบแล้ว": "Deleted",
 
   // ---- being recorded ----

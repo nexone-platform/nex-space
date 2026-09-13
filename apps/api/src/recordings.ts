@@ -64,16 +64,41 @@ const ALLOWED: Record<string, string> = {
 export const acceptsAudio = (mime: string) => !!ALLOWED[mime.replace(/\s/g, "")];
 export const audioExt = (mime: string) => ALLOWED[mime.replace(/\s/g, "")] ?? "webm";
 
-export type Consent = "asked" | "yes" | "no";
+export type Consent = "asked" | "yes" | "no" | "auto";
+
+/**
+ * Whether each person is asked, or told.
+ *
+ * `ask` is the careful setting and the default: a sheet, a yes or a no, and
+ * only a yes is recorded. `notice` is for a workspace that has settled the
+ * question off the system — the room is told loudly that recording has started
+ * and every microphone in it records, with no sheet in the way.
+ *
+ * Which one is in force is a deployment's decision and not a browser's: the
+ * consent route reads this rather than trusting what the client says happened,
+ * so a client asking to be marked `auto` on a deployment set to `ask` does not
+ * get it.
+ *
+ * `notice` is not "no rules". Nobody's device records anybody but its owner,
+ * the chip stays up for as long as it runs, and the person whose voice it is
+ * can still delete it afterwards — those are structural and are not settings.
+ */
+export const CONSENT_MODE: "ask" | "notice" =
+  (process.env.RECORDING_CONSENT || "ask").trim().toLowerCase() === "notice" ? "notice" : "ask";
 
 /**
  * May this track receive audio?
  *
- * Said once, here, because it is the sentence the whole feature rests on: a
- * recording only ever contains the voices of people who said yes, and saying
- * yes late does not retroactively cover a meeting that already happened.
+ * Said once, here, because it is the sentence the whole feature rests on.
+ * `yes` is a person who answered; `auto` is a person recorded under a
+ * workspace that tells rather than asks. `asked` and `no` never record —
+ * neither an unanswered sheet nor a refusal, and saying yes late does not
+ * retroactively cover a meeting that already happened.
  */
-export const mayRecord = (consent: string) => consent === "yes";
+export const mayRecord = (consent: string) => consent === "yes" || consent === "auto";
+
+/** what a new track starts as, before anybody has answered anything */
+export const startingConsent = (): Consent => (CONSENT_MODE === "notice" ? "auto" : "asked");
 
 /** a name on disk that gives nothing away about who is speaking */
 export const trackPath = (recordingId: string, ext: string) =>
@@ -111,11 +136,17 @@ export function dropRecordingDir(recordingId: string) {
  * behaviour above should change this line too.
  */
 export const noticeFacts = () => ({
+  mode: CONSENT_MODE,
   what: "เสียงจากไมโครโฟนของคุณเท่านั้น ระบบไม่ได้อัดเสียงคนอื่นจากเครื่องคุณ",
   why: "เพื่อถอดเป็นข้อความและสรุปการประชุม",
   who: "สรุปทั้งฉบับเปิดดูได้เฉพาะเจ้าของพื้นที่และผู้ดูแล · คุณเปิดดูส่วนของคุณเองได้เสมอ",
   audioDays: AUDIO_KEEP_DAYS,
   textDays: TEXT_KEEP_DAYS,
   abroad: false,
-  rights: "ถอนความยินยอมและลบเสียงของคุณออกได้ทุกเมื่อ",
+  // Different in the two modes, because the first sentence is untrue in the
+  // second: nobody was asked for consent, so there is none to withdraw. What
+  // remains true either way is that the voice can be taken out.
+  rights: CONSENT_MODE === "notice"
+    ? "ลบเสียงและถ้อยคำของคุณออกจากบันทึกได้ทุกเมื่อ"
+    : "ถอนความยินยอมและลบเสียงของคุณออกได้ทุกเมื่อ",
 });

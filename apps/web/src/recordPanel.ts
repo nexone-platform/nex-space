@@ -16,6 +16,8 @@ import { record, uploadTrack, canRecord, type Recorder } from "./recorder";
  */
 
 type Notice = {
+  /** "ask" each person, or "notice" the room and record — the server's choice */
+  mode?: "ask" | "notice";
   what: string; why: string; who: string;
   audioDays: number; textDays: number; abroad: boolean; rights: string;
 };
@@ -88,6 +90,29 @@ export function mountRecording(o: RecordOptions) {
   }
 
   // ---- the notice -----------------------------------------------------------
+  /**
+   * Ask, or tell.
+   *
+   * Which one is the server's decision — a workspace that has settled the
+   * consent question elsewhere sets it to `notice`, and a sheet with a yes and
+   * a no in the way of every meeting is then a question nobody is being asked
+   * for real. `notice` still tells the room, loudly and for as long as it runs;
+   * what it skips is the pause.
+   *
+   * The mode arrives with the notice rather than being a setting in the
+   * browser, because a browser that could choose would be a browser that could
+   * choose to record people a workspace said to ask first.
+   */
+  function tellOrAsk(notice: Notice, by: string) {
+    if (notice.mode === "notice") {
+      o.say(t("{name} เริ่มบันทึกเสียงการประชุมนี้ — เสียงจากไมค์ของคุณจะถูกบันทึกด้วย")
+        .replace("{name}", by));
+      void answer(true);
+      return;
+    }
+    showAsk(notice, by);
+  }
+
   function showAsk(notice: Notice, by: string) {
     sub!.textContent = t("{name} เริ่มบันทึกการประชุมนี้ — คุณเลือกได้ว่าจะให้บันทึกเสียงของคุณหรือไม่")
       .replace("{name}", by);
@@ -186,7 +211,7 @@ export function mountRecording(o: RecordOptions) {
         // apart is how a notice quietly becomes untrue.
         void api("/recordings").then(async (r) => {
           const d = (await r.json().catch(() => ({}))) as { notice?: Notice };
-          if (d.notice) showAsk(d.notice, msg.by);
+          if (d.notice) tellOrAsk(d.notice, msg.by);
         });
       } else if (live?.id === msg.id) {
         void finish();
@@ -213,7 +238,7 @@ export function mountRecording(o: RecordOptions) {
       showChip(true);
       // Asked of the person who pressed it too. Starting a recording is not the
       // same as agreeing to be in one, and the notice is owed to everybody.
-      if (d.notice) showAsk(d.notice, o.me());
+      if (d.notice) tellOrAsk(d.notice, o.me());
     },
 
     dispose() { window.clearInterval(ticker); tape?.cancel(); },

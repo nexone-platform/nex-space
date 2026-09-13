@@ -403,6 +403,11 @@ model Recording {
   /// the whole meeting, in one piece. Read by owners and admins only.
   summary       String?
   failure       String?
+  /// when this was posted into the group chat, and by whom. Kept so the person
+  /// whose job it is can see at a glance what has already gone out, and so a
+  /// second press is a choice rather than an accident.
+  sharedAt      DateTime?
+  sharedByName  String?
   tracks        RecordingTrack[]
   reads         RecordingRead[]
 

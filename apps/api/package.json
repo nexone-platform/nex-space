@@ -30,7 +30,9 @@
     "test:rec": "node scripts/recordings-e2e.mjs",
     "test:summary": "node ../../node_modules/tsx/dist/cli.mjs scripts/summary.test.mts",
     "test:invitemail": "node ../../node_modules/tsx/dist/cli.mjs scripts/invite-mail.test.mts",
-    "test:bookingmail": "node ../../node_modules/tsx/dist/cli.mjs scripts/booking-mail.test.mts"
+    "test:bookingmail": "node ../../node_modules/tsx/dist/cli.mjs scripts/booking-mail.test.mts",
+    "test:lark": "node ../../node_modules/tsx/dist/cli.mjs scripts/lark.test.mts",
+    "test:consent": "node ../../node_modules/tsx/dist/cli.mjs scripts/consent.test.mts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

@@ -394,6 +394,19 @@
         border: 1px solid var(--warn-line); border-radius: var(--r-box);
         background: var(--warn-soft); color: var(--warn-ink); }
       .rv-empty { padding: 40px 20px; text-align: center; color: var(--faint); font-size: 13px; }
+      /* Posting the summary into the group chat: the one action on this page
+         that leaves the building, so it reads as a decision rather than as
+         another button in the row of them. */
+      .rv-share { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        margin-top: 26px; padding: 14px 16px; max-width: 68ch;
+        border: 1px solid var(--border-2); border-radius: var(--r-card, 12px);
+        background: var(--surface); }
+      .rv-share small { color: var(--muted); font-size: 12px; }
+      .rv-send { height: 34px; padding: 0 16px; border: none; cursor: pointer;
+        border-radius: var(--r-ctl); font: 600 13px "Segoe UI", sans-serif;
+        background: var(--teal); color: #fff; }
+      .rv-send:hover { background: var(--teal-hover); }
+      .rv-send:disabled { opacity: .55; cursor: default; }
       .rv-acts { display: flex; gap: 8px; margin-top: 26px; max-width: 68ch; }
       .rv-acts button { height: 32px; padding: 0 14px; border-radius: var(--r-ctl); cursor: pointer;
         font: 500 12.5px "Segoe UI", sans-serif;

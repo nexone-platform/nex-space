@@ -150,6 +150,10 @@ let visitId;
 // Written directly, with dates chosen so every figure below is one somebody
 // could work out on paper.
 
+// The same fallback src/db.ts has: this script builds its own client rather
+// than going through the API, and without it the client depends on a
+// DATABASE_URL that only happens to be in the environment.
+process.env.DATABASE_URL ||= "file:./dev.db";
 const prisma = new PrismaClient();
 const w = await prisma.workspace.findUnique({ where: { slug: ws.slug } });
 await prisma.visit.deleteMany({ where: { workspaceId: w.id } }); // start from a clean slate

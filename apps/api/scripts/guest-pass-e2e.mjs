@@ -157,6 +157,12 @@ ok("restoring a pass opens the door again", restored.in === true, restored.why ?
 // an expiry in the past is what the "หมดอายุแล้ว" tab lists; set it directly,
 // since the API only mints the offered lengths
 const { PrismaClient } = await import("@prisma/client");
+// The same fallback src/db.ts has. This script builds its own client rather
+// than going through the API, and without it the client depends on a
+// DATABASE_URL that only happens to be there — it was inherited from whatever
+// `prisma generate` had in its environment, which is not a thing a test should
+// rest on. (SQLite's relative paths resolve against the schema folder.)
+process.env.DATABASE_URL ||= "file:./dev.db";
 const prisma = new PrismaClient();
 await prisma.guestPass.update({
   where: { id: visitor.guest.id }, data: { expiresAt: new Date(Date.now() - 60_000) },

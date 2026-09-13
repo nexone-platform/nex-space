@@ -275,6 +275,32 @@ await post(`${REC}/${rec.id}/stop`, {}, owner.token);
   await del(`${REC}/${two.id}`, owner.token);
 }
 
+// ---- putting a summary in the group chat ---------------------------------------
+//
+// The chat is outside the building: whoever may not read the whole summary may
+// not publish it either, and a draft nothing has finished writing must not go
+// out at all. LARK_WEBHOOK is deliberately unset in this suite, so the last
+// thing checked is that an unconfigured deployment refuses rather than pretends.
+
+{
+  const three = (await post(REC, { ...room, roomId: "meeting-3" }, admin.token)).recording;
+  const mine = await post(`${REC}/${three.id}/share`, {}, other.token);
+  ok("somebody who cannot read the whole summary cannot post it", mine.status === 403,
+    `status ${mine.status}`);
+
+  const early = await post(`${REC}/${three.id}/share`, {}, admin.token);
+  ok("  · and a summary that is not finished does not go out",
+    early.status === 409 && early.why === "not-done", `status ${early.status} ${early.why ?? ""}`);
+
+  await post(`${REC}/${three.id}/stop`, {}, admin.token);
+  const stillEarly = await post(`${REC}/${three.id}/share`, {}, admin.token);
+  ok("  · nor does one that has only stopped",
+    stillEarly.status === 409 && stillEarly.why === "not-done",
+    `status ${stillEarly.status} ${stillEarly.why ?? ""}`);
+
+  await del(`${REC}/${three.id}`, owner.token);
+}
+
 stop();
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

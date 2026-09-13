@@ -166,12 +166,14 @@ fi
 # ------------------------------------------------------------------------ e2e
 # This one needs nothing running — it replaces fetch and reads the request body
 # — so unlike the suites below it is never skipped.
-say "Outgoing mail"
-for suite in invitemail bookingmail; do
+say "Outgoing messages, and the consent switch"
+# These need nothing running — fetch is replaced and the body is read back — so
+# unlike the suites below they are never skipped.
+for suite in invitemail bookingmail lark consent; do
   if out=$(npm run --silent "test:$suite" -w @nexspace/api 2>&1); then
     ok "$suite — $(echo "$out" | grep -oE '[0-9]+ passed, [0-9]+ failed' | tail -1)"
   else
-    bad "$suite — the email is not shaped the way it needs to be"
+    bad "$suite — what goes out is not shaped the way it needs to be"
     echo "$out" | grep -E '^! FAIL|passed,' | head -8 | sed 's/^/        /' >&2
   fi
 done

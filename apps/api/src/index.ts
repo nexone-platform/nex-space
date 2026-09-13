@@ -12,7 +12,7 @@ import { iceConfig, turnEnabled } from "./ice";
 import { mapDocProblem } from "./mapValidate";
 import {
   AUDIO_KEEP_DAYS, TEXT_KEEP_DAYS, MAX_MINUTES as REC_MAX_MINUTES, TRACK_MAX_BYTES,
-  acceptsAudio, audioExt, dropRecordingDir, dropTrack, mayRecord, noticeFacts,
+  acceptsAudio, audioExt, dropRecordingDir, dropTrack, mayRecord, CONSENT_MODE, startingConsent, noticeFacts,
   putTrack, trackPath,
 } from "./recordings.js";
 import { runSummaryQueue, summariesReady, summaryCheck } from "./summarise.js";
@@ -29,6 +29,7 @@ import {
 import {
   checkWhen, eventSig, ics, newCalendarKey, overlaps,
 } from "./calendar.js";
+import { larkReady, larkWhere, larkCheck, meetingCard, sendToLark } from "./lark.js";
 
 const port = Number(process.env.PORT) || 3001;
 const app = express();
@@ -1833,7 +1834,7 @@ function recordingView(r: RecordingRow, me: { id: string } | null, staff: boolea
       name: t.name,
       consent: t.consent,
       seconds: t.seconds,
-      recorded: t.consent === "yes" && t.seconds > 0,
+      recorded: mayRecord(t.consent) && t.seconds > 0,
       // Staff get each person's summary, which is what a meeting summary
       // broken down by person means. Not each person's transcript: that is a
       // great deal more of somebody than the job needs, and the person whose
@@ -1841,6 +1842,12 @@ function recordingView(r: RecordingRow, me: { id: string } | null, staff: boolea
       ...(staff ? { digest: t.digest } : {}),
     })),
     summary: staff ? r.summary : undefined,
+    // Only to staff, because only staff can post it and only they need to know
+    // whether it already went.
+    ...(staff ? {
+      sharedAt: r.sharedAt?.toISOString() ?? null,
+      sharedByName: r.sharedByName ?? null,
+    } : {}),
     mine: mine
       ? { consent: mine.consent, transcript: mine.transcript, digest: mine.digest }
       : undefined,
@@ -1881,7 +1888,7 @@ app.post("/workspaces/:slug/recordings", async (req, res) => {
       audioUntil: new Date(Date.now() + AUDIO_KEEP_DAYS * DAY_MS),
       // Whoever presses record is in it. Anything else is somebody holding a
       // microphone to a room they have stepped out of.
-      tracks: { create: { userId: can.me.id, name: can.me.name, consent: "asked" } },
+      tracks: { create: { userId: can.me.id, name: can.me.name, consent: startingConsent() } },
     },
     include: { tracks: true },
   });
@@ -1907,7 +1914,11 @@ app.post("/workspaces/:slug/recordings/:id/consent", async (req, res) => {
   if (!rec || rec.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
 
   const yes = (req.body ?? {}).consent === true;
-  const consent = yes ? "yes" : "no";
+  // The deployment decides what a yes means, not the browser. On a workspace
+  // set to `notice` nobody was asked, so the row says `auto` rather than
+  // claiming a consent that was never given — and a client that asks to be
+  // marked `auto` on a workspace set to `ask` does not get it.
+  const consent = yes ? (CONSENT_MODE === "notice" ? "auto" : "yes") : "no";
   const before = await prisma.recordingTrack.findUnique({
     where: { recordingId_userId: { recordingId: rec.id, userId: can.me.id } },
   });
@@ -2063,6 +2074,79 @@ app.get("/workspaces/:slug/recordings/:id", async (req, res) => {
     });
   }
   res.json({ recording: recordingView(rec as RecordingRow, can.me, staff) });
+});
+
+/**
+ * Put the summary in the group chat.
+ *
+ * One person's job, pressed by hand. Not automatic on the queue finishing:
+ * a summary a small model has just written is a draft, and the person whose
+ * job this is reads it before the whole company does. The same reason it does
+ * not go out per person — one message, once, when somebody has looked at it.
+ *
+ * Staff only, like reading the whole summary: posting it into a group chat is
+ * publishing it, and whoever may not read all of it may not publish all of it.
+ */
+app.post("/workspaces/:slug/recordings/:id/share", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can) return res.status(403).json({ error: "forbidden" });
+  if (can.role !== "owner" && can.role !== "admin") {
+    return res.status(403).json({ error: "only somebody who runs the space may post a summary" });
+  }
+  const rec = await prisma.recording.findUnique({
+    where: { id: req.params.id }, include: { tracks: true },
+  });
+  if (!rec || rec.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
+  if (rec.state !== "done") {
+    return res.status(409).json({ error: "there is no finished summary to post yet", why: "not-done" });
+  }
+  // Sent twice is a group chat with the same meeting in it twice. Deliberate
+  // resending is allowed and has to say so.
+  if (rec.sharedAt && String(req.query.again) !== "1") {
+    return res.status(409).json({
+      error: "this one has already been posted", why: "already",
+      sharedAt: rec.sharedAt.toISOString(), sharedByName: rec.sharedByName,
+    });
+  }
+
+  // Last, after everything about the meeting itself has been checked: somebody
+  // pressing this on an unfinished summary should be told it is unfinished,
+  // whatever the deployment has configured.
+  if (!larkReady) return res.status(503).json({ error: "no group chat is configured", why: "no-lark" });
+
+  const sent = await sendToLark(meetingCard({
+    room: rec.roomLabel,
+    startedAt: rec.startedAt,
+    endedAt: rec.endedAt,
+    summary: rec.summary,
+    people: rec.tracks.map((t) => ({
+      name: t.name, digest: t.digest, recorded: mayRecord(t.consent) && t.seconds > 0,
+    })),
+    url: `${appOriginOf(req)}/?w=${encodeURIComponent(w.slug)}`,
+  }));
+  if (!sent.ok) {
+    console.warn(`[lark] ${rec.id} did not go: ${sent.detail}`);
+    return res.status(502).json({ error: sent.detail, why: "refused" });
+  }
+
+  const after = await prisma.recording.update({
+    where: { id: rec.id },
+    data: { sharedAt: new Date(), sharedByName: can.me.name },
+    include: { tracks: true },
+  });
+  console.log(`[lark] ${rec.id} "${rec.roomLabel}" posted to the group by ${can.me.name}`);
+  res.json({ recording: recordingView(after as RecordingRow, can.me, true) });
+});
+
+/** is the group chat reachable? — without putting anything in it */
+app.get("/workspaces/:slug/lark-check", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const staff = await inviteStaff(req, w);
+  if (!staff) return res.status(403).json({ error: "forbidden" });
+  res.json(await larkCheck());
 });
 
 /**
@@ -2869,6 +2953,15 @@ if (!turnEnabled) console.warn("[ice] no TURN relay configured — calls will fa
  * pasting a fetch into a console. It sends nothing: the check opens the
  * connection, or reads a key, and stops.
  */
+console.log(
+  larkReady
+    ? `[lark] group chat configured (${larkWhere}) — summaries can be posted`
+    : "[lark] no group chat configured — a finished summary can be read but not posted (set LARK_WEBHOOK)",
+);
+console.log(`[recording] consent: ${CONSENT_MODE === "notice"
+  ? "the room is told and every microphone records"
+  : "each person is asked, and only a yes is recorded"}`);
+
 if (!mailEnabled) {
   console.warn(`[mail] no transport configured — sign-in codes, invitations and booking invitations go nowhere (set RESEND_API_KEY, or SMTP_HOST/USER/PASS)`);
 } else {

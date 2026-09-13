@@ -28,6 +28,9 @@ type Recording = {
   summary?: string;
   mine?: { consent: string; transcript: string | null; digest: string | null };
   canRead: boolean;
+  /** staff only: when this went into the group chat, and who sent it */
+  sharedAt?: string | null;
+  sharedByName?: string | null;
 };
 
 export type RecordingsOptions = {
@@ -170,6 +173,33 @@ export function mountRecordingsView(o: RecordingsOptions) {
       if (r.mine.transcript) paneEl.append(...block(t("ถ้อยคำของคุณ"), r.mine.transcript));
     }
 
+    /**
+     * Into the group chat, by hand.
+     *
+     * Only for whoever runs the space, and only once the summary is finished:
+     * what a small model has just written is a draft, and the person whose job
+     * this is reads it before the company does. Sending twice is possible and
+     * has to be asked for — a group chat with the same meeting in it twice is
+     * the kind of mistake a button makes on its own.
+     */
+    if (r.canRead && r.state === "done") {
+      const share = document.createElement("div");
+      share.className = "rv-share";
+      const go = document.createElement("button");
+      go.className = "rv-send";
+      go.textContent = r.sharedAt ? t("ส่งซ้ำเข้าแชทรวม") : t("ส่งสรุปเข้าแชทรวม");
+      go.onclick = () => void post(r, !!r.sharedAt, go);
+      share.appendChild(go);
+      if (r.sharedAt) {
+        const said = document.createElement("small");
+        said.textContent = t("ส่งแล้วเมื่อ {when} โดย {name}")
+          .replace("{when}", when(r.sharedAt))
+          .replace("{name}", r.sharedByName || "—");
+        share.appendChild(said);
+      }
+      paneEl.appendChild(share);
+    }
+
     const acts = document.createElement("div");
     acts.className = "rv-acts";
     if (r.mine) {
@@ -209,6 +239,42 @@ export function mountRecordingsView(o: RecordingsOptions) {
       if (p.digest) perPerson.set(p.name, p.digest);
     }
     drawOne(d.recording);
+  }
+
+  /**
+   * Post it, and say what came back.
+   *
+   * The reasons a send fails are all things the person pressing can act on —
+   * no chat configured, a summary that is not finished, one that has already
+   * gone, or Lark's own refusal — so each of them is said rather than turned
+   * into "could not send".
+   */
+  async function post(r: Recording, again: boolean, btn: HTMLButtonElement) {
+    if (again && !confirm(t("การประชุมนี้ส่งเข้าแชทรวมไปแล้ว ส่งซ้ำอีกครั้ง?"))) return;
+    btn.disabled = true;
+    const res = await api(`/recordings/${encodeURIComponent(r.id)}/share${again ? "?again=1" : ""}`,
+      { method: "POST" });
+    btn.disabled = false;
+    const d = (await res.json().catch(() => ({}))) as
+      { recording?: Recording; error?: string; why?: string };
+    if (!res.ok) {
+      o.say(
+        d.why === "no-lark" ? t("ยังไม่ได้ตั้งค่าแชทรวม — ผู้ดูแลระบบต้องใส่ LARK_WEBHOOK ก่อน")
+        : d.why === "not-done" ? t("ยังสรุปไม่เสร็จ ส่งไม่ได้")
+        : d.why === "already" ? t("การประชุมนี้ส่งไปแล้ว")
+        : String(d.error || t("ส่งเข้าแชทรวมไม่สำเร็จ")),
+        true,
+      );
+      return;
+    }
+    o.say(t("ส่งสรุปเข้าแชทรวมแล้ว"));
+    if (d.recording) {
+      perPerson.clear();
+      for (const p of (d.recording.people ?? []) as (Person & { digest?: string })[]) {
+        if (p.digest) perPerson.set(p.name, p.digest);
+      }
+      drawOne(d.recording);
+    }
   }
 
   async function remove(id: string, mineOnly: boolean) {
