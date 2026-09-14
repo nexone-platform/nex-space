@@ -290,6 +290,23 @@ export async function sendBooking(opts: {
 }): Promise<boolean> {
   const { to, toName, space, booking: b, organizer, url, method } = opts;
   const off = method === "CANCEL";
+
+  /**
+   * An invitation to yourself is not an invitation.
+   *
+   * Booking a room puts the host on the list of people coming, so the first
+   * message about almost every booking goes to the person who made it — and it
+   * went out as a REQUEST naming them as both the organiser and the only
+   * attendee, from a domain that is neither. Gmail would not render it:
+   * "โหลดกิจกรรมไม่ได้", no card, no button, nothing in the calendar.
+   *
+   * PUBLISH is what that file actually is — "here is something that is
+   * happening" — and it is offered with "add to calendar" rather than with a
+   * yes and a no nobody is waiting for. A real invitation, to somebody who is
+   * not the host, stays a REQUEST.
+   */
+  const toSelf = !!organizer?.email && organizer.email.toLowerCase() === to.toLowerCase();
+  const icsMethod = method === "REQUEST" && toSelf ? "PUBLISH" : method;
   const when = new Intl.DateTimeFormat("th-TH", {
     dateStyle: "full", timeStyle: "short", timeZone: process.env.BOOKING_TZ || "Asia/Bangkok",
   }).format(b.startsAt);
@@ -350,13 +367,17 @@ export async function sendBooking(opts: {
     attach: [{
       filename: off ? "cancelled.ics" : "meeting.ics",
       body: ics(space, [b], {
-        method, url, organizer,
-        attendees: [{ name: toName || to, email: to }],
+        method: icsMethod, url, organizer,
+        // Nobody is being asked to reply to their own meeting, and an ATTENDEE
+        // line with RSVP=TRUE on it says somebody is.
+        attendees: toSelf ? [] : [{ name: toName || to, email: to }],
       }),
       // The method belongs on the content type as well as inside the file:
       // that is what a client reads to decide between "add this" and "do you
       // accept". Without it the same bytes are just an attachment.
-      type: `text/calendar; method=${method}; charset=utf-8`,
+      // The method on the content type is what a client reads to decide between
+      // "add this" and "do you accept", so it has to be the one inside the file.
+      type: `text/calendar; method=${icsMethod}; charset=utf-8`,
     }],
   });
 }

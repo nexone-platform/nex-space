@@ -116,5 +116,42 @@ ok("  · and each event links to the map it is actually on",
 ok("  · with no organiser, since nobody is being asked to reply",
   !feed.includes("ORGANIZER"));
 
+// ---- the first message about almost every booking --------------------------------
+//
+// Booking a room puts the host on the list of people coming, so the message
+// that goes out the moment a room is held is usually addressed to the person
+// who held it. That one went out as a REQUEST naming them as organiser and as
+// the only attendee, from a domain that is neither — and Gmail would not render
+// it at all: no card, no button, nothing in the calendar.
+
+await sendBooking({
+  to: HOST.email, toName: HOST.name, space: "Test",
+  booking: BOOKING, organizer: HOST, url: URL_, method: "REQUEST",
+});
+
+ok("a booking you made for yourself is not sent as an invitation",
+  out().attachments![0].content_type === "text/calendar; method=PUBLISH; charset=utf-8",
+  out().attachments![0].content_type);
+ok("  · and the file agrees",
+  unfolded().includes("METHOD:PUBLISH") && !unfolded().includes("METHOD:REQUEST"));
+ok("  · nobody is asked to reply to their own meeting",
+  !unfolded().includes("RSVP=TRUE") && !unfolded().includes("ATTENDEE"),
+  (/ATTENDEE[^' + B + 'r' + B + 'n]*/.exec(unfolded()) || ["none"])[0]);
+ok("  · but it still says whose meeting it is",
+  unfolded().includes("ORGANIZER;CN=ชาลิสา:mailto:chalisa@company.test"));
+ok("  · and still carries the room, the time and the way back",
+  unfolded().includes("LOCATION:ห้องประชุมใหญ่")
+  && unfolded().includes("DTSTART:20260910T030000Z") && unfolded().includes(`URL:${URL_}`));
+
+// Somebody else's copy of the same booking is still a real invitation.
+await sendBooking({
+  to: "them@example.test", toName: "สมชาย", space: "Test",
+  booking: BOOKING, organizer: HOST, url: URL_, method: "REQUEST",
+});
+ok("  · while everybody else still gets one they can accept",
+  out().attachments![0].content_type === "text/calendar; method=REQUEST; charset=utf-8"
+  && unfolded().includes("RSVP=TRUE"),
+  out().attachments![0].content_type);
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
