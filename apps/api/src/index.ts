@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { randomBytes } from "crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import express from "express";
 import cors from "cors";
 import { prisma } from "./db";
@@ -16,6 +16,7 @@ import {
   putTrack, trackPath,
 } from "./recordings.js";
 import { llmReady, runSummaryQueue, summariesReady, summaryCheck } from "./summarise.js";
+import { GCAL_SCOPE, dropEvent, gcalCheck, gcalEnabled, pushEvent } from "./gcal.js";
 import {
   newTotpSecret, otpauthUri, qrDataUrl, checkTotp,
   newRecoveryCodes, hashRecoveryCodes, countRecoveryCodes, spendRecoveryCode,
@@ -494,6 +495,169 @@ app.post("/auth/logout", requireAuth, async (req: AuthedRequest, res) => {
 
 // ---- profile / avatar ----
 app.get("/me", requireAuth, (req: AuthedRequest, res) => res.json({ user: safeUser(req.user!) }));
+
+// ---- writing a booking into somebody's own Google Calendar ----------------------
+//
+// The subscribed feed beside this is Google's own eight-to-twenty-four hour
+// refresh, which is right for seeing the month and useless for a room booked
+// ten minutes ago. This is the other half, and it is per person: each
+// individual grants `calendar.events` for their own account and can take it
+// back, and nothing here can reach a calendar nobody connected.
+
+/** the redirect Google is told to come back to, registered in the console */
+const gcalRedirect = (req: express.Request) =>
+  process.env.GCAL_REDIRECT_URL ||
+  `${(req.header("x-forwarded-proto") || req.protocol)}://${req.header("x-forwarded-host") || req.get("host")}/auth/google/calendar/callback`;
+
+/**
+ * Who asked, carried through Google and back, without a session token in a URL.
+ *
+ * A redirect cannot carry an Authorization header, and putting the session
+ * token in the query string would write a working credential into nginx's logs
+ * and the browser's history. So the authenticated request mints this instead: a
+ * signed, short-lived note saying who it was for, worth nothing to anybody else
+ * and nothing at all in ten minutes.
+ */
+const GCAL_STATE_MS = 10 * 60_000;
+const gcalState = (userId: string, back: string) => {
+  const exp = Date.now() + GCAL_STATE_MS;
+  const body = Buffer.from(JSON.stringify({ u: userId, e: exp, b: back })).toString("base64url");
+  const sig = createHmac("sha256", serverKey()).update(body).digest("base64url").slice(0, 32);
+  return `${body}.${sig}`;
+};
+const readGcalState = (raw: string): { u: string; b: string } | null => {
+  const [body, sig] = String(raw).split(".");
+  if (!body || !sig) return null;
+  const want = createHmac("sha256", serverKey()).update(body).digest("base64url").slice(0, 32);
+  const a = Buffer.from(sig), b = Buffer.from(want);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  try {
+    const d = JSON.parse(Buffer.from(body, "base64url").toString()) as { u: string; e: number; b: string };
+    if (!d.u || !(d.e > Date.now())) return null;
+    return { u: d.u, b: d.b || "" };
+  } catch { return null; }
+};
+
+/** what this person has connected, if anything */
+app.get("/me/google-calendar", requireAuth, async (req: AuthedRequest, res) => {
+  const row = await prisma.googleCalendar.findUnique({ where: { userId: req.user!.id } });
+  res.json({
+    available: gcalEnabled,
+    connected: !!row,
+    email: row?.email ?? null,
+    connectedAt: row?.connectedAt?.toISOString() ?? null,
+    // Said plainly, because a connection that has quietly stopped working looks
+    // exactly like one that works until somebody books a room.
+    lastError: row?.lastError ?? null,
+  });
+});
+
+/** the address to send the browser to. Authenticated, so the state can be signed */
+app.post("/me/google-calendar/start", requireAuth, (req: AuthedRequest, res) => {
+  if (!gcalEnabled) return res.status(501).json({ error: "Google is not configured on this server" });
+  const params = new URLSearchParams({
+    client_id: GOOGLE_ID,
+    redirect_uri: gcalRedirect(req),
+    response_type: "code",
+    scope: GCAL_SCOPE,
+    // Both are required to be given a refresh token at all: offline asks for
+    // one, and consent asks again on a re-connect that would otherwise be
+    // answered silently and return none.
+    access_type: "offline",
+    prompt: "consent",
+    include_granted_scopes: "true",
+    login_hint: req.user!.email,
+    state: gcalState(req.user!.id, String((req.body ?? {}).back || "")),
+  });
+  res.json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` });
+});
+
+app.get("/auth/google/calendar/callback", async (req, res) => {
+  const state = readGcalState(String(req.query.state || ""));
+  const back = appUrl(req, state?.b || "");
+  const done = (mark: string) => res.redirect(`${back}#gcal=${encodeURIComponent(mark)}`);
+
+  if (!state) return done("expired");
+  if (req.query.error) {
+    console.warn("[gcal] the person refused, or Google did:", req.query.error);
+    return done(String(req.query.error).slice(0, 40));
+  }
+  if (!req.query.code) return done("no_code");
+
+  try {
+    const r = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code: String(req.query.code),
+        client_id: GOOGLE_ID, client_secret: GOOGLE_SECRET,
+        redirect_uri: gcalRedirect(req),
+        grant_type: "authorization_code",
+      }),
+    });
+    const tok = (await r.json().catch(() => ({}))) as
+      { access_token?: string; refresh_token?: string; scope?: string; error?: string };
+    if (!tok.refresh_token) {
+      // Without one the server can do nothing an hour from now, so a connection
+      // that has only an access token is not a connection.
+      console.error("[gcal] no refresh token came back:", JSON.stringify(tok).slice(0, 200));
+      return done("no_refresh_token");
+    }
+    if (tok.scope && !tok.scope.includes(GCAL_SCOPE)) {
+      console.warn("[gcal] the calendar scope was not granted:", tok.scope);
+      return done("scope_refused");
+    }
+
+    // Which account was actually connected — not necessarily the one they sign
+    // in to NexSpace with, and worth showing them either way.
+    let email = "";
+    if (tok.access_token) {
+      const who = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+        headers: { authorization: `Bearer ${tok.access_token}` },
+      }).then((x) => x.json()).catch(() => ({}));
+      email = normEmail((who as { email?: string }).email);
+    }
+    if (!email) {
+      const me = await prisma.user.findUnique({ where: { id: state.u }, select: { email: true } });
+      email = me?.email ?? "";
+    }
+
+    await prisma.googleCalendar.upsert({
+      where: { userId: state.u },
+      update: { refreshToken: tok.refresh_token, email, lastError: null, lastErrorAt: null, connectedAt: new Date() },
+      create: { userId: state.u, refreshToken: tok.refresh_token, email },
+    });
+    console.log(`[gcal] ${email} connected a calendar`);
+    done("connected");
+  } catch (e) {
+    console.error("[gcal] connecting failed:", e);
+    done("failed");
+  }
+});
+
+/**
+ * Disconnect.
+ *
+ * Told to Google as well as forgotten here. Deleting the row alone would leave
+ * a live grant on their account that nothing uses and nobody can see — the
+ * point of disconnecting is that the permission stops existing.
+ */
+app.delete("/me/google-calendar", requireAuth, async (req: AuthedRequest, res) => {
+  const row = await prisma.googleCalendar.findUnique({ where: { userId: req.user!.id } });
+  if (!row) return res.json({ ok: true, already: true });
+  await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(row.refreshToken)}`, {
+    method: "POST", signal: AbortSignal.timeout(10_000),
+  }).catch((e) => console.warn("[gcal] revoke did not go through:", (e as Error).message));
+  await prisma.googleCalendar.delete({ where: { userId: req.user!.id } });
+  console.log(`[gcal] ${row.email} disconnected`);
+  res.json({ ok: true });
+});
+
+/** does it still work? — asked without writing anything into the calendar */
+app.get("/me/google-calendar/check", requireAuth, async (req: AuthedRequest, res) => {
+  res.json(await gcalCheck(req.user!.id));
+});
+
 
 app.put("/me/avatar", requireAuth, async (req: AuthedRequest, res) => {
   const avatar = JSON.stringify(req.body ?? {});
@@ -1559,6 +1723,64 @@ async function tellAboutBooking(
 }
 
 /** the same, for people whose "going" rows are about to stop existing */
+/**
+ * Put a booking into the calendars of the people who said they are coming.
+ *
+ * Best effort, and never able to fail the thing it is about: a room is held
+ * whether or not Google answered. Called without awaiting, like the invitation
+ * email beside it and for the same reason — the person who pressed the button
+ * is waiting on the booking, not on a third party.
+ *
+ * Only people who connected a calendar have one written. There is no way for
+ * this to reach anybody else, because there is no token for anybody else.
+ */
+async function addToGoogle(
+  req: express.Request,
+  w: { slug: string },
+  b: BookingRow,
+  only?: string,
+) {
+  if (!gcalEnabled) return;
+  try {
+    const going = await prisma.bookingGoing.findMany({
+      where: { bookingId: b.id, ...(only ? { userId: only } : {}) },
+    });
+    if (!going.length) return;
+    const url = `${appOriginOf(req)}/?w=${encodeURIComponent(w.slug)}&m=${encodeURIComponent(b.mapSlug)}`;
+    for (const g of going) {
+      if (g.googleEventId) continue;        // already in that calendar
+      const id = await pushEvent(g.userId, {
+        id: b.id, title: b.title, roomLabel: b.roomLabel, hostName: b.hostName,
+        startsAt: b.startsAt, endsAt: b.endsAt, url,
+      }).catch((e) => { console.warn("[gcal] add failed:", (e as Error).message); return null; });
+      if (id) {
+        await prisma.bookingGoing.update({
+          where: { bookingId_userId: { bookingId: b.id, userId: g.userId } },
+          data: { googleEventId: id },
+        }).catch(() => {});
+      }
+    }
+  } catch (e) {
+    console.warn("[gcal] could not add the booking to anybody's calendar:", e);
+  }
+}
+
+/**
+ * Take it back out.
+ *
+ * Given the rows before they are deleted, because by the time a booking is
+ * cancelled there is nothing left to look up. An event id that is already gone
+ * from Google is not a failure — it is the state that was wanted.
+ */
+async function removeFromGoogle(rows: { userId: string; googleEventId: string | null }[]) {
+  if (!gcalEnabled) return;
+  for (const g of rows) {
+    if (!g.googleEventId) continue;
+    await dropEvent(g.userId, g.googleEventId)
+      .catch((e) => console.warn("[gcal] remove failed:", (e as Error).message));
+  }
+}
+
 async function tellTheseAboutBooking(
   req: express.Request,
   w: { id: string; slug: string; name: string },
@@ -1632,6 +1854,7 @@ app.post("/workspaces/:slug/bookings", async (req, res) => {
   res.json({ booking: bookingView(b, can.me.id, w.slug) });
   // After the answer, not before it. The room is held either way.
   void tellAboutBooking(req, w, b as BookingRow, "REQUEST");
+  void addToGoogle(req, w, b as BookingRow);
 });
 
 /** "I am coming" / "I am not" */
@@ -1660,8 +1883,12 @@ app.post("/workspaces/:slug/bookings/:id/going", async (req, res) => {
   // and sending the invitation again would put a duplicate in their calendar.
   if (coming && !already) {
     void tellAboutBooking(req, w, b as BookingRow, "REQUEST", can.me.id);
+    void addToGoogle(req, w, b as BookingRow, can.me.id);
   } else if (!coming && already) {
     void tellTheseAboutBooking(req, w, b as BookingRow, [{ email: can.me.email, name: can.me.name }]);
+    // Their own copy, out of their own calendar. Everybody else who is coming
+    // keeps theirs.
+    void removeFromGoogle([{ userId: can.me.id, googleEventId: already.googleEventId }]);
   }
   const after = await prisma.booking.findUnique({
     where: { id: b.id }, include: { going: { select: { userId: true } } },
@@ -1691,14 +1918,17 @@ app.delete("/workspaces/:slug/bookings/:id", async (req, res) => {
   // Read before the delete, because the rows go with it. Everyone who was
   // coming has this in their calendar now, and a cancelled meeting that stays
   // in the calendar is worse than one that was never sent: people turn up.
-  const were = (await prisma.bookingGoing.findMany({
+  const rows = await prisma.bookingGoing.findMany({
     where: { bookingId: b.id },
     include: { user: { select: { email: true, name: true } } },
-  })).map((g) => g.user).filter((u): u is { email: string; name: string } => !!u?.email);
+  });
+  const were = rows.map((g) => g.user).filter((u): u is { email: string; name: string } => !!u?.email);
+  const inGoogle = rows.map((g) => ({ userId: g.userId, googleEventId: g.googleEventId }));
 
   await prisma.booking.delete({ where: { id: b.id } });
   res.json({ ok: true });
   void tellTheseAboutBooking(req, w, b as BookingRow, were);
+  void removeFromGoogle(inGoogle);
 });
 
 // ---- getting it into a real calendar ------------------------------------------
@@ -2883,6 +3113,9 @@ if (!turnEnabled) console.warn("[ice] no TURN relay configured — calls will fa
  * pasting a fetch into a console. It sends nothing: the check opens the
  * connection, or reads a key, and stops.
  */
+console.log(gcalEnabled
+  ? "[gcal] Google Calendar can be connected — each person grants it for their own account"
+  : "[gcal] no Google credentials — bookings reach a calendar only through the subscribed feed and the email");
 console.log(`[recording] consent: ${CONSENT_MODE === "notice"
   ? "the room is told and every microphone records"
   : "each person is asked, and only a yes is recorded"}`);

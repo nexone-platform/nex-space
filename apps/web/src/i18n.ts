@@ -410,6 +410,22 @@ const EN: Record<string, string> = {
   "เปิดสรุปไม่สำเร็จ": "Could not open that summary",
   // ---- taking the summary somewhere else ----
   "คัดลอกสรุป": "Copy the summary",
+  // ---- connecting a Google Calendar ----
+  "เชื่อม Google Calendar ของฉัน": "Connect my Google Calendar",
+  "การจองที่คุณกดว่าจะไป จะขึ้นในปฏิทินทันที": "Bookings you say you are coming to appear in it straight away",
+  "เขียนลง Google Calendar ของ {email} แล้ว": "Writing into the Google Calendar of {email}",
+  "ยกเลิกการเชื่อม": "Disconnect",
+  "เลิกเขียนการจองลงปฏิทิน Google ของคุณ?": "Stop writing bookings into your Google Calendar?",
+  "ยกเลิกการเชื่อมแล้ว": "Disconnected",
+  "ยกเลิกการเชื่อมไม่สำเร็จ": "Could not disconnect",
+  "ครั้งล่าสุด Google ไม่รับ — ลองเชื่อมใหม่": "Google refused the last write — try connecting again",
+  "เริ่มเชื่อมไม่สำเร็จ": "Could not start connecting",
+  "เชื่อม Google Calendar แล้ว": "Google Calendar connected",
+  "เชื่อม Google Calendar ไม่สำเร็จ": "Could not connect Google Calendar",
+  "คุณไม่ได้อนุญาต — ปฏิทินยังไม่ถูกเชื่อม": "You did not allow it — nothing was connected",
+  "ลิงก์หมดอายุ ลองกดเชื่อมใหม่อีกครั้ง": "That link expired — press connect again",
+  "Google ไม่ได้ให้สิทธิ์ค้างไว้ — ลองใหม่และกดอนุญาต": "Google did not grant lasting access — try again and allow it",
+  "ต้องติ๊กอนุญาตให้จัดการปฏิทินด้วย จึงจะเชื่อมได้": "The calendar permission has to be ticked for this to work",
   "ยังไม่ได้ตั้งค่า AI สรุป — ข้างล่างคือถ้อยคำที่ถอดได้ ไม่ใช่บทสรุป":
     "No summarising model is set up — what follows is the transcript, not a summary",
   "ถ้อยคำ แยกตามคน": "What each person said",

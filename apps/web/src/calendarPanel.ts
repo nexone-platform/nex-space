@@ -426,6 +426,109 @@ export function mountCalendarPanel(o: CalendarOptions) {
     foot.appendChild(link);
   }
 
+  /**
+   * Connecting one person's own Google Calendar.
+   *
+   * The row above is a subscription, which Google re-reads on its own schedule
+   * somewhere between eight and twenty-four hours. This one writes the booking
+   * into their calendar as it is made. It is per person and it is theirs to
+   * undo, so it lives here rather than in an admin page.
+   */
+  const gcal = document.createElement("div");
+  gcal.className = "cal-gcal";
+  foot.appendChild(gcal);
+
+  const drawGcal = (s: {
+    available?: boolean; connected?: boolean; email?: string | null; lastError?: string | null;
+  }) => {
+    gcal.innerHTML = "";
+    if (!s.available) return;              // nothing configured on this server
+    if (s.connected) {
+      const who = document.createElement("small");
+      who.textContent = t("เขียนลง Google Calendar ของ {email} แล้ว").replace("{email}", s.email || "");
+      const off = document.createElement("button");
+      off.className = "cal-copy";
+      off.textContent = t("ยกเลิกการเชื่อม");
+      off.onclick = async () => {
+        if (!confirm(t("เลิกเขียนการจองลงปฏิทิน Google ของคุณ?"))) return;
+        off.disabled = true;
+        const r = await fetch(`${o.api}/me/google-calendar`, {
+          method: "DELETE",
+          headers: o.token ? { authorization: `Bearer ${o.token}` } : {},
+        });
+        off.disabled = false;
+        if (r.ok) { say(t("ยกเลิกการเชื่อมแล้ว")); void loadGcal(); }
+        else say(t("ยกเลิกการเชื่อมไม่สำเร็จ"), true);
+      };
+      gcal.append(who, off);
+      // A connection that has quietly stopped working looks exactly like one
+      // that works, until somebody books a room and nothing appears.
+      if (s.lastError) {
+        const bad = document.createElement("small");
+        bad.className = "cal-warn";
+        bad.textContent = t("ครั้งล่าสุด Google ไม่รับ — ลองเชื่อมใหม่");
+        gcal.appendChild(bad);
+      }
+      return;
+    }
+    const on = document.createElement("button");
+    on.className = "cal-sub";
+    on.textContent = t("เชื่อม Google Calendar ของฉัน");
+    on.onclick = async () => {
+      on.disabled = true;
+      try {
+        const r = await fetch(`${o.api}/me/google-calendar/start`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            ...(o.token ? { authorization: `Bearer ${o.token}` } : {}),
+          },
+          body: JSON.stringify({ back: location.origin + location.pathname }),
+        });
+        const d = (await r.json().catch(() => ({}))) as { url?: string; error?: string };
+        if (!d.url) { say(String(d.error || t("เริ่มเชื่อมไม่สำเร็จ")), true); return; }
+        // The same tab: Google refuses to render its consent screen inside a
+        // frame, and a popup is a thing browsers block.
+        location.href = d.url;
+      } finally {
+        on.disabled = false;
+      }
+    };
+    const note = document.createElement("small");
+    note.textContent = t("การจองที่คุณกดว่าจะไป จะขึ้นในปฏิทินทันที");
+    gcal.append(on, note);
+  };
+
+  const loadGcal = async () => {
+    try {
+      const r = await fetch(`${o.api}/me/google-calendar`, {
+        headers: o.token ? { authorization: `Bearer ${o.token}` } : {},
+      });
+      if (!r.ok) return;
+      drawGcal(await r.json());
+    } catch { /* offline; the row simply is not drawn */ }
+  };
+  if (o.canBook?.() !== false && o.token) void loadGcal();
+
+  /**
+   * What came back from Google, said out loud.
+   *
+   * The callback returns to the app with a marker in the fragment. Read once
+   * and then cleared, so a reload does not repeat a message about something
+   * that happened a page ago.
+   */
+  if (location.hash.startsWith("#gcal=")) {
+    const mark = decodeURIComponent(location.hash.slice(6));
+    history.replaceState(null, "", location.pathname + location.search);
+    if (mark === "connected") { say(t("เชื่อม Google Calendar แล้ว")); void loadGcal(); }
+    else if (mark === "access_denied") say(t("คุณไม่ได้อนุญาต — ปฏิทินยังไม่ถูกเชื่อม"), true);
+    else if (mark === "expired") say(t("ลิงก์หมดอายุ ลองกดเชื่อมใหม่อีกครั้ง"), true);
+    else if (mark === "no_refresh_token") say(t("Google ไม่ได้ให้สิทธิ์ค้างไว้ — ลองใหม่และกดอนุญาต"), true);
+    else if (mark === "scope_refused") say(t("ต้องติ๊กอนุญาตให้จัดการปฏิทินด้วย จึงจะเชื่อมได้"), true);
+    else say(t("เชื่อม Google Calendar ไม่สำเร็จ"), true);
+  }
+
+
   void refresh();
 
   return {

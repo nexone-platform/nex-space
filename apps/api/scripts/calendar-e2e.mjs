@@ -58,6 +58,9 @@ const api = spawn(process.execPath, [TSX, "src/index.ts"], {
   env: {
     ...process.env, PORT: String(PORT),
     SMTP_HOST: "", SMTP_USER: "", SMTP_PASS: "", RESEND_API_KEY: "",
+    // Google credentials that are not credentials: enough for the connect
+    // routes to exist and be checked, and useless to anybody who finds them.
+    GOOGLE_CLIENT_ID: "e2e-client", GOOGLE_CLIENT_SECRET: "e2e-secret",
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -354,6 +357,72 @@ let feed;
 
   const feedKeyReused = await fetch(API + one.ics.replace(/sig=.*/, "sig="));
   ok("  · nor an empty one", feedKeyReused.status === 403, `status ${feedKeyReused.status}`);
+}
+
+// ---- connecting one person's own Google Calendar -------------------------------
+//
+// The routes only, because the other side is Google. What is worth checking
+// here is who may ask, what is sent to Google, and that the note carried
+// through the round trip cannot be written by somebody else — it names a user
+// account, and a forgeable one would let anybody attach their calendar to
+// somebody else's name.
+
+{
+  const mine = await get("/me/google-calendar", owner.token);
+  ok("somebody who has connected nothing is told so", mine.connected === false, JSON.stringify(mine.connected));
+  ok("  · and that the server can do it at all", mine.available === true, JSON.stringify(mine.available));
+
+  const anon = await fetch(API + "/me/google-calendar");
+  ok("  · and it is nobody else's business", anon.status === 401, `status ${anon.status}`);
+}
+
+let startUrl = "";
+{
+  const r = await post("/me/google-calendar/start", { back: "https://app.test/" }, owner.token);
+  startUrl = String(r.url || "");
+  ok("a signed-in person is given somewhere to go", /^https:\/\/accounts\.google\.com\//.test(startUrl),
+    startUrl.slice(0, 60));
+  const q = new URL(startUrl).searchParams;
+  ok("  · asking only to write events", q.get("scope") === "https://www.googleapis.com/auth/calendar.events",
+    q.get("scope"));
+  ok("  · offline, or the server can do nothing an hour later",
+    q.get("access_type") === "offline" && q.get("prompt") === "consent",
+    `${q.get("access_type")} ${q.get("prompt")}`);
+  ok("  · coming back to this server, not anywhere else",
+    (q.get("redirect_uri") || "").endsWith("/auth/google/calendar/callback"), q.get("redirect_uri"));
+  ok("  · and carrying no session token in the URL",
+    !startUrl.includes(owner.token),
+    "a token in a query string is a working credential in nginx logs and browser history");
+}
+
+{
+  const anon = await fetch(API + "/me/google-calendar/start", { method: "POST" });
+  ok("nobody can be sent to connect a calendar without signing in", anon.status === 401, `status ${anon.status}`);
+}
+
+{
+  const state = new URL(startUrl).searchParams.get("state") || "";
+  const bad = state.slice(0, -1) + (state.endsWith("A") ? "B" : "A");
+  const r = await fetch(`${API}/auth/google/calendar/callback?code=x&state=${encodeURIComponent(bad)}`,
+    { redirect: "manual" });
+  ok("a note somebody edited is refused", (r.headers.get("location") || "").includes("gcal=expired"),
+    r.headers.get("location"));
+
+  const none = await fetch(`${API}/auth/google/calendar/callback?code=x`, { redirect: "manual" });
+  ok("  · and so is one that is missing", (none.headers.get("location") || "").includes("gcal=expired"),
+    none.headers.get("location"));
+
+  const refused = await fetch(
+    `${API}/auth/google/calendar/callback?error=access_denied&state=${encodeURIComponent(state)}`,
+    { redirect: "manual" });
+  ok("  · somebody who said no is brought back saying so",
+    (refused.headers.get("location") || "").includes("gcal=access_denied"),
+    refused.headers.get("location"));
+}
+
+{
+  const r = await del("/me/google-calendar", owner.token);
+  ok("disconnecting nothing is not an error", r.ok === true && r.already === true, JSON.stringify(r));
 }
 
 stop();

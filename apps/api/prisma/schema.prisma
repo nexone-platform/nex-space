@@ -44,6 +44,7 @@ model User {
   recorded      Recording[]      @relation("RecordingsStarted")
   spoken        RecordingTrack[] @relation("RecordingsSpoken")
   invitesSent   Invite[]     @relation("InvitesSent")
+  googleCalendar GoogleCalendar?
   goingTo       BookingGoing[]
   received      Message[]    @relation("MessagesReceived")
   dmReads       DmRead[]
@@ -290,6 +291,10 @@ model BookingGoing {
   booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   at        DateTime @default(now())
+  /// The event in this person's own Google Calendar, if they connected one.
+  /// Per person rather than per booking, because each connected calendar gets
+  /// its own copy of the event and they do not share an id.
+  googleEventId String?
 
   @@id([bookingId, userId])
   @@index([userId])
@@ -454,4 +459,30 @@ model RecordingRead {
   at          DateTime  @default(now())
 
   @@index([recordingId, at])
+}
+
+/// One person's permission to write into their own Google Calendar.
+///
+/// Per person, and never the whole domain: this asks each individual for the
+/// narrowest scope that can write an event, and stores what it is given for
+/// that one account. Nobody's calendar is reachable because somebody else
+/// connected theirs.
+///
+/// The refresh token is the credential. It is what lets the server act as this
+/// person while they are asleep, which is the whole point and also the risk —
+/// deleting the row is what makes that stop, and disconnecting tells Google to
+/// forget it as well rather than merely forgetting it here.
+model GoogleCalendar {
+  userId       String   @id
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// which Google account this is, so somebody can see what they connected
+  email        String
+  refreshToken String
+  /// "primary" for almost everybody; a named calendar is possible later
+  calendarId   String   @default("primary")
+  connectedAt  DateTime @default(now())
+  /// the last thing Google refused with. A revoked grant is not an error to
+  /// retry forever — it is a thing to tell the person about, once.
+  lastError    String?
+  lastErrorAt  DateTime?
 }
