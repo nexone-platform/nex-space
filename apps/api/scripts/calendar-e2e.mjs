@@ -371,6 +371,11 @@ let feed;
   const mine = await get("/me/google-calendar", owner.token);
   ok("somebody who has connected nothing is told so", mine.connected === false, JSON.stringify(mine.connected));
   ok("  · and that the server can do it at all", mine.available === true, JSON.stringify(mine.available));
+  // The one string that has to be registered with Google by hand, and the one
+  // that cannot be worked out by reading the code — it is built from the
+  // headers whatever sits in front of this server sends.
+  ok("  · and is told exactly what to register with Google",
+    String(mine.redirectUri || "").endsWith("/auth/google/calendar/callback"), mine.redirectUri);
 
   const anon = await fetch(API + "/me/google-calendar");
   ok("  · and it is nobody else's business", anon.status === 401, `status ${anon.status}`);

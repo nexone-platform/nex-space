@@ -543,6 +543,12 @@ app.get("/me/google-calendar", requireAuth, async (req: AuthedRequest, res) => {
   const row = await prisma.googleCalendar.findUnique({ where: { userId: req.user!.id } });
   res.json({
     available: gcalEnabled,
+    // The exact string Google has to have been given. Not a secret — it is a
+    // public URL on this host — and the one thing that cannot be worked out by
+    // reading anything, since it is built from the headers the proxy in front
+    // of this one sends. A redirect_uri_mismatch is otherwise a guessing game
+    // between what was registered and what was sent.
+    redirectUri: gcalRedirect(req),
     connected: !!row,
     email: row?.email ?? null,
     connectedAt: row?.connectedAt?.toISOString() ?? null,
