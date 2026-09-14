@@ -28,6 +28,8 @@ type Recording = {
   summary?: string;
   mine?: { consent: string; transcript: string | null; digest: string | null };
   canRead: boolean;
+  /** false when nothing was configured to summarise, and the text is a transcript */
+  summarised?: boolean;
 };
 
 export type RecordingsOptions = {
@@ -137,6 +139,16 @@ export function mountRecordingsView(o: RecordingsOptions) {
       paneEl.appendChild(wait);
     }
 
+    // Said before anything is read, because the difference between a summary
+    // and a transcript is the difference between a conclusion and a recording
+    // of people talking, and nobody should have to work that out from the tone.
+    if (r.canRead && r.summarised === false && r.state === "done") {
+      const note = document.createElement("p");
+      note.className = "rv-missing";
+      note.textContent = t("ยังไม่ได้ตั้งค่า AI สรุป — ข้างล่างคือถ้อยคำที่ถอดได้ ไม่ใช่บทสรุป");
+      paneEl.appendChild(note);
+    }
+
     if (r.canRead && r.summary) paneEl.append(...block(t("สรุปการประชุม"), r.summary));
 
     // Everybody's part, for staff. Your own part, for everybody else. Both come
@@ -146,7 +158,7 @@ export function mountRecordingsView(o: RecordingsOptions) {
       if (spoke.length) {
         const head = document.createElement("div");
         head.className = "rv-sect";
-        head.textContent = t("แยกตามคน");
+        head.textContent = r.summarised === false ? t("ถ้อยคำ แยกตามคน") : t("แยกตามคน");
         paneEl.appendChild(head);
       }
       for (const p of r.people) {
@@ -263,7 +275,7 @@ export function mountRecordingsView(o: RecordingsOptions) {
     if (r.canRead) {
       const spoke = r.people.filter((p) => p.recorded && perPerson.get(p.name));
       if (spoke.length) {
-        out.push(t("แยกตามคน"), "");
+        out.push(r.summarised === false ? t("ถ้อยคำ แยกตามคน") : t("แยกตามคน"), "");
         for (const p of spoke) out.push(`${p.name}`, perPerson.get(p.name)!.trim(), "");
       }
     } else if (r.mine) {

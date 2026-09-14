@@ -32,7 +32,18 @@ const LANG = process.env.ASR_LANG || "th";
 
 export const asrReady = !!ASR_URL;
 export const llmReady = !!LLM_URL;
-export const summariesReady = asrReady && llmReady;
+
+/**
+ * Turning speech into text is the floor; summarising it is not.
+ *
+ * There is no way to have a summary without first having words — audio that
+ * nothing has transcribed is audio, and no amount of anything else changes
+ * that. So ASR is required and the model that writes the summary is optional:
+ * with only ASR_URL set, a meeting still comes out as text, the person whose
+ * job it is to compile it reads that, and writes the summary themselves. Which
+ * is what they were going to do with the model's draft anyway.
+ */
+export const summariesReady = asrReady;
 
 /**
  * Long, and deliberately so.
@@ -163,6 +174,25 @@ ${body}
 3) สิ่งที่ต้องทำต่อ พร้อมชื่อผู้รับผิดชอบ`;
 }
 
+/**
+ * What a meeting comes to when nothing is there to summarise it.
+ *
+ * Not a summary and it does not pretend to be one: it names the room and who
+ * spoke, and says plainly that the words underneath are a transcript. The
+ * person compiling writes the actual summary from it — the thing that would be
+ * dishonest here is a machine-shaped paragraph that reads like a conclusion
+ * somebody reached.
+ */
+export function rawSummary(said: { name: string; transcript: string }[], room: string) {
+  return [
+    `ถอดเสียงเรียบร้อยแล้ว — ยังไม่ได้สรุปด้วย AI`,
+    `ห้อง ${room} · ผู้พูด ${said.map((s) => s.name).join(", ")}`,
+    ``,
+    `ถ้อยคำที่ถอดได้ของแต่ละคนอยู่ในหัวข้อ "แยกตามคน" ด้านล่าง — ผู้รวบรวมอ่านแล้วเขียนสรุปได้จากตรงนั้น`,
+    `(ถ้าต้องการให้ระบบสรุปให้อัตโนมัติ ผู้ดูแลระบบตั้งค่า LLM_URL ได้)`,
+  ].join("\n");
+}
+
 // ---- the queue -----------------------------------------------------------------
 
 /**
@@ -212,6 +242,20 @@ export async function runSummaryQueue(): Promise<void> {
         where: { id: rec.id },
         data: { state: "done", summary: "ไม่มีคำพูดที่ถอดออกมาได้จากการประชุมนี้" },
       });
+      return;
+    }
+
+    if (!llmReady) {
+      // No model to write it, so nothing is written: the transcripts stand as
+      // they are and the meeting is marked finished, because it is. Inventing
+      // a summary out of the first few lines of somebody's speech would be a
+      // worse document than no summary, and harder to tell apart from a real
+      // one.
+      await prisma.recording.update({
+        where: { id: rec.id },
+        data: { state: "done", failure: null, summary: rawSummary(said, rec.roomLabel) },
+      });
+      console.log(`[summary] ${rec.id}: transcribed (${said.length} speaker(s)); no model configured to summarise it`);
       return;
     }
 

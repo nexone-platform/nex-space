@@ -410,6 +410,9 @@ const EN: Record<string, string> = {
   "เปิดสรุปไม่สำเร็จ": "Could not open that summary",
   // ---- taking the summary somewhere else ----
   "คัดลอกสรุป": "Copy the summary",
+  "ยังไม่ได้ตั้งค่า AI สรุป — ข้างล่างคือถ้อยคำที่ถอดได้ ไม่ใช่บทสรุป":
+    "No summarising model is set up — what follows is the transcript, not a summary",
+  "ถ้อยคำ แยกตามคน": "What each person said",
   "คัดลอกแล้ว — วางในแชทได้เลย": "Copied — paste it into the chat",
   "คัดลอกอัตโนมัติไม่ได้ — เลือกข้อความแล้วกด Ctrl+C": "Could not copy for you — select the text and press Ctrl+C",
   "ได้สรุปทั้งการประชุมพร้อมส่วนของทุกคน": "The whole meeting, with everybody's part of it",

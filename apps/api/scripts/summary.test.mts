@@ -190,6 +190,59 @@ llmFails = false;
   ok("  · and asks who is doing what", o.includes("ผู้รับผิดชอบ"));
 }
 
+// ---- a deployment with transcription and no model ------------------------------
+//
+// Speech has to become text somehow — there is no summary without words, and
+// ASR is the only thing that produces them. A model that writes the summary
+// afterwards is a convenience, and doing without it should leave a meeting
+// transcribed and readable rather than stuck.
+
+{
+  // A second copy of the module with LLM_URL unset. ESM will not load the same
+  // specifier twice, so the query string is what makes it a separate module.
+  process.env.LLM_URL = "";
+  const alone = await import(pathToFileURL(resolve(HERE, "../src/summarise.ts")).href + "?noLLM=1");
+  ok("transcription alone is enough for the queue to run", alone.summariesReady === true);
+  ok("  · and it knows there is no model", alone.llmReady === false);
+
+  await prisma.recording.create({
+    data: {
+      id: "r4", workspaceId: ws.id, roomId: "m4", roomLabel: "ห้องเล็ก",
+      startedByName: "ชาลิสา", endedAt: new Date(Date.now() - 60_000),
+      audioUntil: new Date(Date.now() + 86_400_000),
+      tracks: { create: [
+        { userId: a.id, name: "ชาลิสา", consent: "yes", path: "r4/a.webm", seconds: 30 },
+        { userId: b.id, name: "สมชาย", consent: "no" },
+      ] },
+    },
+  });
+  mkdirSync(join(REC_DIR, "r4"), { recursive: true });
+  writeFileSync(join(REC_DIR, "r4", "a.webm"), Buffer.alloc(64, 1));
+  sent.length = 0;
+  await alone.runSummaryQueue();
+
+  const done = await prisma.recording.findUnique({
+    where: { id: "r4" }, include: { tracks: true },
+  });
+  ok("a meeting still comes out finished", done!.state === "done", done!.state);
+  ok("  · with the words of whoever agreed",
+    done!.tracks.find((t) => t.name === "ชาลิสา")!.transcript === asrSays,
+    String(done!.tracks.find((t) => t.name === "ชาลิสา")!.transcript));
+  ok("  · and nothing of whoever did not",
+    done!.tracks.find((t) => t.name === "สมชาย")!.transcript === null);
+  ok("  · nothing was asked of a model that is not there",
+    !sent.some((x) => x.url.includes("chat/completions")),
+    sent.map((x) => x.url).join(" | ") || "nothing");
+  ok("  · and no digest was invented for anybody",
+    done!.tracks.every((t) => t.digest === null),
+    done!.tracks.map((t) => String(t.digest)).join(" | "));
+  ok("  · the summary says it is not one", (done!.summary ?? "").includes("ยังไม่ได้สรุปด้วย AI"),
+    (done!.summary ?? "").split("\n")[0]);
+  ok("  · naming who spoke, so the compiler knows what they are reading",
+    (done!.summary ?? "").includes("ชาลิสา"), done!.summary?.split("\n")[1]);
+  process.env.LLM_URL = "http://llm.test";
+}
+
 await cleanUp();
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

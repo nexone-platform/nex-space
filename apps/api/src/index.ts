@@ -15,7 +15,7 @@ import {
   acceptsAudio, audioExt, dropRecordingDir, dropTrack, mayRecord, CONSENT_MODE, startingConsent, noticeFacts,
   putTrack, trackPath,
 } from "./recordings.js";
-import { runSummaryQueue, summariesReady, summaryCheck } from "./summarise.js";
+import { llmReady, runSummaryQueue, summariesReady, summaryCheck } from "./summarise.js";
 import {
   newTotpSecret, otpauthUri, qrDataUrl, checkTotp,
   newRecoveryCodes, hashRecoveryCodes, countRecoveryCodes, spendRecoveryCode,
@@ -1838,9 +1838,17 @@ function recordingView(r: RecordingRow, me: { id: string } | null, staff: boolea
       // broken down by person means. Not each person's transcript: that is a
       // great deal more of somebody than the job needs, and the person whose
       // words they are can already read their own.
-      ...(staff ? { digest: t.digest } : {}),
+      //
+      // Unless nothing is configured to write a summary, in which case there
+      // is no digest and the transcript is all there is. Reading it is then
+      // exactly the job of the person compiling the meeting — and `summarised`
+      // below says which of the two this is, so nothing passes a transcript
+      // off as a summary.
+      ...(staff ? { digest: llmReady ? t.digest : (t.digest ?? t.transcript) } : {}),
     })),
     summary: staff ? r.summary : undefined,
+    /** false when no model wrote any of this and the text is a transcript */
+    summarised: llmReady,
     mine: mine
       ? { consent: mine.consent, transcript: mine.transcript, digest: mine.digest }
       : undefined,
@@ -2854,10 +2862,12 @@ void sweepRecordings().catch((e) => console.error("[recording] sweep failed:", e
 // Off by default: an unconfigured deployment records perfectly well and simply
 // has no summary, which is the same shape mail takes.
 if (summariesReady) {
-  console.log("[summary] queue on");
+  console.log(llmReady
+    ? "[summary] queue on — transcribing and summarising"
+    : "[summary] queue on — transcribing only, no model configured to summarise (set LLM_URL)");
   setInterval(() => void runSummaryQueue(), 30_000).unref();
 } else {
-  console.log("[summary] no transcription service configured — recordings are kept, not summarised");
+  console.log("[summary] no transcription service configured — recordings are kept as audio and nothing is read out of them (set ASR_URL)");
 }
 setInterval(() => void sweepRecordings().catch((e) => console.error("[recording] sweep failed:", e)), 6 * 60 * 60 * 1000).unref();
 void sweepOrphanUploads().catch((e) => console.error("[uploads] sweep failed:", e));
