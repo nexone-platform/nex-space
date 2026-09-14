@@ -16,7 +16,7 @@ import {
   putTrack, trackPath,
 } from "./recordings.js";
 import { llmReady, runSummaryQueue, summariesReady, summaryCheck } from "./summarise.js";
-import { GCAL_SCOPE, dropEvent, gcalCheck, gcalEnabled, pushEvent } from "./gcal.js";
+import { GCAL_SCOPE, dropEvent, gcalCheck, gcalEnabled, pushEvent, readReplies } from "./gcal.js";
 import {
   newTotpSecret, otpauthUri, qrDataUrl, checkTotp,
   newRecoveryCodes, hashRecoveryCodes, countRecoveryCodes, spendRecoveryCode,
@@ -1660,7 +1660,7 @@ type BookingRow = {
   id: string; mapSlug: string; roomId: string; roomLabel: string; title: string;
   userId: string | null; hostName: string; startsAt: Date; endsAt: Date; createdAt: Date;
   going?: { userId: string }[];
-  invitees?: { email: string; name: string; userId: string | null }[];
+  invitees?: { email: string; name: string; userId: string | null; reply?: string }[];
 };
 
 function bookingView(b: BookingRow, meId: string | null | undefined, slug: string) {
@@ -1683,6 +1683,10 @@ function bookingView(b: BookingRow, meId: string | null | undefined, slug: strin
       name: i.name,
       member: !!i.userId,
       going: !!i.userId && (b.going ?? []).some((g) => g.userId === i.userId),
+      // needsAction | accepted | declined | tentative — Google's own words,
+      // read back off the host's calendar. "Has not replied" is a state, and
+      // folding it into "not coming" loses the difference that matters.
+      reply: i.reply ?? "needsAction",
     })),
   };
 }
@@ -1732,7 +1736,7 @@ app.get("/workspaces/:slug/bookings", async (req, res) => {
     take: 500,
     include: {
       going: { select: { userId: true } },
-      invitees: { select: { email: true, name: true, userId: true } },
+      invitees: { select: { email: true, name: true, userId: true, reply: true } },
     },
   });
   res.json({ bookings: rows.map((b) => bookingView(b, who.userId, w.slug)) });
@@ -1951,7 +1955,7 @@ app.post("/workspaces/:slug/bookings", async (req, res) => {
     },
     include: {
       going: { select: { userId: true } },
-      invitees: { select: { email: true, name: true, userId: true } },
+      invitees: { select: { email: true, name: true, userId: true, reply: true } },
     },
   });
   res.json({ booking: bookingView(b, can.me.id, w.slug) });
@@ -2014,7 +2018,7 @@ app.post("/workspaces/:slug/bookings/:id/going", async (req, res) => {
     where: { id: b.id },
     include: {
       going: { select: { userId: true } },
-      invitees: { select: { email: true, name: true, userId: true } },
+      invitees: { select: { email: true, name: true, userId: true, reply: true } },
     },
   });
   res.json({ booking: bookingView(after as BookingRow, can.me.id, w.slug) });
@@ -2073,6 +2077,90 @@ app.delete("/workspaces/:slug/bookings/:id", async (req, res) => {
 });
 
 // ---- getting it into a real calendar ------------------------------------------
+
+/**
+ * Bring the answers back from Google.
+ *
+ * Somebody presses Yes in Gmail and Google writes it on its own event. Nothing
+ * tells this server, and there is no callback to subscribe to that does not
+ * involve a public HTTPS endpoint Google can reach and a channel to keep
+ * renewing — so this asks, on a timer, about the meetings where an answer could
+ * still arrive.
+ *
+ * Only meetings that have not finished, only ones whose host has a connected
+ * calendar and an event in it, and a ceiling per pass. A calendar with four
+ * hundred bookings in it is not a reason to make four hundred requests every
+ * five minutes.
+ */
+const REPLY_SWEEP_MS = Number(process.env.BOOKING_REPLY_SWEEP_MS || 5 * 60_000);
+const REPLY_SWEEP_MAX = Number(process.env.BOOKING_REPLY_SWEEP_MAX || 40);
+
+let sweepingReplies = false;
+
+async function syncBookingReplies(): Promise<void> {
+  if (sweepingReplies || !gcalEnabled) return;
+  sweepingReplies = true;
+  try {
+    const now = new Date();
+    const rows = await prisma.booking.findMany({
+      where: {
+        endsAt: { gt: now },
+        // Somebody has to have been asked, or there is nothing to read.
+        invitees: { some: {} },
+      },
+      orderBy: { startsAt: "asc" },
+      take: REPLY_SWEEP_MAX,
+      include: {
+        invitees: true,
+        going: { select: { userId: true, googleEventId: true } },
+      },
+    });
+
+    for (const b of rows) {
+      if (!b.userId) continue;                       // the host's account is gone
+      const hosts = b.going.find((g) => g.userId === b.userId);
+      if (!hosts?.googleEventId) continue;           // Google never had this one
+
+      const said = await readReplies(b.userId, hosts.googleEventId)
+        .catch((e) => { console.warn("[gcal] reading replies failed:", (e as Error).message); return null; });
+      if (!said) continue;                           // unreadable is not "nobody replied"
+
+      const byEmail = new Map(said.map((a) => [a.email, a.reply]));
+      for (const who of b.invitees) {
+        const reply = byEmail.get(who.email.toLowerCase());
+        if (!reply || reply === who.reply) continue;
+
+        await prisma.bookingInvitee.update({
+          where: { id: who.id },
+          data: { reply, repliedAt: reply === "needsAction" ? null : new Date() },
+        });
+        console.log(`[gcal] ${who.email} answered ${reply} to "${b.title}"`);
+
+        // A member's yes is the same yes the button in the app writes, so it
+        // has to reach the same place — that list is what the reminders, the
+        // count and their own calendar copy are all read from. Somebody with
+        // no account has nowhere to be put, and their answer lives on the row.
+        if (!who.userId) continue;
+        if (reply === "accepted") {
+          await prisma.bookingGoing.upsert({
+            where: { bookingId_userId: { bookingId: b.id, userId: who.userId } },
+            update: {}, create: { bookingId: b.id, userId: who.userId },
+          }).catch(() => {});
+        } else if (reply === "declined") {
+          await prisma.bookingGoing.deleteMany({
+            where: { bookingId: b.id, userId: who.userId },
+          }).catch(() => {});
+        }
+        // tentative and needsAction change nothing on that list: neither is a
+        // person saying they will be there.
+      }
+    }
+  } catch (e) {
+    console.warn("[gcal] could not bring the replies back:", e);
+  } finally {
+    sweepingReplies = false;
+  }
+}
 
 /**
  * The address of this space's feed.
@@ -3241,6 +3329,11 @@ if (summariesReady) {
   console.log("[summary] no transcription service configured — recordings are kept as audio and nothing is read out of them (set ASR_URL)");
 }
 setInterval(() => void sweepRecordings().catch((e) => console.error("[recording] sweep failed:", e)), 6 * 60 * 60 * 1000).unref();
+// Answers given in Gmail, brought back here. Nothing tells this server when
+// somebody presses Yes, so it asks.
+if (gcalEnabled) {
+  setInterval(() => void syncBookingReplies(), REPLY_SWEEP_MS).unref();
+}
 void sweepOrphanUploads().catch((e) => console.error("[uploads] sweep failed:", e));
 setInterval(() => void sweepOrphanUploads().catch((e) => console.error("[uploads] sweep failed:", e)), DAY_MS).unref();
 

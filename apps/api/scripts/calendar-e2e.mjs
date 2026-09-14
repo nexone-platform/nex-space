@@ -468,6 +468,9 @@ let startUrl = "";
   ok("  · and being invited is not being counted as coming",
     r.booking.going === 1 && list.every((i) => i.going === false),
     `going=${r.booking.going}`);
+  // Four states, and the one everybody forgets is the default.
+  ok("  · nobody has answered yet, which is not the same as declining",
+    list.every((i) => i.reply === "needsAction"), list.map((i) => i.reply).join(" "));
 
   // The host is on it already; saying so twice would email them twice.
   const withHost = await book({

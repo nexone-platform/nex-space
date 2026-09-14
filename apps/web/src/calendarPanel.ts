@@ -27,7 +27,11 @@ export type Booking = {
   /** a signed link to this one meeting as a .ics file */
   ics: string;
   /** who the host put on it — which is not the same list as who is coming */
-  invitees?: { email: string; name: string; member: boolean; going: boolean }[];
+  invitees?: {
+    email: string; name: string; member: boolean; going: boolean;
+    /** needsAction | accepted | declined | tentative, as answered in Gmail */
+    reply?: string;
+  }[];
 };
 
 export type Room = { id: string; label: string };

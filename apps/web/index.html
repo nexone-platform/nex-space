@@ -770,8 +770,16 @@
       .cw-pop-who > small { color: var(--muted); font-size: 11px; }
       .cw-guest { display: flex; align-items: center; gap: 6px; font-size: 12px;
         color: var(--text-2); }
+      /* Four answers, four marks. "No reply yet" is the one that disappears if
+         a list is drawn as coming or not coming, and it is the one that tells
+         somebody to go and ask. */
       .cw-guest.yes { color: var(--teal-ink); font-weight: 600; }
-      .cw-guest.yes::before { content: "¹3"; font-size: 11px; }
+      .cw-guest.yes::before { content: "✓"; font-size: 11px; }
+      .cw-guest.no { color: var(--muted); text-decoration: line-through; }
+      .cw-guest.no::before { content: "✕"; font-size: 10px; text-decoration: none; }
+      .cw-guest.maybe::before { content: "?"; font-size: 11px; font-weight: 700; }
+      .cw-guest.quiet { color: var(--faint); }
+      .cw-guest.quiet::before { content: "·"; font-size: 14px; }
       .cw-guest i { font-style: normal; font-size: 10px; padding: 1px 5px;
         border-radius: 999px; background: var(--surface-3); color: var(--muted); }
       .cal-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center;

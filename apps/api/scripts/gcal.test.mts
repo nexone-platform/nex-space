@@ -22,7 +22,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const load = (f: string) => import(pathToFileURL(resolve(HERE, "../src/" + f)).href);
 
 const { prisma } = await load("db.js");
-const { pushEvent, dropEvent, accessTokenFor, gcalEnabled, GCAL_SCOPE } = await load("gcal.js");
+const { pushEvent, dropEvent, readReplies, accessTokenFor, gcalEnabled, GCAL_SCOPE } = await load("gcal.js");
 
 let pass = 0, fail = 0;
 const ok = (n: string, c: boolean, x = "") => {
@@ -232,6 +232,54 @@ await connect();
   ok("  · and somebody dropping out quietly tells nobody",
     sent.every((s) => !s.url.includes("sendUpdates")),
     sent.map((s) => s.url.replace(/^.*v3/, "…")).join(" | "));
+}
+
+// ---- bringing the answers back ---------------------------------------------------
+//
+// Somebody presses Yes in Gmail and Google writes it on its own event. Nothing
+// tells this server, so it asks — and what it does with each answer is the part
+// a mistake in is silent: an unreadable event is not everybody withdrawing.
+
+{
+  await connect();
+  sent.length = 0;
+  apiStatus = 200;
+  apiAnswer = {
+    id: "ev_9",
+    attendees: [
+      { email: "Somchai@Company.test", responseStatus: "accepted" },
+      { email: "client@outside.test", responseStatus: "declined" },
+      { email: "quiet@company.test" },
+      { email: "maybe@company.test", responseStatus: "tentative" },
+    ],
+  };
+  const said = await readReplies(user.id, "ev_9");
+  ok("the answers come back", said?.length === 4, JSON.stringify(said?.length));
+  ok("  · read off the host's own copy of the event",
+    sent.some((s) => s.method === "GET" && s.url.includes("/events/ev_9")),
+    sent.filter((s) => s.method === "GET").map((s) => s.url.replace(/^.*v3/, "…")).join(" | "));
+  ok("  · with a yes", said?.find((a) => a.email === "somchai@company.test")?.reply === "accepted");
+  ok("  · a no", said?.find((a) => a.email === "client@outside.test")?.reply === "declined");
+  ok("  · a maybe", said?.find((a) => a.email === "maybe@company.test")?.reply === "tentative");
+  ok("  · and a silence, which is its own answer rather than a missing one",
+    said?.find((a) => a.email === "quiet@company.test")?.reply === "needsAction",
+    JSON.stringify(said?.find((a) => a.email === "quiet@company.test")));
+  ok("  · addresses lower-cased, since Google echoes what was typed",
+    said?.every((a) => a.email === a.email.toLowerCase()), JSON.stringify(said?.map((a) => a.email)));
+}
+
+{
+  // Unreadable is not an answer from anybody. Returning an empty list here
+  // would read as every single guest having withdrawn.
+  apiStatus = 500; apiAnswer = { error: { message: "Backend Error" } };
+  ok("an event that cannot be read says nothing at all", await readReplies(user.id, "ev_9") === null,
+    "an empty list would be read as everybody withdrawing");
+  apiStatus = 404; apiAnswer = { error: { message: "Not Found" } };
+  ok("  · and neither does one that is gone", await readReplies(user.id, "ev_9") === null);
+  apiStatus = 200; apiAnswer = { id: "ev_9" };
+  ok("  · an event with nobody on it is an empty list, not nothing",
+    JSON.stringify(await readReplies(user.id, "ev_9")) === "[]",
+    JSON.stringify(await readReplies(user.id, "ev_9")));
 }
 
 await cleanUp();

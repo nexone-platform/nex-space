@@ -310,6 +310,12 @@ model BookingInvitee {
   userId    String?
   user      User?    @relation("BookingsInvited", fields: [userId], references: [id], onDelete: SetNull)
   at        DateTime @default(now())
+  /// What they answered, in Google's own words: needsAction | accepted |
+  /// declined | tentative. Read back from the host's calendar, because the
+  /// invitation Google sends is answered in Gmail and the answer lands there.
+  /// "Has not replied" is a real state and the default has to be able to say it.
+  reply     String   @default("needsAction")
+  repliedAt DateTime?
 
   @@unique([bookingId, email])
   @@index([bookingId])

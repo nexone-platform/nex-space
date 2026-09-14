@@ -224,6 +224,44 @@ export async function dropEvent(
   return false;
 }
 
+/**
+ * What the guests answered, read off the host's copy.
+ *
+ * The invitation Google sends is answered in Gmail, and the answer lands on
+ * Google's event — not here. Reading it back is the only way the app can know:
+ * there is no callback, and asking the guest to answer a second time in a
+ * second place is asking them to do the same thing twice.
+ *
+ * Only the host's event carries the guest list, so this is only ever asked of
+ * the host's calendar. Null when it cannot be read at all, which is different
+ * from an empty list and must not be mistaken for everybody withdrawing.
+ */
+export async function readReplies(
+  userId: string,
+  eventId: string,
+): Promise<{ email: string; reply: string }[] | null> {
+  const row = await prisma.googleCalendar.findUnique({ where: { userId } });
+  if (!row || !eventId) return null;
+  const r = await call(userId, `/calendars/${encodeURIComponent(row.calendarId)}/events/${encodeURIComponent(eventId)}`, {
+    method: "GET",
+  });
+  if (!r.ok) {
+    // Gone from Google is a fact about the event, not a failure to read it —
+    // but it is still not an answer from anybody, so it says nothing either.
+    if (r.status !== 404 && r.status !== 410) {
+      console.warn(`[gcal] could not read replies for ${row.email}: ${r.detail}`);
+    }
+    return null;
+  }
+  const people = (r.body.attendees ?? []) as { email?: string; responseStatus?: string }[];
+  return people
+    .filter((a) => a.email)
+    .map((a) => ({
+      email: String(a.email).toLowerCase(),
+      reply: String(a.responseStatus || "needsAction"),
+    }));
+}
+
 /** does the connection still work? — asked without writing anything */
 export async function gcalCheck(userId: string): Promise<{ ok: boolean; detail: string }> {
   const row = await prisma.googleCalendar.findUnique({ where: { userId } });

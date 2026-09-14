@@ -171,13 +171,33 @@ export function mountCalendarWeek(o: WeekOptions) {
       const who = document.createElement("div");
       who.className = "cw-pop-who";
       const head = document.createElement("small");
-      head.textContent = t("เชิญ {n} คน").replace("{n}", String(b.invitees.length));
+      const yes = b.invitees.filter((p) => (p.reply ?? (p.going ? "accepted" : "")) === "accepted").length;
+      head.textContent = `${t("เชิญ {n} คน").replace("{n}", String(b.invitees.length))} · ${
+        t("ตอบรับแล้ว {n}").replace("{n}", String(yes))}`;
       who.appendChild(head);
       for (const p of b.invitees) {
+        /**
+         * Four states, not two.
+         *
+         * Yes, no, maybe, and no answer yet — which is the one that gets lost
+         * if a guest list is drawn as coming or not coming. Somebody who has
+         * not opened the invitation and somebody who declined it are different
+         * facts about a meeting, and the second is the one worth a message.
+         */
+        const answer = p.reply ?? (p.going ? "accepted" : "needsAction");
+        const mark =
+          answer === "accepted" ? "yes"
+          : answer === "declined" ? "no"
+          : answer === "tentative" ? "maybe"
+          : "quiet";
         const line = document.createElement("span");
-        line.className = "cw-guest" + (p.going ? " yes" : "");
+        line.className = `cw-guest ${mark}`;
         line.textContent = p.name;
-        line.title = p.email;
+        line.title = `${p.email} · ${
+          mark === "yes" ? t("จะไป")
+          : mark === "no" ? t("ไม่ไป")
+          : mark === "maybe" ? t("อาจจะไป")
+          : t("ยังไม่ตอบ")}`;
         if (!p.member) {
           const tag = document.createElement("i");
           tag.textContent = t("ภายนอก");
