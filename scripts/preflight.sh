@@ -76,6 +76,16 @@ else
   echo "        add one to apps/web/nginx.conf or it 404s (as HTML) in production" >&2
 fi
 
+# nginx is the one container that can take the whole site down while every other
+# one is healthy — it refuses a bad config at start-up rather than serving an
+# error. This is what can be known without nginx itself.
+if out=$(node scripts/nginx-check.mjs 2>&1); then
+  ok "nginx.conf — $(echo "$out" | grep -oE '[0-9]+ passed, [0-9]+ failed' | tail -1)"
+else
+  bad "nginx.conf would take the site down, or let a stale page stand"
+  echo "$out" | grep -E '^! FAIL' | head -6 | sed 's/^/        /' >&2
+fi
+
 # a layout the API would refuse can never be created, so the two lists must agree
 web_themes=$(grep -oE '^  (classic|departments|office):' apps/web/src/scenes/mapThemes.ts | tr -d ' :' | sort | xargs)
 api_themes=$(grep -oE 'const THEMES = \[[^]]*\]' apps/api/src/index.ts | grep -oE '"[a-z]+"' | tr -d '"' | sort | xargs)
