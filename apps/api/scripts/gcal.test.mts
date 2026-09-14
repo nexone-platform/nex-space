@@ -173,6 +173,67 @@ await connect();
     "a client secret in a request to anywhere else is a leaked credential");
 }
 
+// ---- letting Google send the invitations -----------------------------------------
+//
+// Given a guest list, Google sends its own invitation: the one with
+// Yes/No/Maybe, the guest list, and replies that land back in the host's
+// calendar. That is a better invitation than anything this project can put in
+// an envelope — but only if the list actually goes, and only on the host's
+// copy.
+
+{
+  await connect();
+  sent.length = 0;
+  apiStatus = 200; apiAnswer = { id: "ev_9" };
+  const guests = [
+    { email: "somchai@company.test", name: "สมชาย" },
+    { email: "client@outside.test", name: "client@outside.test" },
+  ];
+  const id = await pushEvent(user.id, BOOKING, guests);
+  ok("a meeting with people on it still lands in the calendar", id === "ev_9", String(id));
+
+  const call = sent.find((s) => s.url.includes("/calendar/v3/"))!;
+  ok("  · and Google is asked to tell them",
+    call.url.includes("sendUpdates=all"), call.url.replace(/^.*v3/, "…"));
+  const body = JSON.parse(call.body);
+  ok("  · with everybody on the guest list",
+    body.attendees?.length === 2
+    && body.attendees.some((a: { email: string }) => a.email === "client@outside.test"),
+    JSON.stringify(body.attendees));
+  ok("  · named, so the invitation does not read as an address",
+    body.attendees?.[0]?.displayName === "สมชาย", JSON.stringify(body.attendees?.[0]));
+}
+
+{
+  // Nobody on it is not the same as an empty guest list: one is a personal
+  // event, the other would be Google mailing nobody about nothing.
+  sent.length = 0;
+  await pushEvent(user.id, BOOKING, []);
+  const call = sent.find((s) => s.url.includes("/calendar/v3/"))!;
+  ok("a meeting with nobody on it asks Google to tell nobody",
+    !call.url.includes("sendUpdates"), call.url.replace(/^.*v3/, "…"));
+  ok("  · and carries no guest list at all",
+    JSON.parse(call.body).attendees === undefined,
+    JSON.stringify(JSON.parse(call.body).attendees));
+}
+
+{
+  // Cancelling the host's copy is the cancellation. Cancelling anybody else's
+  // is them leaving, and nobody else needs an email about that.
+  sent.length = 0;
+  apiStatus = 200; apiAnswer = {};
+  await dropEvent(user.id, "ev_9", true);
+  ok("cancelling the host's copy tells the guests",
+    sent.some((s) => s.method === "DELETE" && s.url.includes("sendUpdates=all")),
+    sent.filter((s) => s.method === "DELETE").map((s) => s.url.replace(/^.*v3/, "…")).join(" | "));
+
+  sent.length = 0;
+  await dropEvent(user.id, "ev_9");
+  ok("  · and somebody dropping out quietly tells nobody",
+    sent.every((s) => !s.url.includes("sendUpdates")),
+    sent.map((s) => s.url.replace(/^.*v3/, "…")).join(" | "));
+}
+
 await cleanUp();
 console.log(`\n${pass} passed, ${fail} failed\n`);
 await prisma.$disconnect();

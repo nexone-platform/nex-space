@@ -97,6 +97,9 @@ export type BookingEvent = {
   url?: string;
 };
 
+/** somebody the host put on the meeting */
+export type Guest = { email: string; name: string };
+
 /**
  * What a booking looks like as a Google event.
  *
@@ -108,7 +111,7 @@ export type BookingEvent = {
  * *and* connected here would otherwise see the meeting twice — Google collapses
  * two events that agree on it.
  */
-function asEvent(b: BookingEvent) {
+function asEvent(b: BookingEvent, guests: Guest[] = []) {
   return {
     summary: b.title,
     location: b.roomLabel,
@@ -117,10 +120,22 @@ function asEvent(b: BookingEvent) {
     end: { dateTime: b.endsAt.toISOString(), timeZone: TZ },
     iCalUID: `${b.id}@nexspace`,
     source: b.url ? { title: "NexSpace", url: b.url } : undefined,
-    // Whoever is reading this calendar is the only person in it. The invitation
-    // to everybody else is their own event in their own calendar — sending
-    // Google an attendee list would make it mail them a second invitation.
-    attendees: undefined,
+    /**
+     * The guest list, on the host's copy and on nothing else.
+     *
+     * Given one, Google sends the invitation itself — its own email, with the
+     * Yes/No/Maybe a person expects, the guest list, and replies that land back
+     * in the host's calendar rather than in a mailbox nobody reads. That is a
+     * better invitation than anything this project can put in an envelope, and
+     * it is the reason to hand the list over rather than keep it.
+     *
+     * The host's copy only. If every connected person's calendar carried the
+     * guest list, each of them would invite everybody, and one meeting would
+     * become five.
+     */
+    ...(guests.length
+      ? { attendees: guests.map((g) => ({ email: g.email, displayName: g.name })) }
+      : {}),
     reminders: { useDefault: true },
   };
 }
@@ -161,12 +176,19 @@ async function call(
  * — against the connection, where the person can read it — rather than thrown
  * at a route that was doing something else.
  */
-export async function pushEvent(userId: string, b: BookingEvent): Promise<string | null> {
+export async function pushEvent(
+  userId: string,
+  b: BookingEvent,
+  guests: Guest[] = [],
+): Promise<string | null> {
   const row = await prisma.googleCalendar.findUnique({ where: { userId } });
   if (!row) return null;
-  const r = await call(userId, `/calendars/${encodeURIComponent(row.calendarId)}/events`, {
+  // sendUpdates=all is what turns a guest list into invitations. Without it the
+  // people are on the event and none of them has been told.
+  const q = guests.length ? "?sendUpdates=all" : "";
+  const r = await call(userId, `/calendars/${encodeURIComponent(row.calendarId)}/events${q}`, {
     method: "POST",
-    body: JSON.stringify(asEvent(b)),
+    body: JSON.stringify(asEvent(b, guests)),
   });
   if (r.ok) {
     await prisma.googleCalendar
@@ -181,10 +203,18 @@ export async function pushEvent(userId: string, b: BookingEvent): Promise<string
   return null;
 }
 
-export async function dropEvent(userId: string, eventId: string): Promise<boolean> {
+export async function dropEvent(
+  userId: string,
+  eventId: string,
+  tellGuests = false,
+): Promise<boolean> {
   const row = await prisma.googleCalendar.findUnique({ where: { userId } });
   if (!row || !eventId) return false;
-  const r = await call(userId, `/calendars/${encodeURIComponent(row.calendarId)}/events/${encodeURIComponent(eventId)}`, {
+  // On the host's copy, deleting it is the cancellation: Google mails everybody
+  // who was invited and their calendars take it out. On anybody else's copy it
+  // is just them leaving, and nobody else needs an email about that.
+  const q = tellGuests ? "?sendUpdates=all" : "";
+  const r = await call(userId, `/calendars/${encodeURIComponent(row.calendarId)}/events/${encodeURIComponent(eventId)}${q}`, {
     method: "DELETE",
   });
   // Already gone is the state that was wanted, however it got there — somebody

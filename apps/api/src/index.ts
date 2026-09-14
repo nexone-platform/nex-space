@@ -1819,21 +1819,26 @@ async function addToGoogle(
   w: { slug: string },
   b: BookingRow,
   only?: string,
-) {
-  if (!gcalEnabled) return;
+  invite: { email: string; name: string }[] = [],
+): Promise<boolean> {
+  if (!gcalEnabled) return false;
+  let invited = false;
   try {
     const going = await prisma.bookingGoing.findMany({
       where: { bookingId: b.id, ...(only ? { userId: only } : {}) },
     });
-    if (!going.length) return;
+    if (!going.length) return false;
     const url = `${appOriginOf(req)}/?w=${encodeURIComponent(w.slug)}&m=${encodeURIComponent(b.mapSlug)}`;
     for (const g of going) {
       if (g.googleEventId) continue;        // already in that calendar
+      // The guest list goes on the host's copy and nowhere else — see asEvent.
+      const guests = g.userId === b.userId ? invite : [];
       const id = await pushEvent(g.userId, {
         id: b.id, title: b.title, roomLabel: b.roomLabel, hostName: b.hostName,
         startsAt: b.startsAt, endsAt: b.endsAt, url,
-      }).catch((e) => { console.warn("[gcal] add failed:", (e as Error).message); return null; });
+      }, guests).catch((e) => { console.warn("[gcal] add failed:", (e as Error).message); return null; });
       if (id) {
+        if (guests.length) invited = true;
         await prisma.bookingGoing.update({
           where: { bookingId_userId: { bookingId: b.id, userId: g.userId } },
           data: { googleEventId: id },
@@ -1843,6 +1848,7 @@ async function addToGoogle(
   } catch (e) {
     console.warn("[gcal] could not add the booking to anybody's calendar:", e);
   }
+  return invited;
 }
 
 /**
@@ -1852,13 +1858,21 @@ async function addToGoogle(
  * cancelled there is nothing left to look up. An event id that is already gone
  * from Google is not a failure — it is the state that was wanted.
  */
-async function removeFromGoogle(rows: { userId: string; googleEventId: string | null }[]) {
-  if (!gcalEnabled) return;
+async function removeFromGoogle(
+  rows: { userId: string; googleEventId: string | null }[],
+  hostId?: string | null,
+): Promise<boolean> {
+  if (!gcalEnabled) return false;
+  let told = false;
   for (const g of rows) {
     if (!g.googleEventId) continue;
-    await dropEvent(g.userId, g.googleEventId)
-      .catch((e) => console.warn("[gcal] remove failed:", (e as Error).message));
+    // Deleting the host's copy is the cancellation everybody hears about.
+    const tellGuests = !!hostId && g.userId === hostId;
+    const gone = await dropEvent(g.userId, g.googleEventId, tellGuests)
+      .catch((e) => { console.warn("[gcal] remove failed:", (e as Error).message); return false; });
+    if (gone && tellGuests) told = true;
   }
+  return told;
 }
 
 async function tellTheseAboutBooking(
@@ -1941,13 +1955,26 @@ app.post("/workspaces/:slug/bookings", async (req, res) => {
     },
   });
   res.json({ booking: bookingView(b, can.me.id, w.slug) });
-  // After the answer, not before it. The room is held either way.
-  void tellAboutBooking(req, w, b as BookingRow, "REQUEST");
-  void addToGoogle(req, w, b as BookingRow);
-  // The people who were asked. A separate call because they are a separate
-  // list: whoever is coming gets one of these as well, and at this moment that
-  // is the host alone.
-  void tellTheseAboutBooking(req, w, b as BookingRow, asked, "REQUEST");
+
+  /**
+   * Telling people, after the answer. The room is held either way.
+   *
+   * Whichever of the two can do it better. If the host has connected a Google
+   * Calendar, the guest list goes on the event and Google sends its own
+   * invitation — the one with Yes/No/Maybe, the guest list, and replies that
+   * come back to the host's calendar instead of to a mailbox nobody reads.
+   * Only if that does not happen do we put something in an envelope ourselves,
+   * because two invitations to one meeting is worse than either.
+   */
+  void (async () => {
+    const viaGoogle = await addToGoogle(req, w, b as BookingRow, undefined, asked);
+    if (viaGoogle) {
+      console.log(`[calendar] "${b.title}" — Google invited ${asked.length} guest(s) for ${can.me.name}`);
+      return;
+    }
+    void tellAboutBooking(req, w, b as BookingRow, "REQUEST");
+    void tellTheseAboutBooking(req, w, b as BookingRow, asked, "REQUEST");
+  })();
 });
 
 /** "I am coming" / "I am not" */
@@ -2035,8 +2062,14 @@ app.delete("/workspaces/:slug/bookings/:id", async (req, res) => {
 
   await prisma.booking.delete({ where: { id: b.id } });
   res.json({ ok: true });
-  void tellTheseAboutBooking(req, w, b as BookingRow, were);
-  void removeFromGoogle(inGoogle);
+  void (async () => {
+    const viaGoogle = await removeFromGoogle(inGoogle, b.userId);
+    if (viaGoogle) {
+      console.log(`[calendar] "${b.title}" — Google told the guests it is off`);
+      return;
+    }
+    void tellTheseAboutBooking(req, w, b as BookingRow, were);
+  })();
 });
 
 // ---- getting it into a real calendar ------------------------------------------
