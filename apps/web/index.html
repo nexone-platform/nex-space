@@ -759,6 +759,36 @@
         padding-top: 8px; border-top: 1px solid var(--border); }
       .cal-gcal:empty { display: none; }
       .cal-gcal small { color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+      /* People on a meeting, as chips — so an address typed wrong can be taken
+         off without retyping the other four. The box grows with them and the
+         input is the last thing in it, which is where a cursor expects to be. */
+      /* The guest list on a booking card. A name a line, and the ones who have
+         said yes marked — "3 coming" alone cannot tell a meeting nobody has
+         answered from one four people have declined. */
+      .cw-pop-who { display: flex; flex-direction: column; gap: 3px; margin-top: 10px;
+        padding-top: 8px; border-top: 1px solid var(--border); }
+      .cw-pop-who > small { color: var(--muted); font-size: 11px; }
+      .cw-guest { display: flex; align-items: center; gap: 6px; font-size: 12px;
+        color: var(--text-2); }
+      .cw-guest.yes { color: var(--teal-ink); font-weight: 600; }
+      .cw-guest.yes::before { content: "¹3"; font-size: 11px; }
+      .cw-guest i { font-style: normal; font-size: 10px; padding: 1px 5px;
+        border-radius: 999px; background: var(--surface-3); color: var(--muted); }
+      .cal-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center;
+        min-height: 32px; padding: 4px 6px; border-radius: var(--r-ctl);
+        border: 1px solid var(--border-2); background: var(--surface); }
+      .cal-chips:focus-within { border-color: var(--accent); }
+      .cal-chips input { flex: 1; min-width: 110px; border: none; outline: none;
+        background: none; color: var(--text); font: 12.5px "Segoe UI", sans-serif;
+        padding: 3px 2px; }
+      .cal-chip { display: inline-flex; align-items: center; gap: 4px;
+        max-width: 100%; padding: 2px 4px 2px 8px; border-radius: 999px;
+        background: var(--accent-soft); color: var(--accent-ink);
+        font: 12px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+      .cal-chip button { border: none; cursor: pointer; background: none;
+        color: var(--accent-ink); font-size: 11px; line-height: 1; padding: 2px 3px;
+        border-radius: 999px; }
+      .cal-chip button:hover { background: var(--accent-line); }
       .cal-msg { min-height: 15px; font-size: 12px; color: var(--teal-ink); }
       .cal-msg.err { color: var(--danger); }
 

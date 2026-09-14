@@ -158,6 +158,36 @@ export function mountCalendarWeek(o: WeekOptions) {
     row(t("จะไป"), String(b.going));
     pop.append(h, dl);
 
+    /**
+     * Who was asked, and where each of them got to.
+     *
+     * "3 coming" on its own cannot tell a meeting nobody has answered yet from
+     * one four people have declined. The list can, so it is here: a name, and
+     * whether they have said yes. Somebody from outside has no way to answer in
+     * the app at all, which is worth showing rather than leaving as a silence
+     * that looks like a refusal.
+     */
+    if (b.invitees?.length) {
+      const who = document.createElement("div");
+      who.className = "cw-pop-who";
+      const head = document.createElement("small");
+      head.textContent = t("เชิญ {n} คน").replace("{n}", String(b.invitees.length));
+      who.appendChild(head);
+      for (const p of b.invitees) {
+        const line = document.createElement("span");
+        line.className = "cw-guest" + (p.going ? " yes" : "");
+        line.textContent = p.name;
+        line.title = p.email;
+        if (!p.member) {
+          const tag = document.createElement("i");
+          tag.textContent = t("ภายนอก");
+          line.appendChild(tag);
+        }
+        who.appendChild(line);
+      }
+      pop.appendChild(who);
+    }
+
     const acts = document.createElement("div");
     acts.className = "cw-pop-acts";
     if (!over && o.going) {

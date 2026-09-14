@@ -1606,10 +1606,61 @@ async function sweepOldInvites() {
 /** how far a listing may reach in one request */
 const CAL_WINDOW_DAYS = Number(process.env.BOOKING_WINDOW_DAYS || 60);
 
+/**
+ * The people the host put on a meeting.
+ *
+ * Two fields on the form and one list here, because the difference between a
+ * colleague and a guest is not a thing the browser gets to decide: it is
+ * whether the address belongs to somebody in this space, which only the server
+ * can answer. A client that says "this outsider is a member" changes nothing.
+ *
+ * Addresses are normalised and de-duplicated, the host is dropped — they are
+ * already on it — and the whole thing is capped. An invitation list is a thing
+ * that sends email, and an uncapped one is a way to send a great deal of it.
+ */
+const MAX_INVITEES = Number(process.env.BOOKING_MAX_INVITEES || 50);
+
+async function readInvitees(
+  raw: unknown,
+  w: { id: string },
+  host: { id: string; email: string },
+) {
+  const wanted = Array.isArray(raw) ? raw : [];
+  const seen = new Set<string>([normEmail(host.email)]);
+  const emails: string[] = [];
+  for (const one of wanted) {
+    const email = normEmail(one);
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) continue;
+    if (seen.has(email)) continue;
+    seen.add(email);
+    emails.push(email);
+    if (emails.length >= MAX_INVITEES) break;
+  }
+  if (!emails.length) return [];
+
+  // Who among them is actually in this space. Asked of the membership table
+  // rather than taken from the request, so "member" means member.
+  const members = await prisma.membership.findMany({
+    where: { workspaceId: w.id, user: { email: { in: emails } } },
+    include: { user: { select: { id: true, name: true, email: true } } },
+  });
+  const byEmail = new Map(members.map((m) => [normEmail(m.user.email), m.user]));
+
+  return emails.map((email) => {
+    const known = byEmail.get(email);
+    return {
+      email,
+      name: known?.name || email,
+      userId: known?.id ?? null,
+    };
+  });
+}
+
 type BookingRow = {
   id: string; mapSlug: string; roomId: string; roomLabel: string; title: string;
   userId: string | null; hostName: string; startsAt: Date; endsAt: Date; createdAt: Date;
   going?: { userId: string }[];
+  invitees?: { email: string; name: string; userId: string | null }[];
 };
 
 function bookingView(b: BookingRow, meId: string | null | undefined, slug: string) {
@@ -1625,6 +1676,14 @@ function bookingView(b: BookingRow, meId: string | null | undefined, slug: strin
     // questions the browser would otherwise answer by guessing
     imGoing: !!meId && (b.going ?? []).some((g) => g.userId === meId),
     mine: !!meId && b.userId === meId,
+    // Who was asked, and who has answered. Two different facts, and a meeting
+    // where three of five have replied reads as neither if they are merged.
+    invitees: (b.invitees ?? []).map((i) => ({
+      email: i.email,
+      name: i.name,
+      member: !!i.userId,
+      going: !!i.userId && (b.going ?? []).some((g) => g.userId === i.userId),
+    })),
   };
 }
 
@@ -1671,7 +1730,10 @@ app.get("/workspaces/:slug/bookings", async (req, res) => {
     },
     orderBy: { startsAt: "asc" },
     take: 500,
-    include: { going: { select: { userId: true } } },
+    include: {
+      going: { select: { userId: true } },
+      invitees: { select: { email: true, name: true, userId: true } },
+    },
   });
   res.json({ bookings: rows.map((b) => bookingView(b, who.userId, w.slug)) });
 });
@@ -1804,10 +1866,11 @@ async function tellTheseAboutBooking(
   w: { id: string; slug: string; name: string },
   b: BookingRow,
   people: { email: string; name: string }[],
+  method: "REQUEST" | "CANCEL" = "CANCEL",
 ) {
   if (!people.length) return;
   if (!mailEnabled) {
-    console.log(`[calendar] CANCEL for "${b.title}" told nobody — no mail transport is configured`);
+    console.log(`[calendar] ${method} for "${b.title}" told nobody — no mail transport is configured`);
     return;
   }
   const host = b.userId
@@ -1817,11 +1880,11 @@ async function tellTheseAboutBooking(
   for (const p of people) {
     await sendBooking({
       to: p.email, toName: p.name || p.email,
-      space: w.name, booking: b, method: "CANCEL", url,
+      space: w.name, booking: b, method, url,
       organizer: host?.email ? { name: b.hostName, email: host.email } : undefined,
     })
-      .then((sent) => { if (sent) console.log(`[calendar] CANCEL for "${b.title}" sent to ${p.email}`); })
-      .catch((e) => console.warn(`[calendar] cancellation to ${p.email} did not go:`, e));
+      .then((sent) => { if (sent) console.log(`[calendar] ${method} for "${b.title}" sent to ${p.email}`); })
+      .catch((e) => console.warn(`[calendar] ${method} to ${p.email} did not go:`, e));
   }
 }
 
@@ -1859,6 +1922,8 @@ app.post("/workspaces/:slug/bookings", async (req, res) => {
     });
   }
 
+  const asked = await readInvitees(body.invitees, w, can.me);
+
   const b = await prisma.booking.create({
     data: {
       workspaceId: w.id, mapSlug, roomId, roomLabel, title,
@@ -1866,13 +1931,23 @@ app.post("/workspaces/:slug/bookings", async (req, res) => {
       // Booking it is saying you will be there. Anything else would mean the
       // person who called the meeting is the one person it does not remind.
       going: { create: { userId: can.me.id } },
+      // Invited, not coming. They answer for themselves, in the app if they
+      // have an account here and in their own calendar if they do not.
+      invitees: { create: asked },
     },
-    include: { going: { select: { userId: true } } },
+    include: {
+      going: { select: { userId: true } },
+      invitees: { select: { email: true, name: true, userId: true } },
+    },
   });
   res.json({ booking: bookingView(b, can.me.id, w.slug) });
   // After the answer, not before it. The room is held either way.
   void tellAboutBooking(req, w, b as BookingRow, "REQUEST");
   void addToGoogle(req, w, b as BookingRow);
+  // The people who were asked. A separate call because they are a separate
+  // list: whoever is coming gets one of these as well, and at this moment that
+  // is the host alone.
+  void tellTheseAboutBooking(req, w, b as BookingRow, asked, "REQUEST");
 });
 
 /** "I am coming" / "I am not" */
@@ -1909,7 +1984,11 @@ app.post("/workspaces/:slug/bookings/:id/going", async (req, res) => {
     void removeFromGoogle([{ userId: can.me.id, googleEventId: already.googleEventId }]);
   }
   const after = await prisma.booking.findUnique({
-    where: { id: b.id }, include: { going: { select: { userId: true } } },
+    where: { id: b.id },
+    include: {
+      going: { select: { userId: true } },
+      invitees: { select: { email: true, name: true, userId: true } },
+    },
   });
   res.json({ booking: bookingView(after as BookingRow, can.me.id, w.slug) });
 });
@@ -1940,8 +2019,19 @@ app.delete("/workspaces/:slug/bookings/:id", async (req, res) => {
     where: { bookingId: b.id },
     include: { user: { select: { email: true, name: true } } },
   });
-  const were = rows.map((g) => g.user).filter((u): u is { email: string; name: string } => !!u?.email);
   const inGoogle = rows.map((g) => ({ userId: g.userId, googleEventId: g.googleEventId }));
+
+  // Everybody who was told this meeting exists, whether or not they answered.
+  // A cancellation that only reaches the people who said yes leaves the rest
+  // holding an invitation to a meeting that is off — and their calendar keeps
+  // it, because a CANCEL is the only thing that takes one out.
+  const invited = await prisma.bookingInvitee.findMany({
+    where: { bookingId: b.id }, select: { email: true, name: true },
+  });
+  const byEmail = new Map<string, { email: string; name: string }>();
+  for (const u of rows.map((g) => g.user)) if (u?.email) byEmail.set(u.email, u);
+  for (const i of invited) if (!byEmail.has(i.email)) byEmail.set(i.email, i);
+  const were = [...byEmail.values()];
 
   await prisma.booking.delete({ where: { id: b.id } });
   res.json({ ok: true });

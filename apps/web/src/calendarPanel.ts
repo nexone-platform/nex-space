@@ -26,6 +26,8 @@ export type Booking = {
   mine: boolean;
   /** a signed link to this one meeting as a .ics file */
   ics: string;
+  /** who the host put on it — which is not the same list as who is coming */
+  invitees?: { email: string; name: string; member: boolean; going: boolean }[];
 };
 
 export type Room = { id: string; label: string };
@@ -171,6 +173,103 @@ export function mountCalendarPanel(o: CalendarOptions) {
   const save = document.createElement("button"); save.type = "submit"; save.className = "cal-save"; save.textContent = t("จอง");
   const cancel = document.createElement("button"); cancel.type = "button"; cancel.className = "cal-cancel"; cancel.textContent = t("ยกเลิก");
 
+  /**
+   * Two fields of addresses, which are one list by the time they are sent.
+   *
+   * The split is for the person filling it in, not for the server: colleagues
+   * are picked from a list this space already has, guests are typed in full,
+   * and telling them apart is a different job with a different failure. What
+   * goes on the wire is one array of addresses, and which of them are members
+   * is decided where the membership table is.
+   *
+   * Chips rather than a comma-separated box, for the reason every calendar
+   * uses chips: an address that was typed wrong has to be removable without
+   * retyping the other four.
+   */
+  function chipField(opts: { placeholder: string; list?: HTMLDataListElement }) {
+    const box = document.createElement("div");
+    box.className = "cal-chips";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = opts.placeholder;
+    input.autocomplete = "off";
+    if (opts.list) input.setAttribute("list", opts.list.id);
+    box.appendChild(input);
+
+    const held: string[] = [];
+    const draw = () => {
+      box.querySelectorAll(".cal-chip").forEach((n) => n.remove());
+      for (const email of held) {
+        const chip = document.createElement("span");
+        chip.className = "cal-chip";
+        chip.textContent = email;
+        const x = document.createElement("button");
+        x.type = "button";
+        x.textContent = "✕";
+        x.title = t("เอาออก");
+        x.onclick = () => { held.splice(held.indexOf(email), 1); draw(); };
+        chip.appendChild(x);
+        box.insertBefore(chip, input);
+      }
+    };
+    const take = () => {
+      // Commas and spaces both, because a list pasted out of an email client
+      // arrives separated by whichever one that client felt like using.
+      for (const raw of input.value.split(/[,;\s]+/)) {
+        const email = raw.trim().toLowerCase();
+        if (!email) continue;
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { say(t("อีเมลไม่ถูกต้อง: {x}").replace("{x}", email), true); continue; }
+        if (!held.includes(email)) held.push(email);
+      }
+      input.value = "";
+      draw();
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === "," || e.key === "Tab") {
+        if (!input.value.trim()) return;          // Tab still leaves an empty one
+        e.preventDefault();
+        take();
+      }
+      // Backspace on an empty box takes the last chip back, which is what every
+      // field of this shape does and what fingers expect.
+      if (e.key === "Backspace" && !input.value && held.length) { held.pop(); draw(); }
+    });
+    // Typed and then clicked away is still meant. Losing it on blur is how a
+    // form quietly drops the last person somebody added.
+    input.addEventListener("blur", () => { if (input.value.trim()) take(); });
+    // A pick from the datalist arrives as an input event with the whole value.
+    input.addEventListener("change", () => { if (input.value.includes("@")) take(); });
+
+    return { el: box, all: () => [...held], clear: () => { held.length = 0; input.value = ""; draw(); } };
+  }
+
+  /** the addresses this space knows, for the member field to offer */
+  const memberList = document.createElement("datalist");
+  memberList.id = "cal-members";
+  let loadedMembers = false;
+  const loadMembers = async () => {
+    if (loadedMembers || !o.token) return;
+    loadedMembers = true;
+    try {
+      const r = await fetch(`${o.api}/workspaces/${encodeURIComponent(o.workspace)}/members`, {
+        headers: { authorization: `Bearer ${o.token}` },
+      });
+      if (!r.ok) return;
+      const d = (await r.json()) as { members?: { email: string; name: string; isMe?: boolean }[] };
+      memberList.innerHTML = "";
+      for (const m of d.members ?? []) {
+        if (m.isMe || !m.email) continue;        // the host is already on it
+        const opt = document.createElement("option");
+        opt.value = m.email;
+        opt.label = m.name;
+        memberList.appendChild(opt);
+      }
+    } catch { /* offline: the field still takes a typed address */ }
+  };
+
+  const mates = chipField({ placeholder: t("อีเมลสมาชิกในพื้นที่นี้"), list: memberList });
+  const guests = chipField({ placeholder: t("อีเมลคนนอก") });
+
   const row = (labelText: string, ...kids: HTMLElement[]) => {
     const r = document.createElement("label");
     r.className = "cal-row";
@@ -183,6 +282,8 @@ export function mountCalendarPanel(o: CalendarOptions) {
     row(t("ห้อง"), roomIn),
     row(t("เริ่ม"), startIn),
     row(t("ถึง"), endIn),
+    row(t("ผู้เข้าร่วม"), mates.el, memberList),
+    row(t("แขกจากภายนอก"), guests.el),
     (() => { const r = document.createElement("div"); r.className = "cal-actions"; r.append(cancel, save); return r; })(),
   );
 
@@ -200,6 +301,9 @@ export function mountCalendarPanel(o: CalendarOptions) {
     startIn.value = localValue(from);
     endIn.value = localValue(new Date(+from + 60 * 60 * 1000));
     titleIn.value = "";
+    mates.clear();
+    guests.clear();
+    void loadMembers();
     form.hidden = false;
     composing = true;
     add.textContent = t("ปิดฟอร์ม");
@@ -234,6 +338,9 @@ export function mountCalendarPanel(o: CalendarOptions) {
         roomId: room.id, roomLabel: room.label, mapSlug: o.mapSlug,
         startsAt: new Date(startIn.value).toISOString(),
         endsAt: new Date(endIn.value).toISOString(),
+        // One list. Which of them are members is the server's to decide, and
+        // it asks the membership table rather than believing this.
+        invitees: [...mates.all(), ...guests.all()],
       });
       if (r.status === 409) {
         const c = r.clash as { title?: string; startsAt?: string; endsAt?: string } | undefined;

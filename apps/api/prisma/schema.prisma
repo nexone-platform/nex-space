@@ -45,6 +45,7 @@ model User {
   spoken        RecordingTrack[] @relation("RecordingsSpoken")
   invitesSent   Invite[]     @relation("InvitesSent")
   googleCalendar GoogleCalendar?
+  invitedTo     BookingInvitee[] @relation("BookingsInvited")
   goingTo       BookingGoing[]
   received      Message[]    @relation("MessagesReceived")
   dmReads       DmRead[]
@@ -274,6 +275,7 @@ model Booking {
   endsAt      DateTime
   createdAt   DateTime  @default(now())
   going       BookingGoing[]
+  invitees    BookingInvitee[]
 
   // "what is on today" and "is this room free then" are different questions
   @@index([workspaceId, startsAt])
@@ -285,6 +287,34 @@ model Booking {
 // Not an invitation — nobody is added by anybody else. It exists so a reminder
 // has somewhere to go: without it the only person a meeting could remind is the
 // one who booked it, who is the least likely to have forgotten.
+/// Somebody the host put on the meeting.
+///
+/// Invited is not the same as coming: this is the list the invitation was sent
+/// to, and BookingGoing is who answered yes. Google works the same way and it
+/// is the only shape that can tell "has not replied" from "is not coming".
+///
+/// An address rather than an account, because half of them do not have one. A
+/// colleague in this space gets `userId` filled in and can answer in the app; a
+/// guest from outside gets the email with the calendar file and nothing else,
+/// which is all anybody can give somebody who has no account.
+model BookingInvitee {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  email     String
+  /// their name if this space knows them, the address itself if it does not
+  name      String
+  /// set when the address belongs to a member here. Null for a guest, and
+  /// nulled again if that person's account goes — the meeting is the space's,
+  /// the personal data in it is not.
+  userId    String?
+  user      User?    @relation("BookingsInvited", fields: [userId], references: [id], onDelete: SetNull)
+  at        DateTime @default(now())
+
+  @@unique([bookingId, email])
+  @@index([bookingId])
+}
+
 model BookingGoing {
   bookingId String
   userId    String

@@ -85,8 +85,9 @@ if (!up) { console.error("! the test API never came up"); stop(); process.exit(1
 
 const stamp = Date.now();
 const person = async (who) => {
-  const d = await post("/auth/register", { email: `c-${who}-${stamp}@test.local`, name: who, password: "hunter2pw" });
-  return { name: who, token: d.token, id: d.user?.id };
+  const email = `c-${who}-${stamp}@test.local`;
+  const d = await post("/auth/register", { email, name: who, password: "hunter2pw" });
+  return { name: who, email, token: d.token, id: d.user?.id };
 };
 
 const owner = await person("owner");
@@ -436,6 +437,74 @@ let startUrl = "";
 {
   const r = await del("/me/google-calendar", owner.token);
   ok("disconnecting nothing is not an error", r.ok === true && r.already === true, JSON.stringify(r));
+}
+
+// ---- the people the host puts on a meeting -------------------------------------
+//
+// Two fields on the form, one list on the wire, and the split between member
+// and guest decided here rather than by the browser — a client that calls an
+// outsider a member must not make one.
+
+{
+  const r = await book({
+    ...ROOM, title: "มีคนอื่นด้วย", startsAt: at(20), endsAt: at(21),
+    invitees: [mate.email, "someone@outside.test", "  NOT AN EMAIL ", mate.email],
+  });
+  ok("a booking can be made with people on it", r.status === 200, `status ${r.status}`);
+
+  const list = r.booking?.invitees ?? [];
+  ok("  · the same address twice is one person", list.length === 2,
+    list.map((i) => i.email).join(" ") || "nobody");
+  ok("  · something that is not an address is dropped rather than refused",
+    !list.some((i) => /NOT AN EMAIL/i.test(i.email)),
+    "a typo in one row should not lose the other four");
+
+  const known = list.find((i) => i.email === mate.email.toLowerCase());
+  ok("  · somebody in this space is marked as one", known?.member === true, JSON.stringify(known));
+  ok("    · and named, not left as an address", known?.name === mate.name, known?.name);
+  const outsider = list.find((i) => i.email === "someone@outside.test");
+  ok("  · somebody who is not, is not", outsider?.member === false, JSON.stringify(outsider));
+
+  ok("  · and being invited is not being counted as coming",
+    r.booking.going === 1 && list.every((i) => i.going === false),
+    `going=${r.booking.going}`);
+
+  // The host is on it already; saying so twice would email them twice.
+  const withHost = await book({
+    ...ROOM, title: "เชิญตัวเอง", startsAt: at(22), endsAt: at(23),
+    invitees: [owner.email],
+  });
+  ok("  · and the host is not invited to their own meeting",
+    (withHost.booking?.invitees ?? []).length === 0,
+    JSON.stringify(withHost.booking?.invitees));
+  if (withHost.booking) await del(`/workspaces/${ws.slug}/bookings/${withHost.booking.id}`, owner.token);
+
+  // What a client claims about who is a member changes nothing.
+  const lying = await book({
+    ...ROOM, title: "โกหก", startsAt: at(24), endsAt: at(25),
+    invitees: [{ email: "fake@outside.test", member: true }, "real@outside.test"],
+  });
+  ok("  · an invitee sent as an object rather than an address is ignored",
+    (lying.booking?.invitees ?? []).length === 1
+    && lying.booking.invitees[0].email === "real@outside.test",
+    JSON.stringify(lying.booking?.invitees));
+  if (lying.booking) await del(`/workspaces/${ws.slug}/bookings/${lying.booking.id}`, owner.token);
+
+  // Everybody who was asked can read the meeting, and it is on their list.
+  const theirs = await get(`/workspaces/${ws.slug}/bookings?from=${at(0)}&to=${at(48)}`, mate.token);
+  const seen = (theirs.bookings ?? []).find((x) => x.id === r.booking.id);
+  ok("  · and the meeting is visible to the person invited", !!seen, seen ? "yes" : "not in their list");
+
+  if (r.booking) await del(`/workspaces/${ws.slug}/bookings/${r.booking.id}`, owner.token);
+}
+
+{
+  // A list long enough to be a mailing list is not one.
+  const many = Array.from({ length: 80 }, (_, i) => `flood${i}@outside.test`);
+  const r = await book({ ...ROOM, title: "เยอะไป", startsAt: at(26), endsAt: at(27), invitees: many });
+  ok("an invitation list has a ceiling", (r.booking?.invitees ?? []).length <= 50,
+    `${(r.booking?.invitees ?? []).length} of ${many.length}`);
+  if (r.booking) await del(`/workspaces/${ws.slug}/bookings/${r.booking.id}`, owner.token);
 }
 
 stop();

@@ -262,6 +262,81 @@ log("");
     "a footer rebuilt on every draw would wipe the feed address as it was read");
 }
 
+// ---- putting people on the meeting ---------------------------------------------
+// Two fields, because picking a colleague out of a list this space already has
+// and typing an outsider's address in full are different jobs. One array on the
+// wire, because which of them is a member is not the browser's to decide.
+log("");
+{
+  const fields = () => [...panel.form.querySelectorAll(".cal-chips")];
+  const chipsIn = (f) => [...f.querySelectorAll(".cal-chip")].map((c) => c.firstChild.textContent);
+  const typeInto = (f, text, key = "Enter") => {
+    const input = f.querySelector("input");
+    input.value = text;
+    input.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+  };
+
+  // Open the form on an hour that will be accepted.
+  refuseWith = null;
+  hours[future].click();
+  await tick();
+  ok("the form has a field for colleagues and one for outsiders", fields().length === 2,
+    `${fields().length} field(s)`);
+
+  const [mates, guests] = fields();
+  typeInto(mates, "somchai@company.test");
+  typeInto(guests, "client@outside.test");
+  await tick();
+  ok("  · an address becomes a chip", chipsIn(mates).join() === "somchai@company.test",
+    chipsIn(mates).join() || "nothing");
+
+  typeInto(mates, "somchai@company.test");
+  await tick();
+  ok("  · the same one twice is still one", chipsIn(mates).length === 1, String(chipsIn(mates).length));
+
+  // This probe has no say() of its own: the panel writes into its own message
+  // line, which is the thing a person would actually read.
+  const note = () => (document.querySelector(".cal-msg")?.textContent ?? "").trim();
+  typeInto(mates, "not-an-address");
+  await tick();
+  ok("  · something that is not an address is refused, and said so",
+    chipsIn(mates).length === 1 && note().includes("not-an-address"),
+    JSON.stringify(note()) || "nothing said");
+
+  // A list pasted out of a mail client arrives however that client felt like.
+  typeInto(mates, "a@company.test, b@company.test");
+  await tick();
+  ok("  · a pasted list is split on commas and spaces", chipsIn(mates).length === 3,
+    chipsIn(mates).join(" "));
+
+  mates.querySelector(".cal-chip button").click();
+  await tick();
+  ok("  · and one of them can be taken off without retyping the others",
+    chipsIn(mates).length === 2 && !chipsIn(mates).includes("somchai@company.test"),
+    chipsIn(mates).join(" "));
+
+  // ---- what actually goes out --------------------------------------------------
+  posts.length = 0;
+  titleIn().value = "ประชุมกับลูกค้า";
+  submit().click();
+  await tick(); await tick();
+  const sent = posts[0]?.invitees ?? [];
+  ok("both fields are sent as one list", sent.length === 3, JSON.stringify(sent));
+  ok("  · with the outsider in it", sent.includes("client@outside.test"), JSON.stringify(sent));
+  ok("  · as plain addresses, claiming nothing about who is a member",
+    sent.every((x) => typeof x === "string"),
+    "the server asks the membership table; anything the browser says is ignored");
+
+  // ---- and the next booking starts empty ---------------------------------------
+  hours[future].click();
+  await tick();
+  ok("a new booking does not inherit the last one's guests",
+    fields().every((f) => chipsIn(f).length === 0),
+    fields().map((f) => chipsIn(f).join(",")).join(" | ") || "empty");
+  document.getElementById("cw-modal").click();
+  await tick();
+}
+
 log(`\n${pass} passed, ${fail} failed\n`);
 document.title = fail ? `FAIL ${fail}` : `PASS ${pass}`;
 </script>
