@@ -504,10 +504,22 @@ app.get("/me", requireAuth, (req: AuthedRequest, res) => res.json({ user: safeUs
 // individual grants `calendar.events` for their own account and can take it
 // back, and nothing here can reach a calendar nobody connected.
 
-/** the redirect Google is told to come back to, registered in the console */
+/**
+ * The redirect Google is told to come back to, registered in the console.
+ *
+ * Built from APP_URL rather than from the request, through the same helper
+ * every other outward-facing link uses. Deriving it from the headers looks
+ * right and is a guess about what the proxies in front of this server send:
+ * this deployment sits behind Cloudflare and then behind something else, and
+ * X-Forwarded-Proto does not survive the trip — so the URL came out as http://
+ * on an https site, and Google refused it with redirect_uri_mismatch while
+ * everything on both sides looked correctly configured.
+ *
+ * GCAL_REDIRECT_URL still wins, for a deployment where the callback is not on
+ * the same origin as the app.
+ */
 const gcalRedirect = (req: express.Request) =>
-  process.env.GCAL_REDIRECT_URL ||
-  `${(req.header("x-forwarded-proto") || req.protocol)}://${req.header("x-forwarded-host") || req.get("host")}/auth/google/calendar/callback`;
+  process.env.GCAL_REDIRECT_URL || `${appOriginOf(req)}/auth/google/calendar/callback`;
 
 /**
  * Who asked, carried through Google and back, without a session token in a URL.

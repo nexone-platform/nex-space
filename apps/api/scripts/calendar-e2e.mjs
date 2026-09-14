@@ -61,6 +61,11 @@ const api = spawn(process.execPath, [TSX, "src/index.ts"], {
     // Google credentials that are not credentials: enough for the connect
     // routes to exist and be checked, and useless to anybody who finds them.
     GOOGLE_CLIENT_ID: "e2e-client", GOOGLE_CLIENT_SECRET: "e2e-secret",
+    // The real deployment sits behind two proxies and X-Forwarded-Proto does
+    // not survive the trip, so the callback built from the request came out as
+    // http:// on an https site and Google refused it. APP_URL is what the rest
+    // of the app already trusts for this, trailing slash and all.
+    APP_URL: "https://app.example.test/",
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -375,7 +380,9 @@ let feed;
   // that cannot be worked out by reading the code — it is built from the
   // headers whatever sits in front of this server sends.
   ok("  · and is told exactly what to register with Google",
-    String(mine.redirectUri || "").endsWith("/auth/google/calendar/callback"), mine.redirectUri);
+    mine.redirectUri === "https://app.example.test/auth/google/calendar/callback", mine.redirectUri);
+  ok("  · on the scheme the app is actually reached on, not the one the proxy speaks",
+    String(mine.redirectUri).startsWith("https://"), mine.redirectUri);
 
   const anon = await fetch(API + "/me/google-calendar");
   ok("  · and it is nobody else's business", anon.status === 401, `status ${anon.status}`);
@@ -393,8 +400,9 @@ let startUrl = "";
   ok("  · offline, or the server can do nothing an hour later",
     q.get("access_type") === "offline" && q.get("prompt") === "consent",
     `${q.get("access_type")} ${q.get("prompt")}`);
-  ok("  · coming back to this server, not anywhere else",
-    (q.get("redirect_uri") || "").endsWith("/auth/google/calendar/callback"), q.get("redirect_uri"));
+  ok("  · coming back to the address that was registered, character for character",
+    q.get("redirect_uri") === "https://app.example.test/auth/google/calendar/callback",
+    q.get("redirect_uri"));
   ok("  · and carrying no session token in the URL",
     !startUrl.includes(owner.token),
     "a token in a query string is a working credential in nginx logs and browser history");
