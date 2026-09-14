@@ -1272,6 +1272,9 @@ export class OfficeScene extends Phaser.Scene {
             if (!d?.workspace) return;
             // what this account may do here, used only to decide what to offer
             this.myRole = String(d.workspace.role || "guest");
+            // The calendar panel decided what to offer before this arrived, and
+            // at that moment every account still looked like a guest.
+            this.calPanel?.roleChanged();
             // owner and admin get the code; everyone else gets undefined, and
             // the button then copies a link that only points at the door
             this.inviteCode = d.workspace.inviteCode || "";

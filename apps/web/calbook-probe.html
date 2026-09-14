@@ -56,10 +56,14 @@ globalThis.fetch = async (url, init = {}) => {
   return { ok: true, status: 200, json: async () => ({ booking: { id: "b1" } }) };
 };
 
+// The role arrives from a fetch the scene starts after mounting the panel, so
+// at mount every account still looks like a guest. Modelled exactly: false
+// first, true a moment later.
+let role = "guest";
 const panel = mountCalendarPanel({
   host: side, api: "http://x", workspace: "test", token: "t", mapSlug: "main",
   rooms: () => [{ id: "lounge", label: "โซนพักผ่อน" }, { id: "big", label: "ห้องประชุมใหญ่" }],
-  canBook: () => true, canManage: () => true,
+  canBook: () => role !== "guest", canManage: () => true,
 });
 const week = mountCalendarWeek({
   bookings: () => panel.bookings(),
@@ -227,6 +231,35 @@ log("");
 
   const again = freshBookings(past.known, [row("a", false), row("e", false, ended)]);
   ok("  · and nothing is announced twice", again.fresh.length === 0);
+}
+
+// ---- a footer built before the answer arrived ----------------------------------
+//
+// Everything else in the panel asks `canBook()` again every time it draws, so
+// it corrects itself a moment later. The footer was built once, at the only
+// moment the answer was still "guest", and stayed empty for the whole session:
+// no way to subscribe a calendar, no way to connect one, and nothing anywhere
+// saying why.
+log("");
+{
+  const footOf = () => document.getElementById("cw-foot").textContent.trim();
+  ok("a guest is offered nothing in the footer", footOf() === "", JSON.stringify(footOf()));
+
+  role = "member";
+  panel.roleChanged();
+  await tick();
+  ok("  · and the moment the role lands, the footer is there",
+    footOf().includes("ปฏิทิน"), JSON.stringify(footOf()).slice(0, 80));
+  ok("  · including the row that connects a Google Calendar",
+    !!document.querySelector("#cw-foot .cal-gcal"),
+    "an element for it, whether or not this server has Google configured");
+
+  // And it does not rebuild itself out from under somebody mid-use.
+  const was = document.querySelector("#cw-foot .cal-sub");
+  panel.roleChanged();
+  await tick();
+  ok("  · asking again changes nothing", document.querySelector("#cw-foot .cal-sub") === was,
+    "a footer rebuilt on every draw would wipe the feed address as it was read");
 }
 
 log(`\n${pass} passed, ${fail} failed\n`);

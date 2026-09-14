@@ -283,6 +283,8 @@ export function mountCalendarPanel(o: CalendarOptions) {
   }
 
   function render() {
+    // Cheap and idempotent: it returns at once unless the answer changed.
+    drawFoot();
     label.textContent = dayName(day);
     const start = new Date(day); start.setHours(0, 0, 0, 0);
     const end = new Date(+start + DAY);
@@ -379,7 +381,29 @@ export function mountCalendarPanel(o: CalendarOptions) {
    * break because a token expired. Fetched lazily — a space that never opens
    * this row never gets a key minted.
    */
-  if (o.canBook?.() !== false) {
+
+  /**
+   * The footer is built more than once, because what may go in it is not known
+   * when this mounts.
+   *
+   * `canBook()` reads the role, and the role arrives from a fetch the scene
+   * starts after mounting this panel. Everything else in here asks the question
+   * again every time it draws, so it corrects itself a moment later; the footer
+   * was built once, at the only moment the answer was still "guest", and stayed
+   * empty for the rest of the session. Both rows were missing and neither left
+   * a trace of why.
+   */
+  let footFor: boolean | null = null;
+  function drawFoot() {
+    const may = o.canBook?.() !== false;
+    if (footFor === may) return;
+    footFor = may;
+    foot.innerHTML = "";
+    if (!may) return;
+    buildFoot();
+  }
+
+  function buildFoot() {
     const link = document.createElement("button");
     link.className = "cal-sub";
     link.textContent = t("ซิงก์เข้าปฏิทินของคุณ");
@@ -424,7 +448,6 @@ export function mountCalendarPanel(o: CalendarOptions) {
       }
     };
     foot.appendChild(link);
-  }
 
   /**
    * Connecting one person's own Google Calendar.
@@ -434,13 +457,19 @@ export function mountCalendarPanel(o: CalendarOptions) {
    * into their calendar as it is made. It is per person and it is theirs to
    * undo, so it lives here rather than in an admin page.
    */
-  const gcal = document.createElement("div");
-  gcal.className = "cal-gcal";
-  foot.appendChild(gcal);
+    gcal = document.createElement("div");
+    gcal.className = "cal-gcal";
+    foot.appendChild(gcal);
+    if (o.token) void loadGcal();
+  }
+
+  /** the row itself, replaced whenever the footer is rebuilt */
+  let gcal: HTMLElement | null = null;
 
   const drawGcal = (s: {
     available?: boolean; connected?: boolean; email?: string | null; lastError?: string | null;
   }) => {
+    if (!gcal) return;                     // the footer is not built yet
     gcal.innerHTML = "";
     if (!s.available) return;              // nothing configured on this server
     if (s.connected) {
@@ -460,14 +489,14 @@ export function mountCalendarPanel(o: CalendarOptions) {
         if (r.ok) { say(t("ยกเลิกการเชื่อมแล้ว")); void loadGcal(); }
         else say(t("ยกเลิกการเชื่อมไม่สำเร็จ"), true);
       };
-      gcal.append(who, off);
+      gcal!.append(who, off);
       // A connection that has quietly stopped working looks exactly like one
       // that works, until somebody books a room and nothing appears.
       if (s.lastError) {
         const bad = document.createElement("small");
         bad.className = "cal-warn";
         bad.textContent = t("ครั้งล่าสุด Google ไม่รับ — ลองเชื่อมใหม่");
-        gcal.appendChild(bad);
+        gcal!.appendChild(bad);
       }
       return;
     }
@@ -496,7 +525,7 @@ export function mountCalendarPanel(o: CalendarOptions) {
     };
     const note = document.createElement("small");
     note.textContent = t("การจองที่คุณกดว่าจะไป จะขึ้นในปฏิทินทันที");
-    gcal.append(on, note);
+    gcal!.append(on, note);
   };
 
   const loadGcal = async () => {
@@ -508,7 +537,6 @@ export function mountCalendarPanel(o: CalendarOptions) {
       drawGcal(await r.json());
     } catch { /* offline; the row simply is not drawn */ }
   };
-  if (o.canBook?.() !== false && o.token) void loadGcal();
 
   /**
    * What came back from Google, said out loud.
@@ -545,6 +573,14 @@ export function mountCalendarPanel(o: CalendarOptions) {
      * rather than by where it sits, so it works wherever it is put.
      */
     form,
+    /**
+     * The role arrived.
+     *
+     * The scene fetches it after mounting this, so anything decided from it
+     * has to be decided again once it lands. Said explicitly rather than left
+     * to the next poll, which is two minutes of a footer that should be there.
+     */
+    roleChanged: drawFoot,
     /**
      * The line the form talks back on.
      *
