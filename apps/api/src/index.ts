@@ -3455,6 +3455,8 @@ if (gcalEnabled) {
 }
 // A reminder is a time somebody chose. Checked every minute, because "twenty
 // minutes before" that lands twelve minutes before is not what was asked for.
+console.log(`[calendar] reminder sweep on, every ${Math.round(REMINDER_SWEEP_MS / 1000)}s${
+  mailEnabled ? "" : " — but no mail transport is configured, so nothing can go out"}`);
 setInterval(() => void sweepReminders(), REMINDER_SWEEP_MS).unref();
 void sweepOrphanUploads().catch((e) => console.error("[uploads] sweep failed:", e));
 setInterval(() => void sweepOrphanUploads().catch((e) => console.error("[uploads] sweep failed:", e)), DAY_MS).unref();
