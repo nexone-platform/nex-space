@@ -7,7 +7,7 @@ import {
   hashPassword, verifyPassword, createSession, activateSession, sessionFromToken,
   requireAuth, userFromToken, type AuthedRequest,
 } from "./auth";
-import { sendLoginCode, mailEnabled, mailTransport, sendInvite, sendBooking, mailCheck } from "./mailer";
+import { sendLoginCode, mailEnabled, mailTransport, sendInvite, sendBooking, sendReminder, mailCheck } from "./mailer";
 import { iceConfig, turnEnabled } from "./ice";
 import { mapDocProblem } from "./mapValidate";
 import {
@@ -1661,6 +1661,7 @@ type BookingRow = {
   userId: string | null; hostName: string; startsAt: Date; endsAt: Date; createdAt: Date;
   going?: { userId: string }[];
   invitees?: { email: string; name: string; userId: string | null; reply?: string }[];
+  reminders?: { method: string; minutes: number }[];
 };
 
 function bookingView(b: BookingRow, meId: string | null | undefined, slug: string) {
@@ -1688,6 +1689,9 @@ function bookingView(b: BookingRow, meId: string | null | undefined, slug: strin
       // folding it into "not coming" loses the difference that matters.
       reply: i.reply ?? "needsAction",
     })),
+    // What the host asked for, so the browser can draw the popup ones at the
+    // times that were chosen rather than at a time this app picked.
+    reminders: (b.reminders ?? []).map((r) => ({ method: r.method, minutes: r.minutes })),
   };
 }
 
@@ -1737,6 +1741,7 @@ app.get("/workspaces/:slug/bookings", async (req, res) => {
     include: {
       going: { select: { userId: true } },
       invitees: { select: { email: true, name: true, userId: true, reply: true } },
+      reminders: { select: { method: true, minutes: true } },
     },
   });
   res.json({ bookings: rows.map((b) => bookingView(b, who.userId, w.slug)) });
@@ -1941,6 +1946,7 @@ app.post("/workspaces/:slug/bookings", async (req, res) => {
   }
 
   const asked = await readInvitees(body.invitees, w, can.me);
+  const remind = readReminders(body.reminders);
 
   const b = await prisma.booking.create({
     data: {
@@ -1952,10 +1958,12 @@ app.post("/workspaces/:slug/bookings", async (req, res) => {
       // Invited, not coming. They answer for themselves, in the app if they
       // have an account here and in their own calendar if they do not.
       invitees: { create: asked },
+      reminders: { create: remind },
     },
     include: {
       going: { select: { userId: true } },
       invitees: { select: { email: true, name: true, userId: true, reply: true } },
+      reminders: { select: { method: true, minutes: true } },
     },
   });
   res.json({ booking: bookingView(b, can.me.id, w.slug) });
@@ -2019,6 +2027,7 @@ app.post("/workspaces/:slug/bookings/:id/going", async (req, res) => {
     include: {
       going: { select: { userId: true } },
       invitees: { select: { email: true, name: true, userId: true, reply: true } },
+      reminders: { select: { method: true, minutes: true } },
     },
   });
   res.json({ booking: bookingView(after as BookingRow, can.me.id, w.slug) });
@@ -2159,6 +2168,116 @@ async function syncBookingReplies(): Promise<void> {
     console.warn("[gcal] could not bring the replies back:", e);
   } finally {
     sweepingReplies = false;
+  }
+}
+
+/**
+ * How long before a meeting somebody may ask to be told.
+ *
+ * Google's own ceiling is four weeks, and five reminders on one event. Matching
+ * it is not deference — it is that a booking can end up in a Google calendar,
+ * and a sixth reminder there would be refused with the whole event.
+ */
+const REMINDER_MAX_MINUTES = 4 * 7 * 24 * 60;
+const REMINDER_MAX_COUNT = 5;
+
+function readReminders(raw: unknown) {
+  const wanted = Array.isArray(raw) ? raw : [];
+  const seen = new Set<string>();
+  const out: { method: string; minutes: number }[] = [];
+  for (const one of wanted) {
+    const r = (one ?? {}) as { method?: unknown; minutes?: unknown };
+    const method = r.method === "email" ? "email" : "popup";
+    const minutes = Math.round(Number(r.minutes));
+    if (!Number.isFinite(minutes) || minutes < 0 || minutes > REMINDER_MAX_MINUTES) continue;
+    const key = `${method}:${minutes}`;
+    if (seen.has(key)) continue;                  // the same reminder twice is one
+    seen.add(key);
+    out.push({ method, minutes });
+    if (out.length >= REMINDER_MAX_COUNT) break;
+  }
+  return out;
+}
+
+/**
+ * Send the reminders whose moment has come.
+ *
+ * Every minute, because a reminder is a time somebody chose and "twenty minutes
+ * before" that lands twelve minutes before is not the thing they asked for.
+ *
+ * Only email. A popup is the browser's to draw — it knows whether the person is
+ * looking at the app, and a server cannot make a sound on somebody's desk.
+ *
+ * `sentAt` is what makes this safe to run on a timer: it is set before the mail
+ * goes out, so a reminder cannot be sent twice even if a pass overlaps the next
+ * one. The cost of that order is a reminder lost when the mail fails, which is
+ * better than a mailbox with sixty copies of the same sentence in it.
+ */
+const REMINDER_SWEEP_MS = Number(process.env.BOOKING_REMINDER_SWEEP_MS || 60_000);
+/** how late is too late — a reminder for a meeting that began is not a reminder */
+const REMINDER_GRACE_MS = 5 * 60_000;
+
+let sweepingReminders = false;
+
+async function sweepReminders(): Promise<void> {
+  if (sweepingReminders) return;
+  sweepingReminders = true;
+  try {
+    const now = Date.now();
+    const due = await prisma.bookingReminder.findMany({
+      where: {
+        method: "email",
+        sentAt: null,
+        booking: { startsAt: { gt: new Date(now - REMINDER_GRACE_MS) } },
+      },
+      include: {
+        booking: {
+          include: {
+            workspace: { select: { slug: true, name: true } },
+            going: { include: { user: { select: { email: true, name: true } } } },
+            invitees: true,
+          },
+        },
+      },
+      take: 100,
+    });
+
+    for (const r of due) {
+      const b = r.booking;
+      if (+b.startsAt - r.minutes * 60_000 > now) continue;      // not yet
+
+      // Claimed first. Two passes overlapping must not both send it.
+      const claimed = await prisma.bookingReminder.updateMany({
+        where: { id: r.id, sentAt: null },
+        data: { sentAt: new Date() },
+      });
+      if (!claimed.count) continue;
+
+      // Whoever is coming, and whoever was asked and said yes. Nobody who
+      // declined, and nobody who has not answered — a reminder for a meeting
+      // somebody never agreed to be at is an email they did not ask for.
+      const to = new Map<string, string>();
+      for (const g of b.going) if (g.user?.email) to.set(g.user.email, g.user.name || g.user.email);
+      for (const i of b.invitees) if (i.reply === "accepted") to.set(i.email, i.name || i.email);
+      if (!to.size) continue;
+
+      // No request to read a host from — a sweep has none — so this is the one
+      // place that needs APP_URL to be set rather than derivable.
+      const base = (process.env.APP_URL || "").replace(/\/+$/, "");
+      const url = base
+        ? `${base}/?w=${encodeURIComponent(b.workspace.slug)}&m=${encodeURIComponent(b.mapSlug)}`
+        : undefined;
+      for (const [email] of to) {
+        await sendReminder({
+          to: email, space: b.workspace.name, booking: b as BookingRow, minutes: r.minutes, url,
+        }).catch((e) => console.warn(`[calendar] reminder to ${email} did not go:`, e));
+      }
+      console.log(`[calendar] reminder for "${b.title}" sent to ${to.size} person(s)`);
+    }
+  } catch (e) {
+    console.warn("[calendar] could not send reminders:", e);
+  } finally {
+    sweepingReminders = false;
   }
 }
 
@@ -3334,6 +3453,9 @@ setInterval(() => void sweepRecordings().catch((e) => console.error("[recording]
 if (gcalEnabled) {
   setInterval(() => void syncBookingReplies(), REPLY_SWEEP_MS).unref();
 }
+// A reminder is a time somebody chose. Checked every minute, because "twenty
+// minutes before" that lands twelve minutes before is not what was asked for.
+setInterval(() => void sweepReminders(), REMINDER_SWEEP_MS).unref();
 void sweepOrphanUploads().catch((e) => console.error("[uploads] sweep failed:", e));
 setInterval(() => void sweepOrphanUploads().catch((e) => console.error("[uploads] sweep failed:", e)), DAY_MS).unref();
 

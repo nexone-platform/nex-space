@@ -510,6 +510,64 @@ let startUrl = "";
   if (r.booking) await del(`/workspaces/${ws.slug}/bookings/${r.booking.id}`, owner.token);
 }
 
+// ---- being told before it starts -----------------------------------------------
+//
+// A lead time and a way to say it, chosen per meeting. Minutes on the wire
+// whatever the form showed: "2 hours" and "120 minutes" are one fact.
+
+{
+  const r = await book({
+    ...ROOM, title: "มีเตือน", startsAt: at(30), endsAt: at(31),
+    reminders: [
+      { method: "email", minutes: 120 },
+      { method: "popup", minutes: 10 },
+      { method: "email", minutes: 120 },          // the same one twice
+      { method: "email", minutes: -5 },           // before the heat death
+      { method: "email", minutes: 60 * 24 * 40 }, // further ahead than Google allows
+      { method: "shout", minutes: 5 },            // not a way of saying anything
+    ],
+  });
+  ok("a booking can carry reminders", r.status === 200, `status ${r.status}`);
+  const got = r.booking?.reminders ?? [];
+  ok("  · the same reminder twice is one", got.filter((x) => x.minutes === 120).length === 1,
+    JSON.stringify(got));
+  ok("  · a lead time before the meeting exists is dropped",
+    !got.some((x) => x.minutes < 0), JSON.stringify(got.map((x) => x.minutes)));
+  ok("  · and one further ahead than a calendar will take",
+    !got.some((x) => x.minutes > 4 * 7 * 24 * 60),
+    "Google refuses a reminder over four weeks, and refuses the event with it");
+  ok("  · a way of saying it nobody has is read as a notice in the app",
+    got.every((x) => x.method === "email" || x.method === "popup"),
+    got.map((x) => x.method).join(" "));
+  ok("  · and what survives is what was asked for",
+    got.some((x) => x.method === "email" && x.minutes === 120)
+    && got.some((x) => x.method === "popup" && x.minutes === 10),
+    JSON.stringify(got));
+
+  const listed = await get(`/workspaces/${ws.slug}/bookings?from=${at(0)}&to=${at(48)}`, owner.token);
+  const seen = (listed.bookings ?? []).find((x) => x.id === r.booking.id);
+  ok("  · and comes back on the listing, so the browser can draw them",
+    (seen?.reminders ?? []).length === got.length, JSON.stringify(seen?.reminders));
+
+  if (r.booking) await del(`/workspaces/${ws.slug}/bookings/${r.booking.id}`, owner.token);
+}
+
+{
+  // Six is one more than a calendar will hold.
+  const many = Array.from({ length: 9 }, (_, i) => ({ method: "popup", minutes: i + 1 }));
+  const r = await book({ ...ROOM, title: "เตือนเยอะ", startsAt: at(32), endsAt: at(33), reminders: many });
+  ok("no more reminders than a calendar will hold", (r.booking?.reminders ?? []).length <= 5,
+    `${(r.booking?.reminders ?? []).length} of ${many.length}`);
+  if (r.booking) await del(`/workspaces/${ws.slug}/bookings/${r.booking.id}`, owner.token);
+}
+
+{
+  const r = await book({ ...ROOM, title: "ไม่เตือน", startsAt: at(34), endsAt: at(35) });
+  ok("a booking with none asked for carries none", (r.booking?.reminders ?? []).length === 0,
+    JSON.stringify(r.booking?.reminders));
+  if (r.booking) await del(`/workspaces/${ws.slug}/bookings/${r.booking.id}`, owner.token);
+}
+
 stop();
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

@@ -488,6 +488,11 @@ const EN: Record<string, string> = {
   "ไม่ไป": "Not coming",
   "อาจจะไป": "Maybe",
   "ยังไม่ตอบ": "No reply yet",
+  // ---- being told before it starts ----
+  "แจ้งเตือนก่อนเริ่ม": "Reminders",
+  "แจ้งเตือนในแอป": "Notification",
+  "อีเมล": "Email",
+  "＋ เพิ่มการแจ้งเตือน": "＋ Add a reminder",
   "อีเมลไม่ถูกต้อง: {x}": "That is not an email address: {x}",
   "เชิญ {n} คน": "{n} invited",
   "ตอบรับแล้ว {n}": "{n} coming",

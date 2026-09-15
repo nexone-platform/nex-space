@@ -797,6 +797,24 @@
         color: var(--accent-ink); font-size: 11px; line-height: 1; padding: 2px 3px;
         border-radius: 999px; }
       .cal-chip button:hover { background: var(--accent-line); }
+      /* When to be told, and how. Three controls a row because they are three
+         decisions — one box asking for "20m" is a box people get wrong. */
+      .cal-remind { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+      .cal-remind-row { display: flex; gap: 6px; align-items: center; width: 100%; }
+      .cal-remind-row select { flex: 0 1 auto; min-width: 0; height: 30px;
+        border-radius: var(--r-ctl); border: 1px solid var(--border-2);
+        background: var(--surface); color: var(--text);
+        font: 12.5px "Segoe UI", sans-serif; padding: 0 6px; }
+      .cal-remind-row input[type="number"] { width: 62px; height: 30px; text-align: right;
+        border-radius: var(--r-ctl); border: 1px solid var(--border-2);
+        background: var(--surface); color: var(--text);
+        font: 12.5px "Segoe UI", sans-serif; padding: 0 6px; }
+      .cal-remind-x { border: none; background: none; cursor: pointer; padding: 4px 6px;
+        border-radius: var(--r-ctl); color: var(--muted); font-size: 12px; line-height: 1; }
+      .cal-remind-x:hover { background: var(--danger-soft); color: var(--danger-ink); }
+      .cal-remind-add { border: none; background: none; cursor: pointer; padding: 3px 2px;
+        color: var(--accent); font: 500 12.5px "Segoe UI", sans-serif; text-align: left; }
+      .cal-remind-add:hover { text-decoration: underline; }
       .cal-msg { min-height: 15px; font-size: 12px; color: var(--teal-ink); }
       .cal-msg.err { color: var(--danger); }
 

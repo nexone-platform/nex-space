@@ -381,3 +381,70 @@ export async function sendBooking(opts: {
     }],
   });
 }
+
+/**
+ * "It starts in twenty minutes."
+ *
+ * Not an invitation and deliberately not shaped like one: no calendar file, no
+ * accept and decline. Whoever gets this already said they were coming, and a
+ * second .ics for a meeting already in their calendar is how a calendar ends up
+ * with the same thing in it twice.
+ */
+export async function sendReminder(opts: {
+  to: string;
+  space: string;
+  booking: IcsEvent;
+  minutes: number;
+  url?: string;
+}): Promise<boolean> {
+  const { to, space, booking: b, minutes, url } = opts;
+  const when = new Intl.DateTimeFormat("th-TH", {
+    timeStyle: "short", timeZone: process.env.BOOKING_TZ || "Asia/Bangkok",
+  }).format(b.startsAt);
+
+  // "in 90 minutes" is a thing to work out; "in an hour and a half" is a thing
+  // to read. The row stores minutes; the sentence does not have to.
+  const lead =
+    minutes < 60 ? `${minutes} นาที`
+    : minutes < 60 * 24
+      ? (minutes % 60 === 0 ? `${minutes / 60} ชั่วโมง` : `${Math.floor(minutes / 60)} ชั่วโมง ${minutes % 60} นาที`)
+      : (minutes % (60 * 24) === 0 ? `${minutes / (60 * 24)} วัน` : `${Math.floor(minutes / (60 * 24))} วัน`);
+
+  const subject = `เตือน: ${b.title} เริ่มในอีก ${lead}`;
+  const lines = [
+    `${b.title} เริ่มในอีก ${lead}`,
+    ``,
+    `${b.roomLabel} · ${when}`,
+    ...(url ? [``, `เข้าห้อง: ${url}`] : []),
+    ``,
+    `พื้นที่ทำงาน ${space} บน NexSpace`,
+  ];
+
+  if (!mailEnabled) {
+    console.log(`[mail] no mail transport configured — reminder for ${to} not sent`);
+    return false;
+  }
+  return deliver({
+    to,
+    subject,
+    text: lines.join("\n"),
+    html: `
+      <div style="font-family:'Segoe UI',sans-serif;max-width:460px;margin:0 auto;padding:28px 24px;color:#1c1b22">
+        <p style="margin:0 0 4px;color:#6b7280;font-size:13px">เริ่มในอีก ${esc(lead)}</p>
+        <h2 style="margin:0 0 14px;font-size:19px">${esc(b.title)}</h2>
+        <table style="border-collapse:collapse;font-size:14px;color:#1c1b22">
+          <tr><td style="padding:2px 12px 2px 0;color:#8a8f98">ห้อง</td><td>${esc(b.roomLabel)}</td></tr>
+          <tr><td style="padding:2px 12px 2px 0;color:#8a8f98">เวลา</td><td>${esc(when)}</td></tr>
+        </table>
+        ${url ? `
+        <a href="${esc(url)}" style="display:block;text-align:center;text-decoration:none;margin-top:20px;
+           padding:13px;border-radius:11px;background:#2bb3a3;color:#fff;font-weight:600;font-size:15px">
+          เข้าห้อง ${esc(b.roomLabel)}
+        </a>` : ""}
+        <p style="margin:20px 0 0;padding-top:14px;border-top:1px solid #e8e9ee;
+                  color:#a3a7b0;font-size:11.5px;line-height:1.6">
+          พื้นที่ทำงาน ${esc(space)} บน NexSpace
+        </p>
+      </div>`,
+  });
+}

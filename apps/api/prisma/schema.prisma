@@ -276,6 +276,7 @@ model Booking {
   createdAt   DateTime  @default(now())
   going       BookingGoing[]
   invitees    BookingInvitee[]
+  reminders   BookingReminder[]
 
   // "what is on today" and "is this room free then" are different questions
   @@index([workspaceId, startsAt])
@@ -287,6 +288,31 @@ model Booking {
 // Not an invitation — nobody is added by anybody else. It exists so a reminder
 // has somewhere to go: without it the only person a meeting could remind is the
 // one who booked it, who is the least likely to have forgotten.
+/// Telling people before it starts.
+///
+/// A lead time and a way to say it, chosen per meeting — five minutes before a
+/// stand-up and a day before something people have to prepare for are not the
+/// same reminder. Minutes on the wire and in the row whatever the form showed:
+/// "2 hours" and "120 minutes" are the same fact, and storing the words as well
+/// would be storing it twice.
+model BookingReminder {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  /// email | popup — a message, or a notice inside the app
+  method    String
+  /// how long before it starts
+  minutes   Int
+  /// when the email actually went. Null for a popup, which the browser does,
+  /// and null for one whose moment has not come. It is what stops a sweep that
+  /// runs every minute from sending the same reminder sixty times an hour.
+  sentAt    DateTime?
+
+  @@unique([bookingId, method, minutes])
+  @@index([bookingId])
+  @@index([sentAt])
+}
+
 /// Somebody the host put on the meeting.
 ///
 /// Invited is not the same as coming: this is the list the invitation was sent

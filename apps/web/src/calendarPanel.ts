@@ -9,7 +9,7 @@
  * Times are shown in the reader's own zone and sent as UTC. Nothing here
  * formats a date by hand: a meeting at the wrong hour is worse than no meeting.
  */
-import { t } from "./i18n";
+import { lang, t } from "./i18n";
 
 export type Booking = {
   id: string;
@@ -26,6 +26,8 @@ export type Booking = {
   mine: boolean;
   /** a signed link to this one meeting as a .ics file */
   ics: string;
+  /** when to be told before it starts, as the host asked for it */
+  reminders?: { method: string; minutes: number }[];
   /** who the host put on it — which is not the same list as who is coming */
   invitees?: {
     email: string; name: string; member: boolean; going: boolean;
@@ -274,6 +276,124 @@ export function mountCalendarPanel(o: CalendarOptions) {
   const mates = chipField({ placeholder: t("อีเมลสมาชิกในพื้นที่นี้"), list: memberList });
   const guests = chipField({ placeholder: t("อีเมลคนนอก") });
 
+  /**
+   * When to be told, and how.
+   *
+   * A way of saying it, a number, a unit, and a way to take the row off — the
+   * shape every calendar uses, because the three parts are three different
+   * decisions and one text box asking for "20m" is a box people get wrong.
+   *
+   * Minutes are what leaves here. The unit is a convenience for reading and
+   * typing: "2 hours" and "120 minutes" are one fact, and sending both the
+   * number and the word would be sending it twice and inviting them to
+   * disagree.
+   */
+  /**
+   * The units carry both words rather than a dictionary key.
+   *
+   * "ชั่วโมง" and "วัน" are already in the dictionary as column headings in the
+   * stats table, where they mean Hours and Day — the same Thai word, a
+   * different English one, and a dictionary keyed on Thai can only hold one.
+   * A list of units is data, like the other tables the coverage check exempts,
+   * so it says both and picks.
+   */
+  const UNITS: { th: string; en: string; mins: number }[] = [
+    { th: "นาที", en: "minutes", mins: 1 },
+    { th: "ชั่วโมง", en: "hours", mins: 60 },
+    { th: "วัน", en: "days", mins: 60 * 24 },
+    { th: "สัปดาห์", en: "weeks", mins: 60 * 24 * 7 },
+  ];
+  const unitWord = (u: { th: string; en: string }) => (lang() === "en" ? u.en : u.th);
+  /** Google refuses a sixth reminder, and refuses the whole event with it */
+  const MAX_REMINDERS = 5;
+
+  const remindRows = document.createElement("div");
+  remindRows.className = "cal-remind";
+
+  function remindRow(method = "popup", minutes = 30) {
+    const row = document.createElement("div");
+    row.className = "cal-remind-row";
+
+    const how = document.createElement("select");
+    for (const [value, word] of [["popup", t("แจ้งเตือนในแอป")], ["email", t("อีเมล")]]) {
+      const o = document.createElement("option");
+      o.value = value; o.textContent = word;
+      how.appendChild(o);
+    }
+    how.value = method;
+
+    // The biggest unit the number divides into cleanly, so 120 comes back as
+    // "2 hours" rather than as "120 minutes" — which is the same fact and a
+    // worse way to read it.
+    let unit = UNITS[0];
+    for (const u of UNITS) if (minutes >= u.mins && minutes % u.mins === 0) unit = u;
+
+    const howMany = document.createElement("input");
+    howMany.type = "number";
+    howMany.min = "0";
+    howMany.step = "1";
+    howMany.value = String(Math.round(minutes / unit.mins));
+
+    const which = document.createElement("select");
+    for (const u of UNITS) {
+      const o = document.createElement("option");
+      o.value = String(u.mins); o.textContent = unitWord(u);
+      which.appendChild(o);
+    }
+    which.value = String(unit.mins);
+    // Four weeks is Google's ceiling and therefore ours: a reminder it would
+    // refuse takes the whole event down with it.
+    const cap = () => {
+      const most = Math.floor((60 * 24 * 7 * 4) / Number(which.value));
+      howMany.max = String(most);
+      if (Number(howMany.value) > most) howMany.value = String(most);
+    };
+    which.onchange = cap;
+    howMany.onchange = cap;
+    cap();
+
+    const off = document.createElement("button");
+    off.type = "button";
+    off.className = "cal-remind-x";
+    off.textContent = "✕";
+    off.title = t("เอาออก");
+    off.onclick = () => { row.remove(); drawAddRemind(); };
+
+    row.append(how, howMany, which, off);
+    return row;
+  }
+
+  const addRemind = document.createElement("button");
+  addRemind.type = "button";
+  addRemind.className = "cal-remind-add";
+  addRemind.textContent = t("＋ เพิ่มการแจ้งเตือน");
+  addRemind.onclick = () => {
+    remindRows.insertBefore(remindRow(), addRemind);
+    drawAddRemind();
+  };
+  const drawAddRemind = () => {
+    addRemind.hidden = remindRows.querySelectorAll(".cal-remind-row").length >= MAX_REMINDERS;
+  };
+  remindRows.appendChild(addRemind);
+
+  const remindersFor = () =>
+    Array.from(remindRows.querySelectorAll(".cal-remind-row")).map((row) => {
+      const [how, howMany, which] = [
+        row.querySelector("select") as HTMLSelectElement,
+        row.querySelector("input") as HTMLInputElement,
+        row.querySelectorAll("select")[1] as HTMLSelectElement,
+      ];
+      return {
+        method: how.value,
+        minutes: Math.max(0, Math.round(Number(howMany.value) || 0)) * Number(which.value),
+      };
+    });
+
+  const clearReminders = () => {
+    remindRows.querySelectorAll(".cal-remind-row").forEach((n) => n.remove());
+    drawAddRemind();
+  };
+
   const row = (labelText: string, ...kids: HTMLElement[]) => {
     const r = document.createElement("label");
     r.className = "cal-row";
@@ -288,6 +408,7 @@ export function mountCalendarPanel(o: CalendarOptions) {
     row(t("ถึง"), endIn),
     row(t("ผู้เข้าร่วม"), mates.el, memberList),
     row(t("แขกจากภายนอก"), guests.el),
+    row(t("แจ้งเตือนก่อนเริ่ม"), remindRows),
     (() => { const r = document.createElement("div"); r.className = "cal-actions"; r.append(cancel, save); return r; })(),
   );
 
@@ -307,6 +428,7 @@ export function mountCalendarPanel(o: CalendarOptions) {
     titleIn.value = "";
     mates.clear();
     guests.clear();
+    clearReminders();
     void loadMembers();
     form.hidden = false;
     composing = true;
@@ -345,6 +467,7 @@ export function mountCalendarPanel(o: CalendarOptions) {
         // One list. Which of them are members is the server's to decide, and
         // it asks the membership table rather than believing this.
         invitees: [...mates.all(), ...guests.all()],
+        reminders: remindersFor(),
       });
       if (r.status === 409) {
         const c = r.clash as { title?: string; startsAt?: string; endsAt?: string } | undefined;

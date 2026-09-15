@@ -1748,16 +1748,37 @@ export class OfficeScene extends Phaser.Scene {
    */
   private checkReminders() {
     const now = Date.now();
-    const AHEAD = 5 * 60 * 1000;
+    /** when nobody chose, which is most bookings */
+    const USUAL = 5;
     for (const b of this.bookings) {
-      if (!b.imGoing || this.reminded.has(b.id)) continue;
-      const inMs = +new Date(b.startsAt) - now;
-      // A window, not a moment: the poll is every two minutes, so "exactly five
-      // minutes before" would be missed more often than hit. Past the start is
-      // excluded — a reminder for a meeting already running is not a reminder.
-      if (inMs > AHEAD || inMs < -60_000) continue;
-      this.reminded.add(b.id);
-      const mins = Math.max(0, Math.round(inMs / 60_000));
+      if (!b.imGoing) continue;
+      // The lead times the host asked for, in minutes. Only the ones that are
+      // a notice in the app: an email is the server's to send, and sending
+      // both from here would be two of everything.
+      const leads = (b.reminders ?? [])
+        .filter((r) => r.method === "popup")
+        .map((r) => r.minutes);
+      for (const lead of leads.length ? leads : [USUAL]) {
+        // Per lead time, not per booking: a meeting with a reminder a day
+        // before and one ten minutes before is two reminders, and a set keyed
+        // on the booking would swallow the second.
+        const key = `${b.id}@${lead}`;
+        if (this.reminded.has(key)) continue;
+        const inMs = +new Date(b.startsAt) - now;
+        // A window, not a moment: the poll is every two minutes, so an exact
+        // instant would be missed more often than hit. Past the start is
+        // excluded — a reminder for a meeting already running is not one.
+        if (inMs > lead * 60_000 || inMs < -60_000) continue;
+        this.reminded.add(key);
+        this.sayReminder(b, Math.max(0, Math.round(inMs / 60_000)));
+      }
+    }
+    this.refreshCalBadge();
+  }
+
+  /** the toast and the bell for one booking about to start */
+  private sayReminder(b: Booking, mins: number) {
+    {
       const line = mins > 0
         ? t("{title} เริ่มในอีก {n} นาที").replace("{title}", b.title).replace("{n}", String(mins))
         : t("{title} เริ่มแล้ว").replace("{title}", b.title);
@@ -1773,7 +1794,6 @@ export class OfficeScene extends Phaser.Scene {
         }
       });
     }
-    this.refreshCalBadge();
   }
 
   /** how many of my meetings are still to come today */

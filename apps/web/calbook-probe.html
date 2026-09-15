@@ -337,6 +337,75 @@ log("");
   await tick();
 }
 
+// ---- being told before it starts -------------------------------------------------
+// A way of saying it, a number and a unit — three decisions, three controls.
+// Minutes are what leaves: "2 hours" and "120 minutes" are one fact, and
+// sending the word as well would be sending it twice.
+log("");
+{
+  const rows = () => [...panel.form.querySelectorAll(".cal-remind-row")];
+  const add = panel.form.querySelector(".cal-remind-add");
+
+  refuseWith = null;
+  hours[future].click();
+  await tick();
+  ok("a new booking asks for no reminders", rows().length === 0, String(rows().length));
+
+  add.click();
+  await tick();
+  ok("  · one can be added", rows().length === 1, String(rows().length));
+  const [how, unit] = rows()[0].querySelectorAll("select");
+  const many = rows()[0].querySelector("input");
+  ok("  · offering a notice in the app and an email",
+    [...how.options].map((o) => o.value).join() === "popup,email",
+    [...how.options].map((o) => o.value).join());
+  ok("  · and minutes, hours, days and weeks",
+    [...unit.options].map((o) => o.value).join() === "1,60,1440,10080",
+    [...unit.options].map((o) => o.value).join());
+
+  // Two hours, by email.
+  how.value = "email";
+  many.value = "2";
+  unit.value = "60";
+  unit.dispatchEvent(new Event("change"));
+
+  add.click();
+  await tick();
+  const second = rows()[1];
+  second.querySelector("input").value = "10";
+  ok("  · and a second, which is a different reminder", rows().length === 2, String(rows().length));
+
+  posts.length = 0;
+  titleIn().value = "ประชุมที่ต้องเตือน";
+  submit().click();
+  await tick(); await tick();
+  const sent = posts[0]?.reminders ?? [];
+  ok("both go out as minutes, whatever unit was on screen",
+    JSON.stringify(sent) === JSON.stringify([
+      { method: "email", minutes: 120 }, { method: "popup", minutes: 10 },
+    ]), JSON.stringify(sent));
+
+  // The ceiling is Google's: a reminder it refuses takes the event with it.
+  hours[future].click();
+  await tick();
+  add.click();
+  await tick();
+  const u = rows()[0].querySelectorAll("select")[1];
+  const n = rows()[0].querySelector("input");
+  u.value = "10080";                       // weeks
+  n.value = "9";
+  u.dispatchEvent(new Event("change"));
+  ok("nothing further ahead than four weeks can be asked for",
+    Number(n.value) <= 4, `${n.value} week(s), max ${n.max}`);
+
+  rows()[0].querySelector(".cal-remind-x").click();
+  await tick();
+  ok("  · and a row can be taken off again", rows().length === 0, String(rows().length));
+
+  document.getElementById("cw-modal").click();
+  await tick();
+}
+
 log(`\n${pass} passed, ${fail} failed\n`);
 document.title = fail ? `FAIL ${fail}` : `PASS ${pass}`;
 </script>
