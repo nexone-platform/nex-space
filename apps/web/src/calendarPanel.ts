@@ -27,7 +27,7 @@ export type Booking = {
   /** a signed link to this one meeting as a .ics file */
   ics: string;
   /** when to be told before it starts, as the host asked for it */
-  reminders?: { method: string; minutes: number }[];
+  reminders?: { method: string; minutes: number; sentAt?: string | null }[];
   /** who the host put on it — which is not the same list as who is coming */
   invitees?: {
     email: string; name: string; member: boolean; going: boolean;

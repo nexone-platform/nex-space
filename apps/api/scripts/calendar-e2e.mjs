@@ -548,6 +548,11 @@ let startUrl = "";
   const seen = (listed.bookings ?? []).find((x) => x.id === r.booking.id);
   ok("  · and comes back on the listing, so the browser can draw them",
     (seen?.reminders ?? []).length === got.length, JSON.stringify(seen?.reminders));
+  // "Will be sent" and "was sent" is the question somebody asks when an
+  // expected email has not arrived, and it was not answerable anywhere.
+  ok("  · saying of each email one whether it has gone yet",
+    got.filter((x) => x.method === "email").every((x) => x.sentAt === null),
+    JSON.stringify(got.map((x) => x.sentAt)));
 
   if (r.booking) await del(`/workspaces/${ws.slug}/bookings/${r.booking.id}`, owner.token);
 }

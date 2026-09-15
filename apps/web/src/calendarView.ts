@@ -208,6 +208,33 @@ export function mountCalendarWeek(o: WeekOptions) {
       pop.appendChild(who);
     }
 
+    /**
+     * The reminders, and whether an email has actually gone.
+     *
+     * An expected email that has not arrived is a question with three
+     * possible answers — not set up, not due yet, or sent and lost somewhere
+     * after us — and none of them was visible anywhere. The first two are
+     * answerable here.
+     */
+    if (b.reminders?.length) {
+      const rem = document.createElement("div");
+      rem.className = "cw-pop-remind";
+      for (const r of b.reminders) {
+        const line = document.createElement("small");
+        const lead =
+          r.minutes < 60 ? t("{n} นาที").replace("{n}", String(r.minutes))
+          : r.minutes < 1440 ? t("{n} ชม.").replace("{n}", String(Math.round(r.minutes / 60)))
+          : t("{n} วัน").replace("{n}", String(Math.round(r.minutes / 1440)));
+        const how = r.method === "email" ? t("อีเมล") : t("แจ้งเตือนในแอป");
+        line.textContent = `🔔 ${how} · ${t("ก่อน {lead}").replace("{lead}", lead)}${
+          r.method === "email"
+            ? ` · ${r.sentAt ? t("ส่งแล้ว {t}").replace("{t}", hhmm(new Date(r.sentAt))) : t("ยังไม่ถึงเวลา")}`
+            : ""}`;
+        rem.appendChild(line);
+      }
+      pop.appendChild(rem);
+    }
+
     const acts = document.createElement("div");
     acts.className = "cw-pop-acts";
     if (!over && o.going) {

@@ -1661,7 +1661,7 @@ type BookingRow = {
   userId: string | null; hostName: string; startsAt: Date; endsAt: Date; createdAt: Date;
   going?: { userId: string }[];
   invitees?: { email: string; name: string; userId: string | null; reply?: string }[];
-  reminders?: { method: string; minutes: number }[];
+  reminders?: { method: string; minutes: number; sentAt?: Date | null }[];
 };
 
 function bookingView(b: BookingRow, meId: string | null | undefined, slug: string) {
@@ -1691,7 +1691,14 @@ function bookingView(b: BookingRow, meId: string | null | undefined, slug: strin
     })),
     // What the host asked for, so the browser can draw the popup ones at the
     // times that were chosen rather than at a time this app picked.
-    reminders: (b.reminders ?? []).map((r) => ({ method: r.method, minutes: r.minutes })),
+    reminders: (b.reminders ?? []).map((r) => ({
+      method: r.method, minutes: r.minutes,
+      // When the email actually went. Null on a popup, which the browser does,
+      // and null on one whose moment has not come — the difference between
+      // "will be sent" and "was sent" is the whole question somebody asks when
+      // an expected email has not arrived, and it was not answerable anywhere.
+      sentAt: r.sentAt ? r.sentAt.toISOString() : null,
+    })),
   };
 }
 
@@ -1741,7 +1748,7 @@ app.get("/workspaces/:slug/bookings", async (req, res) => {
     include: {
       going: { select: { userId: true } },
       invitees: { select: { email: true, name: true, userId: true, reply: true } },
-      reminders: { select: { method: true, minutes: true } },
+      reminders: { select: { method: true, minutes: true, sentAt: true } },
     },
   });
   res.json({ bookings: rows.map((b) => bookingView(b, who.userId, w.slug)) });
@@ -1963,7 +1970,7 @@ app.post("/workspaces/:slug/bookings", async (req, res) => {
     include: {
       going: { select: { userId: true } },
       invitees: { select: { email: true, name: true, userId: true, reply: true } },
-      reminders: { select: { method: true, minutes: true } },
+      reminders: { select: { method: true, minutes: true, sentAt: true } },
     },
   });
   res.json({ booking: bookingView(b, can.me.id, w.slug) });
@@ -2027,7 +2034,7 @@ app.post("/workspaces/:slug/bookings/:id/going", async (req, res) => {
     include: {
       going: { select: { userId: true } },
       invitees: { select: { email: true, name: true, userId: true, reply: true } },
-      reminders: { select: { method: true, minutes: true } },
+      reminders: { select: { method: true, minutes: true, sentAt: true } },
     },
   });
   res.json({ booking: bookingView(after as BookingRow, can.me.id, w.slug) });
@@ -2246,20 +2253,27 @@ async function sweepReminders(): Promise<void> {
       const b = r.booking;
       if (+b.startsAt - r.minutes * 60_000 > now) continue;      // not yet
 
-      // Claimed first. Two passes overlapping must not both send it.
-      const claimed = await prisma.bookingReminder.updateMany({
-        where: { id: r.id, sentAt: null },
-        data: { sentAt: new Date() },
-      });
-      if (!claimed.count) continue;
-
       // Whoever is coming, and whoever was asked and said yes. Nobody who
       // declined, and nobody who has not answered — a reminder for a meeting
       // somebody never agreed to be at is an email they did not ask for.
       const to = new Map<string, string>();
       for (const g of b.going) if (g.user?.email) to.set(g.user.email, g.user.name || g.user.email);
       for (const i of b.invitees) if (i.reply === "accepted") to.set(i.email, i.name || i.email);
+      // Worked out before the row is claimed, not after. Claiming first meant
+      // that a reminder whose moment arrived while nobody had answered yet was
+      // marked sent and sent to nobody — and then somebody pressing yes a
+      // minute later could never receive it, because the row already said it
+      // had gone. Left unclaimed, it is simply still due.
       if (!to.size) continue;
+
+      // Claimed before the mail goes, so two passes overlapping cannot both
+      // send it. The cost is a reminder lost when the mail fails, which beats
+      // a mailbox with sixty copies of the same sentence in it.
+      const claimed = await prisma.bookingReminder.updateMany({
+        where: { id: r.id, sentAt: null },
+        data: { sentAt: new Date() },
+      });
+      if (!claimed.count) continue;
 
       // No request to read a host from — a sweep has none — so this is the one
       // place that needs APP_URL to be set rather than derivable.

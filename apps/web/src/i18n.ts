@@ -490,6 +490,9 @@ const EN: Record<string, string> = {
   "ยังไม่ตอบ": "No reply yet",
   // ---- being told before it starts ----
   "แจ้งเตือนก่อนเริ่ม": "Reminders",
+  "ก่อน {lead}": "{lead} before",
+  "ส่งแล้ว {t}": "sent {t}",
+  "ยังไม่ถึงเวลา": "not due yet",
   "แจ้งเตือนในแอป": "Notification",
   "อีเมล": "Email",
   "＋ เพิ่มการแจ้งเตือน": "＋ Add a reminder",
