@@ -1985,6 +1985,14 @@ app.post("/workspaces/:slug/bookings", async (req, res) => {
    * Only if that does not happen do we put something in an envelope ourselves,
    * because two invitations to one meeting is worse than either.
    */
+  // Said at the moment they are created, because "did the reminder row get
+  // written" and "has its moment not come yet" look identical from outside and
+  // the second one is a wait with no way to tell it from a failure.
+  console.log(remind.length
+    ? `[calendar] "${b.title}" — ${remind.length} reminder(s): ${
+        remind.map((r) => `${r.method} ${r.minutes}m`).join(", ")}`
+    : `[calendar] "${b.title}" — no reminders asked for`);
+
   void (async () => {
     const viaGoogle = await addToGoogle(req, w, b as BookingRow, undefined, asked);
     if (viaGoogle) {
