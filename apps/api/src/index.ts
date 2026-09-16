@@ -2289,9 +2289,11 @@ async function sweepReminders(): Promise<void> {
       const url = base
         ? `${base}/?w=${encodeURIComponent(b.workspace.slug)}&m=${encodeURIComponent(b.mapSlug)}`
         : undefined;
+      const host = b.going.find((g) => g.userId === b.userId)?.user?.email ?? undefined;
       for (const [email] of to) {
         await sendReminder({
-          to: email, space: b.workspace.name, booking: b as BookingRow, minutes: r.minutes, url,
+          to: email, space: b.workspace.name, booking: b as BookingRow,
+          minutes: r.minutes, url, replyTo: host,
         }).catch((e) => console.warn(`[calendar] reminder to ${email} did not go:`, e));
       }
       console.log(`[calendar] reminder for "${b.title}" sent to ${to.size} person(s)`);

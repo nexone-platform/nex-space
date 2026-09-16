@@ -493,6 +493,16 @@ const EN: Record<string, string> = {
   "ก่อน {lead}": "{lead} before",
   "ส่งแล้ว {t}": "sent {t}",
   "ยังไม่ถึงเวลา": "not due yet",
+  // ---- a meeting about to start ----
+  "แจ้งเตือนบนเดสก์ท็อป": "Desktop notifications",
+  "เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือนบนเดสก์ท็อป": "This browser cannot show desktop notifications",
+  "เปิดแจ้งเตือนบนเดสก์ท็อปอยู่แล้ว": "Desktop notifications are already on",
+  "เปิดแจ้งเตือนบนเดสก์ท็อปแล้ว": "Desktop notifications are on",
+  "การแจ้งเตือนบนเดสก์ท็อปทำงานอยู่": "Desktop notifications are working",
+  "จะเตือนเมื่อใกล้ถึงเวลาประชุม": "You will be told before a meeting starts",
+  "เบราว์เซอร์บล็อกไว้ — เปิดได้ที่ไอคอนกุญแจข้างช่องที่อยู่เว็บ":
+    "The browser is blocking them — turn them on from the padlock beside the address bar",
+  "ยังไม่ได้อนุญาต": "Not allowed yet",
   "แจ้งเตือนในแอป": "Notification",
   "อีเมล": "Email",
   "＋ เพิ่มการแจ้งเตือน": "＋ Add a reminder",

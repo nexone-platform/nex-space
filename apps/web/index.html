@@ -1013,6 +1013,32 @@
          Light, unlike the person card, because this one is not attached to a
          place on the map — it is a message about the room, so it belongs with
          the panels rather than with the world. */
+      /* A meeting about to start, across the top and staying there. The toast
+         beside it lasts 2.3 seconds, which is long enough to be missed by
+         anybody who was looking at the map instead of the corner. */
+      #meet-alert {
+        position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+        z-index: 46; display: flex; align-items: center; gap: 10px;
+        max-width: min(92vw, 520px); padding: 10px 12px 10px 14px;
+        border-radius: 14px; border: 1px solid var(--warn-line);
+        background: var(--warn-soft); color: var(--warn-ink);
+        box-shadow: 0 10px 30px #00000026;
+        animation: nudge-in .18s cubic-bezier(.2, .8, .3, 1);
+      }
+      #meet-alert[hidden] { display: none; }
+      @media (prefers-reduced-motion: reduce) { #meet-alert { animation: none; } }
+      .ma-bell { font-style: normal; font-size: 18px; flex: 0 0 auto; }
+      .ma-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+      .ma-text b { font-size: 13.5px; overflow-wrap: anywhere; }
+      .ma-text small { font-size: 11.5px; opacity: .8; }
+      .ma-go { flex: 0 0 auto; height: 30px; padding: 0 14px; border: none;
+        cursor: pointer; border-radius: var(--r-ctl); background: var(--teal);
+        color: #fff; font: 600 12.5px "Segoe UI", sans-serif; }
+      .ma-go:hover { background: var(--teal-hover); }
+      .ma-x { flex: 0 0 auto; border: none; background: none; cursor: pointer;
+        color: var(--warn-ink); opacity: .6; font-size: 12px; padding: 4px 6px; }
+      .ma-x:hover { opacity: 1; }
+
       #nudge {
         position: fixed; z-index: 29; box-sizing: border-box;
         top: 14px; right: 16px; width: 400px; max-width: calc(100vw - var(--dock) - 32px);
@@ -2530,6 +2556,7 @@
         <div class="nf-head">
           <span>ล่าสุด</span>
           <button id="nf-sound" title="เสียงแจ้งเตือน">🔔</button>
+          <button id="nf-desktop" title="แจ้งเตือนบนเดสก์ท็อป">🖥</button>
           <button id="nf-clear">ล้าง</button>
         </div>
         <div id="nf-list"><div class="chat-empty">ยังไม่มีอะไรพลาดไป</div></div>
@@ -2548,6 +2575,19 @@
 
     </aside>
     <!-- somebody did something that wants an answer: a wave, a call over -->
+    <!-- A meeting about to start. It stays until somebody puts it away: a toast
+         that fades in two seconds is a reminder for whoever happened to be
+         looking at that second, which is not what a reminder is for. -->
+    <div id="meet-alert" hidden>
+      <i class="ma-bell">🔔</i>
+      <span class="ma-text">
+        <b id="ma-title"></b>
+        <small id="ma-sub"></small>
+      </span>
+      <button id="ma-go" class="ma-go">เข้าห้อง</button>
+      <button id="ma-x" class="ma-x" title="ปิด">✕</button>
+    </div>
+
     <div id="nudge" hidden>
       <button id="nudge-x" title="ปิด">✕</button>
       <div class="nudge-top">

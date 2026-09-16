@@ -396,8 +396,10 @@ export async function sendReminder(opts: {
   booking: IcsEvent;
   minutes: number;
   url?: string;
+  /** the host, so a reply reaches a person rather than a no-reply address */
+  replyTo?: string;
 }): Promise<boolean> {
-  const { to, space, booking: b, minutes, url } = opts;
+  const { to, space, booking: b, minutes, url, replyTo } = opts;
   const when = new Intl.DateTimeFormat("th-TH", {
     timeStyle: "short", timeZone: process.env.BOOKING_TZ || "Asia/Bangkok",
   }).format(b.startsAt);
@@ -427,6 +429,9 @@ export async function sendReminder(opts: {
   return deliver({
     to,
     subject,
+    // Mail from an address that cannot be answered is one of the things a spam
+    // classifier counts against a sender, and it is also just rude.
+    replyTo,
     text: lines.join("\n"),
     html: `
       <div style="font-family:'Segoe UI',sans-serif;max-width:460px;margin:0 auto;padding:28px 24px;color:#1c1b22">

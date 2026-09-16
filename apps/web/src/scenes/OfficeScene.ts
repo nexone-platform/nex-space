@@ -1186,6 +1186,27 @@ export class OfficeScene extends Phaser.Scene {
     document.getElementById("rail-cal")?.addEventListener("click", () => this.calWeek?.open());
     document.getElementById("rail-notif")?.addEventListener("click", () => { showView("notif"); this.renderNotifs(true); });
     document.getElementById("nf-clear")?.addEventListener("click", () => { this.notifs = []; this.renderNotifs(true); });
+    // A deliberate way to turn desktop notices on, since asking at the moment
+    // one is needed is a prompt somebody has to answer while a meeting starts.
+    document.getElementById("nf-desktop")?.addEventListener("click", async () => {
+      if (!("Notification" in window)) { this.toast(t("เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือนบนเดสก์ท็อป"), "warn"); return; }
+      if (Notification.permission === "granted") {
+        this.toast(t("เปิดแจ้งเตือนบนเดสก์ท็อปอยู่แล้ว"));
+        void this.desktopNotice(t("การแจ้งเตือนบนเดสก์ท็อปทำงานอยู่"), t("จะเตือนเมื่อใกล้ถึงเวลาประชุม"));
+        return;
+      }
+      if (Notification.permission === "denied") {
+        this.toast(t("เบราว์เซอร์บล็อกไว้ — เปิดได้ที่ไอคอนกุญแจข้างช่องที่อยู่เว็บ"), "warn");
+        return;
+      }
+      const answer = await Notification.requestPermission().catch(() => "denied");
+      if (answer === "granted") {
+        this.toast(t("เปิดแจ้งเตือนบนเดสก์ท็อปแล้ว"));
+        void this.desktopNotice(t("การแจ้งเตือนบนเดสก์ท็อปทำงานอยู่"), t("จะเตือนเมื่อใกล้ถึงเวลาประชุม"));
+      } else {
+        this.toast(t("ยังไม่ได้อนุญาต"), "warn");
+      }
+    });
     document.getElementById("nf-sound")?.addEventListener("click", () => {
       const on = localStorage.getItem("nexspace-sound") !== "off";
       localStorage.setItem("nexspace-sound", on ? "off" : "on");
@@ -1776,6 +1797,71 @@ export class OfficeScene extends Phaser.Scene {
     this.refreshCalBadge();
   }
 
+  /**
+   * A meeting about to start, said where it cannot be missed.
+   *
+   * Three places, because they fail in different ways. The bell keeps it, and
+   * is read by whoever opens the panel. The toast says it now, and is gone in
+   * two seconds — which is a reminder for whoever happened to be looking at
+   * that corner at that second. This card stays until somebody puts it away,
+   * and the desktop notice reaches the person whose tab is somewhere else
+   * entirely, which is where most people are five minutes before a meeting.
+   */
+  private showMeetingAlert(b: Booking, mins: number) {
+    const el = document.getElementById("meet-alert");
+    const title = document.getElementById("ma-title");
+    const sub = document.getElementById("ma-sub");
+    const go = document.getElementById("ma-go");
+    const x = document.getElementById("ma-x");
+    if (!el || !title || !sub || !go || !x) return;
+
+    title.textContent = mins > 0
+      ? t("{title} เริ่มในอีก {n} นาที").replace("{title}", b.title).replace("{n}", String(mins))
+      : t("{title} เริ่มแล้ว").replace("{title}", b.title);
+    sub.textContent = `${b.room} · ${clock(b.startsAt)}`;
+    el.hidden = false;
+
+    const walk = () => {
+      el.hidden = true;
+      const area = PRIVATE_AREAS.find((a) => a.id === b.roomId);
+      if (!area) return;
+      const cx = ((area.x0 + area.x1) / 2) * TILE + TILE / 2;
+      const cy = ((area.y0 + area.y1) / 2) * TILE + TILE / 2;
+      this.walkOrJump(cx, cy);
+    };
+    (go as HTMLButtonElement).onclick = walk;
+    (x as HTMLButtonElement).onclick = () => { el.hidden = true; };
+    // It is about a meeting that is starting, so it has no business outliving
+    // the start by much. Put away on its own after a quarter of an hour.
+    window.setTimeout(() => { el.hidden = true; }, 15 * 60_000);
+  }
+
+  /**
+   * The same thing, outside the browser window.
+   *
+   * The only one of the four that reaches somebody who is not looking at this
+   * tab — which five minutes before a meeting is nearly everybody. Permission
+   * is asked for when it is about to be used rather than on arrival: a prompt
+   * the instant somebody walks in is the one everybody refuses, and once
+   * refused it cannot be asked again.
+   */
+  private async desktopNotice(title: string, body: string, go?: () => void) {
+    if (this.dnd) return;
+    if (!("Notification" in window)) return;
+    if (Notification.permission === "denied") return;
+    if (Notification.permission === "default") {
+      const answer = await Notification.requestPermission().catch(() => "denied");
+      if (answer !== "granted") return;
+    }
+    try {
+      const n = new Notification(title, { body, tag: "nexspace-meeting" });
+      n.onclick = () => { window.focus(); n.close(); go?.(); };
+    } catch {
+      // Some browsers only allow this through a service worker. The card on
+      // screen has already said it, so there is nothing to fall back to.
+    }
+  }
+
   /** the toast and the bell for one booking about to start */
   private sayReminder(b: Booking, mins: number) {
     {
@@ -1783,6 +1869,11 @@ export class OfficeScene extends Phaser.Scene {
         ? t("{title} เริ่มในอีก {n} นาที").replace("{title}", b.title).replace("{n}", String(mins))
         : t("{title} เริ่มแล้ว").replace("{title}", b.title);
       this.toast(line, "info");
+      // On screen and staying, and outside the window for whoever is not here.
+      this.showMeetingAlert(b, mins);
+      void this.desktopNotice(line, `${b.room} · ${clock(b.startsAt)}`, () => {
+        this.showView?.("cal");
+      });
       this.notify("📅", line, `${b.room} · ${clock(b.startsAt)}`, () => {
         this.showView?.("cal");
         // and walk them there, which is the actual next thing they wanted
