@@ -395,10 +395,24 @@ export function mountCalendarPanel(o: CalendarOptions) {
     howOften.value = String(Math.max(1, Math.min(MAX_TIMES, times)));
     howOften.title = t("ส่งกี่ครั้ง");
 
+    /**
+     * Why the repeat is not there, when it is not there.
+     *
+     * Hiding the controls on a notice row was right — a control that is shown
+     * and refused is a question the form asked and would not accept an answer
+     * to — but hiding them with nothing in their place left the whole feature
+     * invisible to somebody looking straight at it. A line of text is not a
+     * control: it explains the absence rather than pretending to be the thing.
+     */
+    const why = document.createElement("small");
+    why.className = "cal-remind-why";
+    why.textContent = t("ทำซ้ำได้เฉพาะอีเมล");
+
     const showRepeat = () => {
       const email = how.value === "email";
       over.hidden = !email;
       howOften.hidden = !email || over.value === "none";
+      why.hidden = email;
       if (!email) over.value = "none";
     };
     how.addEventListener("change", showRepeat);
@@ -412,7 +426,7 @@ export function mountCalendarPanel(o: CalendarOptions) {
     off.title = t("เอาออก");
     off.onclick = () => { row.remove(); drawAddRemind(); };
 
-    row.append(how, howMany, which, over, howOften, off);
+    row.append(how, howMany, which, over, howOften, why, off);
     return row;
   }
 

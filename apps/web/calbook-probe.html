@@ -395,6 +395,14 @@ log("");
   // to be looking somewhere else, not three reminders.
   ok("  · a notice in the app is offered none",
     rows()[1].querySelector(".cal-remind-rep").hidden, "popup rows carry no repeat");
+  // Hidden with nothing in its place left the feature invisible to somebody
+  // looking straight at the row it belongs to.
+  ok("    · but is told why, rather than shown a gap",
+    !rows()[1].querySelector(".cal-remind-why").hidden
+    && rows()[1].querySelector(".cal-remind-why").textContent.includes("อีเมล"),
+    rows()[1].querySelector(".cal-remind-why")?.textContent ?? "nothing there");
+  ok("    · and an email row is not told it", rows()[0].querySelector(".cal-remind-why").hidden,
+    "the controls are right there instead");
 
   posts.length = 0;
   titleIn().value = "ประชุมที่ต้องเตือน";

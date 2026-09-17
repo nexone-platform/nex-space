@@ -507,6 +507,7 @@ const EN: Record<string, string> = {
   "อีเมล": "Email",
   "＋ เพิ่มการแจ้งเตือน": "＋ Add a reminder",
   "ส่งกี่ครั้ง": "How many times",
+  "ทำซ้ำได้เฉพาะอีเมล": "Only an email can repeat",
   "อีเมลไม่ถูกต้อง: {x}": "That is not an email address: {x}",
   "เชิญ {n} คน": "{n} invited",
   "ตอบรับแล้ว {n}": "{n} coming",
