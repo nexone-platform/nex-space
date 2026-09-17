@@ -18,6 +18,10 @@ import {
 import { llmReady, runSummaryQueue, summariesReady, summaryCheck } from "./summarise.js";
 import { GCAL_SCOPE, dropEvent, gcalCheck, gcalEnabled, pushEvent, readReplies } from "./gcal.js";
 import {
+  MS_SCOPE, msAuthUrl, msCheck, msDropEvent, msEnabled, msExchangeCode,
+  msPushEvent, msReadReplies, msWhoIs,
+} from "./mscal.js";
+import {
   newTotpSecret, otpauthUri, qrDataUrl, checkTotp,
   newRecoveryCodes, hashRecoveryCodes, countRecoveryCodes, spendRecoveryCode,
 } from "./totp";
@@ -675,6 +679,102 @@ app.delete("/me/google-calendar", requireAuth, async (req: AuthedRequest, res) =
 app.get("/me/google-calendar/check", requireAuth, async (req: AuthedRequest, res) => {
   res.json(await gcalCheck(req.user!.id));
 });
+
+// ---- the same, for Outlook ------------------------------------------------------
+//
+// Deliberately a second set of routes rather than one with a provider in the
+// path. Somebody may connect both, and then both are live at once and each is
+// revoked on its own; a shared route would spend its whole body asking which.
+
+const msRedirect = (req: express.Request) =>
+  process.env.MS_REDIRECT_URL || `${appOriginOf(req)}/auth/microsoft/calendar/callback`;
+
+app.get("/me/microsoft-calendar", requireAuth, async (req: AuthedRequest, res) => {
+  const row = await prisma.microsoftCalendar.findUnique({ where: { userId: req.user!.id } });
+  res.json({
+    available: msEnabled,
+    connected: !!row,
+    email: row?.email ?? null,
+    connectedAt: row?.connectedAt?.toISOString() ?? null,
+    lastError: row?.lastError ?? null,
+    redirectUri: msRedirect(req),
+  });
+});
+
+app.post("/me/microsoft-calendar/start", requireAuth, (req: AuthedRequest, res) => {
+  if (!msEnabled) return res.status(501).json({ error: "Microsoft is not configured on this server" });
+  const params = new URLSearchParams({
+    client_id: process.env.MS_CLIENT_ID || "",
+    response_type: "code",
+    redirect_uri: msRedirect(req),
+    response_mode: "query",
+    scope: MS_SCOPE,
+    // The account picker rather than whichever one the browser is already
+    // signed in to: people have a work account and a personal one, and being
+    // silently given the wrong calendar is worse than being asked.
+    prompt: "select_account",
+    login_hint: req.user!.email,
+    state: gcalState(req.user!.id, String((req.body ?? {}).back || "")),
+  });
+  res.json({ url: msAuthUrl(params) });
+});
+
+app.get("/auth/microsoft/calendar/callback", async (req, res) => {
+  const state = readGcalState(String(req.query.state || ""));
+  const back = appUrl(req, state?.b || "");
+  const done = (mark: string) => res.redirect(`${back}#mscal=${encodeURIComponent(mark)}`);
+
+  if (!state) return done("expired");
+  if (req.query.error) {
+    console.warn("[mscal] the person refused, or Microsoft did:", req.query.error,
+      String(req.query.error_description || "").slice(0, 120));
+    return done(String(req.query.error).slice(0, 40));
+  }
+  if (!req.query.code) return done("no_code");
+
+  try {
+    const tok = await msExchangeCode(String(req.query.code), msRedirect(req));
+    if (!tok.refresh_token) {
+      console.error("[mscal] no refresh token came back:",
+        (tok.error_description || tok.error || "").slice(0, 200));
+      return done("no_refresh_token");
+    }
+    const email = (tok.access_token ? await msWhoIs(tok.access_token) : "")
+      || (await prisma.user.findUnique({ where: { id: state.u }, select: { email: true } }))?.email
+      || "";
+
+    await prisma.microsoftCalendar.upsert({
+      where: { userId: state.u },
+      update: { refreshToken: tok.refresh_token, email, lastError: null, lastErrorAt: null, connectedAt: new Date() },
+      create: { userId: state.u, refreshToken: tok.refresh_token, email },
+    });
+    console.log(`[mscal] ${email} connected a calendar`);
+    done("connected");
+  } catch (e) {
+    console.error("[mscal] connecting failed:", e);
+    done("failed");
+  }
+});
+
+/**
+ * Disconnect.
+ *
+ * Microsoft has no revoke endpoint a client can call for one grant — the
+ * person removes it from their account page. So this forgets the token, which
+ * is what stops this server acting, and says where to finish the job.
+ */
+app.delete("/me/microsoft-calendar", requireAuth, async (req: AuthedRequest, res) => {
+  const row = await prisma.microsoftCalendar.findUnique({ where: { userId: req.user!.id } });
+  if (!row) return res.json({ ok: true, already: true });
+  await prisma.microsoftCalendar.delete({ where: { userId: req.user!.id } });
+  console.log(`[mscal] ${row.email} disconnected`);
+  res.json({ ok: true, revokeAt: "https://account.live.com/consent/Manage" });
+});
+
+app.get("/me/microsoft-calendar/check", requireAuth, async (req: AuthedRequest, res) => {
+  res.json(await msCheck(req.user!.id));
+});
+
 
 
 app.put("/me/avatar", requireAuth, async (req: AuthedRequest, res) => {
@@ -1837,7 +1937,7 @@ async function addToGoogle(
   only?: string,
   invite: { email: string; name: string }[] = [],
 ): Promise<boolean> {
-  if (!gcalEnabled) return false;
+  if (!gcalEnabled && !msEnabled) return false;
   let invited = false;
   try {
     const going = await prisma.bookingGoing.findMany({
@@ -1846,19 +1946,38 @@ async function addToGoogle(
     if (!going.length) return false;
     const url = `${appOriginOf(req)}/?w=${encodeURIComponent(w.slug)}&m=${encodeURIComponent(b.mapSlug)}`;
     for (const g of going) {
-      if (g.googleEventId) continue;        // already in that calendar
       // The guest list goes on the host's copy and nowhere else — see asEvent.
       const guests = g.userId === b.userId ? invite : [];
-      const id = await pushEvent(g.userId, {
+      const one = {
         id: b.id, title: b.title, roomLabel: b.roomLabel, hostName: b.hostName,
         startsAt: b.startsAt, endsAt: b.endsAt, url,
-      }, guests).catch((e) => { console.warn("[gcal] add failed:", (e as Error).message); return null; });
-      if (id) {
-        if (guests.length) invited = true;
-        await prisma.bookingGoing.update({
-          where: { bookingId_userId: { bookingId: b.id, userId: g.userId } },
-          data: { googleEventId: id },
-        }).catch(() => {});
+      };
+
+      if (!g.googleEventId) {
+        const id = await pushEvent(g.userId, one, guests)
+          .catch((e) => { console.warn("[gcal] add failed:", (e as Error).message); return null; });
+        if (id) {
+          if (guests.length) invited = true;
+          await prisma.bookingGoing.update({
+            where: { bookingId_userId: { bookingId: b.id, userId: g.userId } },
+            data: { googleEventId: id },
+          }).catch(() => {});
+        }
+      }
+
+      // And the same into Outlook, for whoever connected that instead — or as
+      // well. Both is a real answer: the meeting then sits in both calendars,
+      // which is what somebody who keeps two of them is asking for.
+      if (!g.msEventId) {
+        const id = await msPushEvent(g.userId, one, guests)
+          .catch((e) => { console.warn("[mscal] add failed:", (e as Error).message); return null; });
+        if (id) {
+          if (guests.length) invited = true;
+          await prisma.bookingGoing.update({
+            where: { bookingId_userId: { bookingId: b.id, userId: g.userId } },
+            data: { msEventId: id },
+          }).catch(() => {});
+        }
       }
     }
   } catch (e) {
@@ -1875,18 +1994,25 @@ async function addToGoogle(
  * from Google is not a failure — it is the state that was wanted.
  */
 async function removeFromGoogle(
-  rows: { userId: string; googleEventId: string | null }[],
+  rows: { userId: string; googleEventId: string | null; msEventId?: string | null }[],
   hostId?: string | null,
 ): Promise<boolean> {
-  if (!gcalEnabled) return false;
   let told = false;
   for (const g of rows) {
-    if (!g.googleEventId) continue;
     // Deleting the host's copy is the cancellation everybody hears about.
     const tellGuests = !!hostId && g.userId === hostId;
-    const gone = await dropEvent(g.userId, g.googleEventId, tellGuests)
-      .catch((e) => { console.warn("[gcal] remove failed:", (e as Error).message); return false; });
-    if (gone && tellGuests) told = true;
+    if (gcalEnabled && g.googleEventId) {
+      const gone = await dropEvent(g.userId, g.googleEventId, tellGuests)
+        .catch((e) => { console.warn("[gcal] remove failed:", (e as Error).message); return false; });
+      if (gone && tellGuests) told = true;
+    }
+    // Outlook needs no flag: Graph decides it is a cancellation from whose
+    // calendar the event was in, which is one fewer thing to forget.
+    if (msEnabled && g.msEventId) {
+      const gone = await msDropEvent(g.userId, g.msEventId)
+        .catch((e) => { console.warn("[mscal] remove failed:", (e as Error).message); return false; });
+      if (gone && tellGuests) told = true;
+    }
   }
   return told;
 }
@@ -2035,7 +2161,9 @@ app.post("/workspaces/:slug/bookings/:id/going", async (req, res) => {
     void tellTheseAboutBooking(req, w, b as BookingRow, [{ email: can.me.email, name: can.me.name }]);
     // Their own copy, out of their own calendar. Everybody else who is coming
     // keeps theirs.
-    void removeFromGoogle([{ userId: can.me.id, googleEventId: already.googleEventId }]);
+    void removeFromGoogle([{
+      userId: can.me.id, googleEventId: already.googleEventId, msEventId: already.msEventId,
+    }]);
   }
   const after = await prisma.booking.findUnique({
     where: { id: b.id },
@@ -2074,7 +2202,9 @@ app.delete("/workspaces/:slug/bookings/:id", async (req, res) => {
     where: { bookingId: b.id },
     include: { user: { select: { email: true, name: true } } },
   });
-  const inGoogle = rows.map((g) => ({ userId: g.userId, googleEventId: g.googleEventId }));
+  const inGoogle = rows.map((g) => ({
+    userId: g.userId, googleEventId: g.googleEventId, msEventId: g.msEventId,
+  }));
 
   // Everybody who was told this meeting exists, whether or not they answered.
   // A cancellation that only reaches the people who said yes leaves the rest
@@ -2122,7 +2252,7 @@ const REPLY_SWEEP_MAX = Number(process.env.BOOKING_REPLY_SWEEP_MAX || 40);
 let sweepingReplies = false;
 
 async function syncBookingReplies(): Promise<void> {
-  if (sweepingReplies || !gcalEnabled) return;
+  if (sweepingReplies || (!gcalEnabled && !msEnabled)) return;
   sweepingReplies = true;
   try {
     const now = new Date();
@@ -2136,17 +2266,27 @@ async function syncBookingReplies(): Promise<void> {
       take: REPLY_SWEEP_MAX,
       include: {
         invitees: true,
-        going: { select: { userId: true, googleEventId: true } },
+        going: { select: { userId: true, googleEventId: true, msEventId: true } },
       },
     });
 
     for (const b of rows) {
       if (!b.userId) continue;                       // the host's account is gone
       const hosts = b.going.find((g) => g.userId === b.userId);
-      if (!hosts?.googleEventId) continue;           // Google never had this one
+      if (!hosts) continue;
 
-      const said = await readReplies(b.userId, hosts.googleEventId)
-        .catch((e) => { console.warn("[gcal] reading replies failed:", (e as Error).message); return null; });
+      // Whichever calendar carries the guest list. If somebody connected both,
+      // the two say the same thing and reading either is enough — so the first
+      // one that answers wins, rather than asking twice every five minutes.
+      const said =
+        (hosts.googleEventId
+          ? await readReplies(b.userId, hosts.googleEventId)
+            .catch((e) => { console.warn("[gcal] reading replies failed:", (e as Error).message); return null; })
+          : null)
+        ?? (hosts.msEventId
+          ? await msReadReplies(b.userId, hosts.msEventId)
+            .catch((e) => { console.warn("[mscal] reading replies failed:", (e as Error).message); return null; })
+          : null);
       if (!said) continue;                           // unreadable is not "nobody replied"
 
       const byEmail = new Map(said.map((a) => [a.email, a.reply]));
@@ -3474,7 +3614,7 @@ if (summariesReady) {
 setInterval(() => void sweepRecordings().catch((e) => console.error("[recording] sweep failed:", e)), 6 * 60 * 60 * 1000).unref();
 // Answers given in Gmail, brought back here. Nothing tells this server when
 // somebody presses Yes, so it asks.
-if (gcalEnabled) {
+if (gcalEnabled || msEnabled) {
   setInterval(() => void syncBookingReplies(), REPLY_SWEEP_MS).unref();
 }
 // A reminder is a time somebody chose. Checked every minute, because "twenty
@@ -3498,6 +3638,9 @@ if (!turnEnabled) console.warn("[ice] no TURN relay configured — calls will fa
 console.log(gcalEnabled
   ? "[gcal] Google Calendar can be connected — each person grants it for their own account"
   : "[gcal] no Google credentials — bookings reach a calendar only through the subscribed feed and the email");
+console.log(msEnabled
+  ? "[mscal] Outlook can be connected — each person grants it for their own account"
+  : "[mscal] no Microsoft credentials (set MS_CLIENT_ID and MS_CLIENT_SECRET)");
 console.log(`[recording] consent: ${CONSENT_MODE === "notice"
   ? "the room is told and every microphone records"
   : "each person is asked, and only a yes is recorded"}`);

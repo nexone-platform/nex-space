@@ -682,113 +682,145 @@ export function mountCalendarPanel(o: CalendarOptions) {
       }
     };
     foot.appendChild(link);
-
-  /**
-   * Connecting one person's own Google Calendar.
-   *
-   * The row above is a subscription, which Google re-reads on its own schedule
-   * somewhere between eight and twenty-four hours. This one writes the booking
-   * into their calendar as it is made. It is per person and it is theirs to
-   * undo, so it lives here rather than in an admin page.
-   */
-    gcal = document.createElement("div");
-    gcal.className = "cal-gcal";
-    foot.appendChild(gcal);
-    if (o.token) void loadGcal();
+    for (const l of links) l.mount(foot);
   }
 
-  /** the row itself, replaced whenever the footer is rebuilt */
-  let gcal: HTMLElement | null = null;
-
-  const drawGcal = (s: {
+  /**
+   * Connecting one person's own calendar — Google's, or Outlook's.
+   *
+   * The row above is a subscription, which the calendar re-reads on its own
+   * schedule somewhere between eight and twenty-four hours. These write the
+   * booking as it is made. Per person, and theirs to undo, so they live here
+   * rather than in an admin page.
+   *
+   * One factory for both, because the two differ in a name, a path and a word
+   * in a fragment, and nothing else a person can see. Two copies of eighty
+   * lines would differ in more than that within a month.
+   */
+  type LinkState = {
     available?: boolean; connected?: boolean; email?: string | null; lastError?: string | null;
-  }) => {
-    if (!gcal) return;                     // the footer is not built yet
-    gcal.innerHTML = "";
-    if (!s.available) return;              // nothing configured on this server
-    if (s.connected) {
-      const who = document.createElement("small");
-      who.textContent = t("เขียนลง Google Calendar ของ {email} แล้ว").replace("{email}", s.email || "");
-      const off = document.createElement("button");
-      off.className = "cal-copy";
-      off.textContent = t("ยกเลิกการเชื่อม");
-      off.onclick = async () => {
-        if (!confirm(t("เลิกเขียนการจองลงปฏิทิน Google ของคุณ?"))) return;
-        off.disabled = true;
-        const r = await fetch(`${o.api}/me/google-calendar`, {
-          method: "DELETE",
+  };
+
+  function calendarLink(opts: { what: string; path: string; mark: string }) {
+    /** the row itself, replaced whenever the footer is rebuilt */
+    let box: HTMLElement | null = null;
+
+    const draw = (s: LinkState) => {
+      if (!box) return;                      // the footer is not built yet
+      box.innerHTML = "";
+      if (!s.available) return;              // nothing configured on this server
+      if (s.connected) {
+        const who = document.createElement("small");
+        who.textContent = t("เขียนลงปฏิทิน {what} ของ {email} แล้ว")
+          .replace("{what}", opts.what).replace("{email}", s.email || "");
+        const off = document.createElement("button");
+        off.className = "cal-copy";
+        off.textContent = t("ยกเลิกการเชื่อม");
+        off.onclick = async () => {
+          if (!confirm(t("เลิกเขียนการจองลงปฏิทิน {what} ของคุณ?").replace("{what}", opts.what))) return;
+          off.disabled = true;
+          const r = await fetch(`${o.api}${opts.path}`, {
+            method: "DELETE",
+            headers: o.token ? { authorization: `Bearer ${o.token}` } : {},
+          });
+          off.disabled = false;
+          if (r.ok) { say(t("ยกเลิกการเชื่อมแล้ว")); void load(); }
+          else say(t("ยกเลิกการเชื่อมไม่สำเร็จ"), true);
+        };
+        box.append(who, off);
+        // A connection that has quietly stopped working looks exactly like one
+        // that works, until somebody books a room and nothing appears.
+        if (s.lastError) {
+          const bad = document.createElement("small");
+          bad.className = "cal-warn";
+          bad.textContent = t("ครั้งล่าสุด {what} ไม่รับ — ลองเชื่อมใหม่").replace("{what}", opts.what);
+          box.appendChild(bad);
+        }
+        return;
+      }
+      const on = document.createElement("button");
+      on.className = "cal-sub";
+      on.textContent = t("เชื่อมปฏิทิน {what} ของฉัน").replace("{what}", opts.what);
+      on.onclick = async () => {
+        on.disabled = true;
+        try {
+          const r = await fetch(`${o.api}${opts.path}/start`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              ...(o.token ? { authorization: `Bearer ${o.token}` } : {}),
+            },
+            body: JSON.stringify({ back: location.origin + location.pathname }),
+          });
+          const d = (await r.json().catch(() => ({}))) as { url?: string; error?: string };
+          if (!d.url) { say(String(d.error || t("เริ่มเชื่อมไม่สำเร็จ")), true); return; }
+          // The same tab: a consent screen refuses to render inside a frame,
+          // and a popup is a thing browsers block.
+          location.href = d.url;
+        } finally {
+          on.disabled = false;
+        }
+      };
+      const note = document.createElement("small");
+      note.textContent = t("การจองที่คุณกดว่าจะไป จะขึ้นในปฏิทินทันที");
+      box.append(on, note);
+    };
+
+    const load = async () => {
+      try {
+        const r = await fetch(`${o.api}${opts.path}`, {
           headers: o.token ? { authorization: `Bearer ${o.token}` } : {},
         });
-        off.disabled = false;
-        if (r.ok) { say(t("ยกเลิกการเชื่อมแล้ว")); void loadGcal(); }
-        else say(t("ยกเลิกการเชื่อมไม่สำเร็จ"), true);
-      };
-      gcal!.append(who, off);
-      // A connection that has quietly stopped working looks exactly like one
-      // that works, until somebody books a room and nothing appears.
-      if (s.lastError) {
-        const bad = document.createElement("small");
-        bad.className = "cal-warn";
-        bad.textContent = t("ครั้งล่าสุด Google ไม่รับ — ลองเชื่อมใหม่");
-        gcal!.appendChild(bad);
-      }
-      return;
-    }
-    const on = document.createElement("button");
-    on.className = "cal-sub";
-    on.textContent = t("เชื่อม Google Calendar ของฉัน");
-    on.onclick = async () => {
-      on.disabled = true;
-      try {
-        const r = await fetch(`${o.api}/me/google-calendar/start`, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            ...(o.token ? { authorization: `Bearer ${o.token}` } : {}),
-          },
-          body: JSON.stringify({ back: location.origin + location.pathname }),
-        });
-        const d = (await r.json().catch(() => ({}))) as { url?: string; error?: string };
-        if (!d.url) { say(String(d.error || t("เริ่มเชื่อมไม่สำเร็จ")), true); return; }
-        // The same tab: Google refuses to render its consent screen inside a
-        // frame, and a popup is a thing browsers block.
-        location.href = d.url;
-      } finally {
-        on.disabled = false;
+        if (!r.ok) return;
+        draw(await r.json());
+      } catch { /* offline; the row simply is not drawn */ }
+    };
+
+    /**
+     * What came back, said out loud.
+     *
+     * The callback returns to the app with a marker in the fragment. Read once
+     * and then cleared, so a reload does not repeat a message about something
+     * that happened a page ago.
+     */
+    const readHash = () => {
+      const prefix = `#${opts.mark}=`;
+      if (!location.hash.startsWith(prefix)) return;
+      const answer = decodeURIComponent(location.hash.slice(prefix.length));
+      history.replaceState(null, "", location.pathname + location.search);
+      const what = opts.what;
+      if (answer === "connected") {
+        say(t("เชื่อมปฏิทิน {what} แล้ว").replace("{what}", what));
+        void load();
+      } else if (answer === "access_denied") {
+        say(t("คุณไม่ได้อนุญาต — ปฏิทินยังไม่ถูกเชื่อม"), true);
+      } else if (answer === "expired") {
+        say(t("ลิงก์หมดอายุ ลองกดเชื่อมใหม่อีกครั้ง"), true);
+      } else if (answer === "no_refresh_token") {
+        say(t("{what} ไม่ได้ให้สิทธิ์ค้างไว้ — ลองใหม่และกดอนุญาต").replace("{what}", what), true);
+      } else if (answer === "scope_refused") {
+        say(t("ต้องติ๊กอนุญาตให้จัดการปฏิทินด้วย จึงจะเชื่อมได้"), true);
+      } else {
+        say(t("เชื่อมปฏิทิน {what} ไม่สำเร็จ").replace("{what}", what), true);
       }
     };
-    const note = document.createElement("small");
-    note.textContent = t("การจองที่คุณกดว่าจะไป จะขึ้นในปฏิทินทันที");
-    gcal!.append(on, note);
-  };
 
-  const loadGcal = async () => {
-    try {
-      const r = await fetch(`${o.api}/me/google-calendar`, {
-        headers: o.token ? { authorization: `Bearer ${o.token}` } : {},
-      });
-      if (!r.ok) return;
-      drawGcal(await r.json());
-    } catch { /* offline; the row simply is not drawn */ }
-  };
-
-  /**
-   * What came back from Google, said out loud.
-   *
-   * The callback returns to the app with a marker in the fragment. Read once
-   * and then cleared, so a reload does not repeat a message about something
-   * that happened a page ago.
-   */
-  if (location.hash.startsWith("#gcal=")) {
-    const mark = decodeURIComponent(location.hash.slice(6));
-    history.replaceState(null, "", location.pathname + location.search);
-    if (mark === "connected") { say(t("เชื่อม Google Calendar แล้ว")); void loadGcal(); }
-    else if (mark === "access_denied") say(t("คุณไม่ได้อนุญาต — ปฏิทินยังไม่ถูกเชื่อม"), true);
-    else if (mark === "expired") say(t("ลิงก์หมดอายุ ลองกดเชื่อมใหม่อีกครั้ง"), true);
-    else if (mark === "no_refresh_token") say(t("Google ไม่ได้ให้สิทธิ์ค้างไว้ — ลองใหม่และกดอนุญาต"), true);
-    else if (mark === "scope_refused") say(t("ต้องติ๊กอนุญาตให้จัดการปฏิทินด้วย จึงจะเชื่อมได้"), true);
-    else say(t("เชื่อม Google Calendar ไม่สำเร็จ"), true);
+    return {
+      mount: (into: HTMLElement) => {
+        box = document.createElement("div");
+        box.className = "cal-gcal";
+        into.appendChild(box);
+        if (o.token) void load();
+      },
+      readHash,
+    };
   }
+
+  const links = [
+    calendarLink({ what: "Google Calendar", path: "/me/google-calendar", mark: "gcal" }),
+    calendarLink({ what: "Outlook", path: "/me/microsoft-calendar", mark: "mscal" }),
+  ];
+  for (const l of links) l.readHash();
 
 
   void refresh();

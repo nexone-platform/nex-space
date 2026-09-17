@@ -61,6 +61,7 @@ const api = spawn(process.execPath, [TSX, "src/index.ts"], {
     // Google credentials that are not credentials: enough for the connect
     // routes to exist and be checked, and useless to anybody who finds them.
     GOOGLE_CLIENT_ID: "e2e-client", GOOGLE_CLIENT_SECRET: "e2e-secret",
+    MS_CLIENT_ID: "e2e-ms", MS_CLIENT_SECRET: "e2e-ms-secret", MS_TENANT: "common",
     // The real deployment sits behind two proxies and X-Forwarded-Proto does
     // not survive the trip, so the callback built from the request came out as
     // http:// on an https site and Google refused it. APP_URL is what the rest
@@ -437,6 +438,44 @@ let startUrl = "";
 {
   const r = await del("/me/google-calendar", owner.token);
   ok("disconnecting nothing is not an error", r.ok === true && r.already === true, JSON.stringify(r));
+}
+
+// ---- and the same for Outlook ---------------------------------------------------
+// A second grant to a second company, revoked on its own. Somebody may have
+// one, the other, both or neither.
+
+{
+  const mine = await get("/me/microsoft-calendar", owner.token);
+  ok("Outlook is offered as well", mine.available === true, JSON.stringify(mine.available));
+  ok("  · and is its own connection, not Google's",
+    mine.connected === false, JSON.stringify(mine.connected));
+
+  const r = await post("/me/microsoft-calendar/start", {}, owner.token);
+  const url = String(r.url || "");
+  ok("  · with somewhere of its own to go",
+    /^https:\/\/login\.microsoftonline\.com\//.test(url), url.slice(0, 64));
+  const q = new URL(url).searchParams;
+  ok("  · asking to write a calendar and nothing else",
+    q.get("scope") === "offline_access Calendars.ReadWrite User.Read", q.get("scope"));
+  ok("  · offline, or the server can do nothing an hour later",
+    (q.get("scope") || "").includes("offline_access"), q.get("scope"));
+  ok("  · coming back to this server", (q.get("redirect_uri") || "").endsWith("/auth/microsoft/calendar/callback"),
+    q.get("redirect_uri"));
+  ok("  · and carrying no session token in the URL", !url.includes(owner.token),
+    "a token in a query string is a working credential in nginx logs and browser history");
+
+  const anon = await fetch(API + "/me/microsoft-calendar/start", { method: "POST" });
+  ok("  · and nobody can start one without signing in", anon.status === 401, `status ${anon.status}`);
+
+  const state = q.get("state") || "";
+  const bad = state.slice(0, -1) + (state.endsWith("A") ? "B" : "A");
+  const edited = await fetch(`${API}/auth/microsoft/calendar/callback?code=x&state=${encodeURIComponent(bad)}`,
+    { redirect: "manual" });
+  ok("  · a note somebody edited is refused",
+    (edited.headers.get("location") || "").includes("mscal=expired"), edited.headers.get("location"));
+
+  const off = await del("/me/microsoft-calendar", owner.token);
+  ok("  · and disconnecting nothing is not an error", off.ok === true, JSON.stringify(off));
 }
 
 // ---- the people the host puts on a meeting -------------------------------------

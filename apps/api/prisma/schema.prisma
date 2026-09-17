@@ -45,6 +45,7 @@ model User {
   spoken        RecordingTrack[] @relation("RecordingsSpoken")
   invitesSent   Invite[]     @relation("InvitesSent")
   googleCalendar GoogleCalendar?
+  msCalendar     MicrosoftCalendar?
   invitedTo     BookingInvitee[] @relation("BookingsInvited")
   goingTo       BookingGoing[]
   received      Message[]    @relation("MessagesReceived")
@@ -357,6 +358,9 @@ model BookingGoing {
   /// Per person rather than per booking, because each connected calendar gets
   /// its own copy of the event and they do not share an id.
   googleEventId String?
+  /// The same, in Outlook. Two columns rather than one with a flag: somebody
+  /// can connect both, and then the meeting is in both and has two ids.
+  msEventId     String?
 
   @@id([bookingId, userId])
   @@index([userId])
@@ -545,6 +549,23 @@ model GoogleCalendar {
   connectedAt  DateTime @default(now())
   /// the last thing Google refused with. A revoked grant is not an error to
   /// retry forever — it is a thing to tell the person about, once.
+  lastError    String?
+  lastErrorAt  DateTime?
+}
+
+/// One person's permission to write into their own Outlook calendar.
+///
+/// The same shape as GoogleCalendar and deliberately a separate table: the two
+/// are different grants to different companies, revoked separately, and
+/// somebody may have one, the other, both or neither. Folding them into one
+/// row with a "provider" column would make every query ask which one it meant.
+model MicrosoftCalendar {
+  userId       String   @id
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// which Microsoft account this is, so somebody can see what they connected
+  email        String
+  refreshToken String
+  connectedAt  DateTime @default(now())
   lastError    String?
   lastErrorAt  DateTime?
 }
