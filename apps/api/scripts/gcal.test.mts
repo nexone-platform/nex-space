@@ -100,6 +100,13 @@ await connect();
   ok("  · the time in the office's own zone, not the reader's",
     body.start.timeZone === "Asia/Bangkok" && body.end.timeZone === "Asia/Bangkok",
     `${body.start.timeZone}`);
+  // The zone alone proved nothing about the instant. A booking written an hour
+  // out is a calendar entry that disagrees with the invitation email about the
+  // same meeting, and both of them look right on their own.
+  ok("    · and at the instant it was booked for, to the second",
+    body.start.dateTime === "2026-09-14T03:00:00.000Z"
+    && body.end.dateTime === "2026-09-14T04:00:00.000Z",
+    `${body.start.dateTime} → ${body.end.dateTime}`);
   ok("  · carrying the same id as the .ics feed, so it is not in there twice",
     body.iCalUID === "bk_9@nexspace", body.iCalUID);
   ok("  · and no attendee list, which would make Google send its own invitations",
