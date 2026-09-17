@@ -98,6 +98,59 @@ services:
       # generated and kept in the volume, which survives restarts. Set it to
       # share the same links across more than one API container.
       - UPLOAD_SECRET=${UPLOAD_SECRET:-}
+      # Everything else the API reads. Listed here because a setting that is in
+      # .env and not in this list is a setting that does nothing: compose hands
+      # the container only what it names, and the app then quietly uses its
+      # default. scripts/compose-check.mjs refuses a build where the two lists
+      # have drifted, which is how RECORDING_CONSENT and the whole ASR
+      # configuration came to be documented and unreachable at the same time.
+      - APP_TZ=${APP_TZ:-}
+      - BOOKING_TZ=${BOOKING_TZ:-Asia/Bangkok}
+      - BOOKING_MAX_MINUTES=${BOOKING_MAX_MINUTES:-}
+      - BOOKING_MAX_DAYS=${BOOKING_MAX_DAYS:-}
+      - BOOKING_KEEP_DAYS=${BOOKING_KEEP_DAYS:-}
+      - BOOKING_WINDOW_DAYS=${BOOKING_WINDOW_DAYS:-}
+      - BOOKING_MAX_INVITEES=${BOOKING_MAX_INVITEES:-}
+      - BOOKING_REMINDER_SWEEP_MS=${BOOKING_REMINDER_SWEEP_MS:-}
+      - BOOKING_REPLY_SWEEP_MS=${BOOKING_REPLY_SWEEP_MS:-}
+      - BOOKING_REPLY_SWEEP_MAX=${BOOKING_REPLY_SWEEP_MAX:-}
+      # Writing a booking into somebody's own calendar. Google reuses the
+      # sign-in credentials above; Microsoft is its own app registration.
+      - GCAL_REDIRECT_URL=${GCAL_REDIRECT_URL:-}
+      - GCAL_TIMEOUT_MS=${GCAL_TIMEOUT_MS:-}
+      - MS_CLIENT_ID=${MS_CLIENT_ID:-}
+      - MS_CLIENT_SECRET=${MS_CLIENT_SECRET:-}
+      - MS_TENANT=${MS_TENANT:-common}
+      - MS_REDIRECT_URL=${MS_REDIRECT_URL:-}
+      - MS_TIMEOUT_MS=${MS_TIMEOUT_MS:-}
+      # Meeting recordings, and turning them into text.
+      - RECORDING_CONSENT=${RECORDING_CONSENT:-ask}
+      - RECORDING_DIR=${RECORDING_DIR:-}
+      - RECORDING_AUDIO_DAYS=${RECORDING_AUDIO_DAYS:-}
+      - RECORDING_TEXT_DAYS=${RECORDING_TEXT_DAYS:-}
+      - RECORDING_MAX_MINUTES=${RECORDING_MAX_MINUTES:-}
+      - RECORDING_MAX_BYTES=${RECORDING_MAX_BYTES:-}
+      - ASR_URL=${ASR_URL:-}
+      - ASR_MODEL=${ASR_MODEL:-}
+      - ASR_LANG=${ASR_LANG:-}
+      - ASR_TIMEOUT_MS=${ASR_TIMEOUT_MS:-}
+      - LLM_URL=${LLM_URL:-}
+      - LLM_MODEL=${LLM_MODEL:-}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_TIMEOUT_MS=${LLM_TIMEOUT_MS:-}
+      - SUMMARY_SETTLE_MS=${SUMMARY_SETTLE_MS:-}
+      # Files, maps, invitations and how long anything is kept.
+      - UPLOAD_DIR=${UPLOAD_DIR:-}
+      - UPLOAD_MAX_BYTES=${UPLOAD_MAX_BYTES:-}
+      - UPLOAD_SECRET=${UPLOAD_SECRET:-}
+      - UPLOAD_LINK_TTL_MS=${UPLOAD_LINK_TTL_MS:-}
+      - MAP_MAX_BYTES=${MAP_MAX_BYTES:-}
+      - MAPS_PER_SPACE=${MAPS_PER_SPACE:-}
+      - INVITE_DAYS=${INVITE_DAYS:-}
+      - INVITE_KEEP_DAYS=${INVITE_KEEP_DAYS:-}
+      - CHAT_KEEP_DAYS=${CHAT_KEEP_DAYS:-}
+      - STATS_KEEP_DAYS=${STATS_KEEP_DAYS:-}
+      - STUN_URL=${STUN_URL:-}
     ports:
       - "3001:3001"
     volumes:

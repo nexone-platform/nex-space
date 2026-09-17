@@ -18,11 +18,13 @@
  *
  *   node scripts/compose-check.mjs
  */
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
+import { join } from "path";
 import { fileURLToPath } from "url";
 
 const FILE = fileURLToPath(new URL("../docker-compose.yml", import.meta.url));
 const RELAY = fileURLToPath(new URL("../deploy/turn/docker-compose.yml", import.meta.url));
+const API_SRC = fileURLToPath(new URL("../apps/api/src/", import.meta.url));
 const raw = readFileSync(FILE, "utf8");
 
 let pass = 0, fail = 0;
@@ -308,6 +310,41 @@ ok("  · resolved per request against docker's own DNS",
   /resolver\s+127\.0\.0\.11/.test(lkBlock));
 ok("  · with the prefix stripped by rewrite, since a variable passes the URI through",
   /rewrite\s+\^\/lk\/\(\.\*\)\$\s+\/\$1\s+break;/.test(lkBlock));
+
+/**
+ * Every setting the API reads has to be one the deployment can set.
+ *
+ * Compose hands a container only the variables it names. A setting that is in
+ * .env and not in that list does nothing at all — the app falls back to its
+ * default and says nothing, which is indistinguishable from the setting being
+ * ignored on purpose.
+ *
+ * It had drifted badly: forty-two of the sixty-one settings the API reads could
+ * not be set from .env, RECORDING_CONSENT and the whole ASR configuration among
+ * them. Both had been written down in .env.example as though they worked.
+ */
+{
+  const src = readdirSync(API_SRC)
+    .filter((f) => f.endsWith(".ts"))
+    .map((f) => readFileSync(join(API_SRC, f), "utf8"))
+    .join("\n");
+  const reads = [...new Set(
+    [...src.matchAll(/process\.env\.([A-Z_][A-Z0-9_]*)/g)].map((m) => m[1]),
+  )].sort();
+
+  // The api service's own environment list, whatever shape the values take.
+  const api = /\n {2}nexspace-api:\n([\s\S]*?)\n {2}[a-z]/.exec(raw + "\n  zzz:");
+  const passed = new Set(
+    [...(api?.[1] ?? "").matchAll(/^\s+- ([A-Z_][A-Z0-9_]*)=/gm)].map((m) => m[1]),
+  );
+
+  const missing = reads.filter((v) => !passed.has(v));
+  ok(`every setting the API reads can be set from .env (${reads.length} of them)`,
+    missing.length === 0,
+    missing.length
+      ? `not passed through: ${missing.join(" ")}`
+      : `${passed.size} passed through`);
+}
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
