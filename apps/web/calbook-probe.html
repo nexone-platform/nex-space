@@ -363,8 +363,11 @@ log("");
     [...unit.options].map((o) => o.value).join() === "1,60,1440,10080",
     [...unit.options].map((o) => o.value).join());
 
-  // Two hours, by email.
+  // Two hours, by email. The event matters: a person picking from the list
+  // fires it, and the row shows its repeat controls in response — setting the
+  // value alone is the probe reaching past the interaction it is testing.
   how.value = "email";
+  how.dispatchEvent(new Event("change"));
   many.value = "2";
   unit.value = "60";
   unit.dispatchEvent(new Event("change"));
@@ -375,6 +378,24 @@ log("");
   second.querySelector("input").value = "10";
   ok("  · and a second, which is a different reminder", rows().length === 2, String(rows().length));
 
+  // The repeat, which only an email row is offered.
+  const rep = rows()[0].querySelector(".cal-remind-rep");
+  const often = rows()[0].querySelector(".cal-remind-times");
+  ok("  · an email row is offered a repeat", !rep.hidden, `hidden=${rep.hidden}`);
+  ok("    · with the same choices a calendar offers",
+    [...rep.options].map((o) => o.value).join() === "none,daily,weekdays,weekly",
+    [...rep.options].map((o) => o.value).join());
+  ok("    · and how many times, only once it repeats", often.hidden, `hidden=${often.hidden}`);
+  rep.value = "daily";
+  rep.dispatchEvent(new Event("change"));
+  often.value = "3";
+  ok("      · which appears when it does", !often.hidden, `hidden=${often.hidden}`);
+
+  // A notice in the app is never repeated: three days of it is three chances
+  // to be looking somewhere else, not three reminders.
+  ok("  · a notice in the app is offered none",
+    rows()[1].querySelector(".cal-remind-rep").hidden, "popup rows carry no repeat");
+
   posts.length = 0;
   titleIn().value = "ประชุมที่ต้องเตือน";
   submit().click();
@@ -382,7 +403,8 @@ log("");
   const sent = posts[0]?.reminders ?? [];
   ok("both go out as minutes, whatever unit was on screen",
     JSON.stringify(sent) === JSON.stringify([
-      { method: "email", minutes: 120 }, { method: "popup", minutes: 10 },
+      { method: "email", minutes: 120, repeat: "daily", times: 3 },
+      { method: "popup", minutes: 10, repeat: "none", times: 1 },
     ]), JSON.stringify(sent));
 
   // The ceiling is Google's: a reminder it refuses takes the event with it.

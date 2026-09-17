@@ -33,7 +33,8 @@
     "test:bookingmail": "node ../../node_modules/tsx/dist/cli.mjs scripts/booking-mail.test.mts",
     "test:consent": "node ../../node_modules/tsx/dist/cli.mjs scripts/consent.test.mts",
     "test:gcal": "node ../../node_modules/tsx/dist/cli.mjs scripts/gcal.test.mts",
-    "test:mscal": "node ../../node_modules/tsx/dist/cli.mjs scripts/mscal.test.mts"
+    "test:mscal": "node ../../node_modules/tsx/dist/cli.mjs scripts/mscal.test.mts",
+    "test:remind": "node ../../node_modules/tsx/dist/cli.mjs scripts/remind.test.mts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

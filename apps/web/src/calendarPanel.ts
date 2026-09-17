@@ -310,7 +310,24 @@ export function mountCalendarPanel(o: CalendarOptions) {
   const remindRows = document.createElement("div");
   remindRows.className = "cal-remind";
 
-  function remindRow(method = "popup", minutes = 30) {
+  /**
+   * How a reminder repeats, for email only.
+   *
+   * Carries both words like the units above, and for the same reason: "ทุกวัน"
+   * is already in the dictionary meaning something else, and a list of choices
+   * is data rather than prose.
+   */
+  const REPEATS: { th: string; en: string; value: string }[] = [
+    { th: "ไม่ซ้ำ", en: "Does not repeat", value: "none" },
+    { th: "ทุกวัน", en: "Daily", value: "daily" },
+    { th: "ทุกวันทำการ (จ.–ศ.)", en: "Every weekday (Mon–Fri)", value: "weekdays" },
+    { th: "ทุกสัปดาห์", en: "Weekly", value: "weekly" },
+  ];
+  const repeatWord = (r: { th: string; en: string }) => (lang() === "en" ? r.en : r.th);
+  /** as many copies as anybody could want, and fewer than anybody would tolerate */
+  const MAX_TIMES = 10;
+
+  function remindRow(method = "popup", minutes = 30, repeat = "none", times = 1) {
     const row = document.createElement("div");
     row.className = "cal-remind-row";
 
@@ -352,6 +369,42 @@ export function mountCalendarPanel(o: CalendarOptions) {
     howMany.onchange = cap;
     cap();
 
+    /**
+     * The repeat, and how many times.
+     *
+     * Only on an email row. A notice in the app repeated over three days is
+     * three chances to be looking somewhere else, not three reminders — so the
+     * two controls go away when the method is a notice, rather than sitting
+     * there offering something the server will refuse.
+     */
+    const over = document.createElement("select");
+    over.className = "cal-remind-rep";
+    for (const r of REPEATS) {
+      const o = document.createElement("option");
+      o.value = r.value; o.textContent = repeatWord(r);
+      over.appendChild(o);
+    }
+    over.value = repeat;
+
+    const howOften = document.createElement("input");
+    howOften.type = "number";
+    howOften.className = "cal-remind-times";
+    howOften.min = "1";
+    howOften.max = String(MAX_TIMES);
+    howOften.step = "1";
+    howOften.value = String(Math.max(1, Math.min(MAX_TIMES, times)));
+    howOften.title = t("ส่งกี่ครั้ง");
+
+    const showRepeat = () => {
+      const email = how.value === "email";
+      over.hidden = !email;
+      howOften.hidden = !email || over.value === "none";
+      if (!email) over.value = "none";
+    };
+    how.addEventListener("change", showRepeat);
+    over.addEventListener("change", showRepeat);
+    showRepeat();
+
     const off = document.createElement("button");
     off.type = "button";
     off.className = "cal-remind-x";
@@ -359,7 +412,7 @@ export function mountCalendarPanel(o: CalendarOptions) {
     off.title = t("เอาออก");
     off.onclick = () => { row.remove(); drawAddRemind(); };
 
-    row.append(how, howMany, which, off);
+    row.append(how, howMany, which, over, howOften, off);
     return row;
   }
 
@@ -383,9 +436,16 @@ export function mountCalendarPanel(o: CalendarOptions) {
         row.querySelector("input") as HTMLInputElement,
         row.querySelectorAll("select")[1] as HTMLSelectElement,
       ];
+      const over = row.querySelector(".cal-remind-rep") as HTMLSelectElement | null;
+      const often = row.querySelector(".cal-remind-times") as HTMLInputElement | null;
+      const repeat = how.value === "email" ? (over?.value ?? "none") : "none";
       return {
         method: how.value,
         minutes: Math.max(0, Math.round(Number(howMany.value) || 0)) * Number(which.value),
+        repeat,
+        times: repeat === "none"
+          ? 1
+          : Math.max(1, Math.min(MAX_TIMES, Math.round(Number(often?.value) || 1))),
       };
     });
 

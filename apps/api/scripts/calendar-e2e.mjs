@@ -612,6 +612,40 @@ let startUrl = "";
   if (r.booking) await del(`/workspaces/${ws.slug}/bookings/${r.booking.id}`, owner.token);
 }
 
+// ---- a reminder that repeats ----------------------------------------------------
+//
+// One booking, told about more than once. Email only: a notice inside the app
+// repeated over three days is three chances to be looking somewhere else.
+
+{
+  const r = await book({
+    ...ROOM, title: "เตือนซ้ำ", startsAt: at(40), endsAt: at(41),
+    reminders: [
+      { method: "email", minutes: 30, repeat: "daily", times: 3 },
+      { method: "popup", minutes: 10, repeat: "daily", times: 5 },
+      { method: "email", minutes: 60, repeat: "yearly", times: 2 },
+      { method: "email", minutes: 90, repeat: "weekly", times: 99 },
+    ],
+  });
+  ok("a reminder can be asked to repeat", r.status === 200, `status ${r.status}`);
+  const got = r.booking?.reminders ?? [];
+  const at30 = got.find((x) => x.minutes === 30);
+  ok("  · daily, three times", at30?.repeat === "daily" && at30?.times === 3, JSON.stringify(at30));
+  const at10 = got.find((x) => x.minutes === 10);
+  ok("  · but a notice in the app never repeats",
+    at10?.repeat === "none" && at10?.times === 1, JSON.stringify(at10));
+  const at60 = got.find((x) => x.minutes === 60);
+  ok("  · a repeat nobody offers is read as none",
+    at60?.repeat === "none" && at60?.times === 1, JSON.stringify(at60));
+  const at90 = got.find((x) => x.minutes === 90);
+  ok("  · and there is a ceiling on how many times",
+    (at90?.times ?? 0) <= 10, JSON.stringify(at90?.times));
+  ok("  · none of them has gone yet", got.every((x) => x.sentCount === 0),
+    JSON.stringify(got.map((x) => x.sentCount)));
+
+  if (r.booking) await del(`/workspaces/${ws.slug}/bookings/${r.booking.id}`, owner.token);
+}
+
 stop();
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

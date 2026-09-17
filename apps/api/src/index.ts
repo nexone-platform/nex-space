@@ -32,7 +32,7 @@ import {
   serverKey,
 } from "./uploads.js";
 import {
-  checkWhen, eventSig, ics, newCalendarKey, overlaps,
+  checkWhen, eventSig, ics, newCalendarKey, overlaps, reminderMoments, REMINDER_MAX_TIMES,
 } from "./calendar.js";
 
 const port = Number(process.env.PORT) || 3001;
@@ -1761,7 +1761,10 @@ type BookingRow = {
   userId: string | null; hostName: string; startsAt: Date; endsAt: Date; createdAt: Date;
   going?: { userId: string }[];
   invitees?: { email: string; name: string; userId: string | null; reply?: string }[];
-  reminders?: { method: string; minutes: number; sentAt?: Date | null }[];
+  reminders?: {
+    method: string; minutes: number; sentAt?: Date | null;
+    repeat?: string; times?: number; sentCount?: number;
+  }[];
 };
 
 function bookingView(b: BookingRow, meId: string | null | undefined, slug: string) {
@@ -1793,6 +1796,7 @@ function bookingView(b: BookingRow, meId: string | null | undefined, slug: strin
     // times that were chosen rather than at a time this app picked.
     reminders: (b.reminders ?? []).map((r) => ({
       method: r.method, minutes: r.minutes,
+      repeat: r.repeat ?? "none", times: r.times ?? 1, sentCount: r.sentCount ?? 0,
       // When the email actually went. Null on a popup, which the browser does,
       // and null on one whose moment has not come — the difference between
       // "will be sent" and "was sent" is the whole question somebody asks when
@@ -1848,7 +1852,7 @@ app.get("/workspaces/:slug/bookings", async (req, res) => {
     include: {
       going: { select: { userId: true } },
       invitees: { select: { email: true, name: true, userId: true, reply: true } },
-      reminders: { select: { method: true, minutes: true, sentAt: true } },
+      reminders: { select: { method: true, minutes: true, sentAt: true, repeat: true, times: true, sentCount: true } },
     },
   });
   res.json({ bookings: rows.map((b) => bookingView(b, who.userId, w.slug)) });
@@ -2096,7 +2100,7 @@ app.post("/workspaces/:slug/bookings", async (req, res) => {
     include: {
       going: { select: { userId: true } },
       invitees: { select: { email: true, name: true, userId: true, reply: true } },
-      reminders: { select: { method: true, minutes: true, sentAt: true } },
+      reminders: { select: { method: true, minutes: true, sentAt: true, repeat: true, times: true, sentCount: true } },
     },
   });
   res.json({ booking: bookingView(b, can.me.id, w.slug) });
@@ -2116,7 +2120,7 @@ app.post("/workspaces/:slug/bookings", async (req, res) => {
   // the second one is a wait with no way to tell it from a failure.
   console.log(remind.length
     ? `[calendar] "${b.title}" — ${remind.length} reminder(s): ${
-        remind.map((r) => `${r.method} ${r.minutes}m`).join(", ")}`
+        remind.map((r) => `${r.method} ${r.minutes}m${r.repeat === "none" ? "" : ` ×${r.times} ${r.repeat}`}`).join(", ")}`
     : `[calendar] "${b.title}" — no reminders asked for`);
 
   void (async () => {
@@ -2170,7 +2174,7 @@ app.post("/workspaces/:slug/bookings/:id/going", async (req, res) => {
     include: {
       going: { select: { userId: true } },
       invitees: { select: { email: true, name: true, userId: true, reply: true } },
-      reminders: { select: { method: true, minutes: true, sentAt: true } },
+      reminders: { select: { method: true, minutes: true, sentAt: true, repeat: true, times: true, sentCount: true } },
     },
   });
   res.json({ booking: bookingView(after as BookingRow, can.me.id, w.slug) });
@@ -2339,16 +2343,26 @@ const REMINDER_MAX_COUNT = 5;
 function readReminders(raw: unknown) {
   const wanted = Array.isArray(raw) ? raw : [];
   const seen = new Set<string>();
-  const out: { method: string; minutes: number }[] = [];
+  const out: { method: string; minutes: number; repeat: string; times: number }[] = [];
   for (const one of wanted) {
     const r = (one ?? {}) as { method?: unknown; minutes?: unknown };
     const method = r.method === "email" ? "email" : "popup";
     const minutes = Math.round(Number(r.minutes));
     if (!Number.isFinite(minutes) || minutes < 0 || minutes > REMINDER_MAX_MINUTES) continue;
+    // Repeating is for email only. A notice inside the app is seen by whoever
+    // is in the app at that second, and one repeated over three days is three
+    // chances to be looking elsewhere rather than a reminder.
+    const repeat = method === "email" && typeof (r as { repeat?: unknown }).repeat === "string"
+      && ["daily", "weekly", "weekdays"].includes(String((r as { repeat?: unknown }).repeat))
+      ? String((r as { repeat?: unknown }).repeat)
+      : "none";
+    const times = repeat === "none"
+      ? 1
+      : Math.max(1, Math.min(REMINDER_MAX_TIMES, Math.round(Number((r as { times?: unknown }).times)) || 1));
     const key = `${method}:${minutes}`;
     if (seen.has(key)) continue;                  // the same reminder twice is one
     seen.add(key);
-    out.push({ method, minutes });
+    out.push({ method, minutes, repeat, times });
     if (out.length >= REMINDER_MAX_COUNT) break;
   }
   return out;
@@ -2382,7 +2396,8 @@ async function sweepReminders(): Promise<void> {
     const due = await prisma.bookingReminder.findMany({
       where: {
         method: "email",
-        sentAt: null,
+        // A repeating one is not finished until every copy has gone, so the
+        // filter is "fewer sent than asked for" rather than "never sent".
         booking: { startsAt: { gt: new Date(now - REMINDER_GRACE_MS) } },
       },
       include: {
@@ -2399,7 +2414,14 @@ async function sweepReminders(): Promise<void> {
 
     for (const r of due) {
       const b = r.booking;
-      if (+b.startsAt - r.minutes * 60_000 > now) continue;      // not yet
+      // Legacy rows from before repeating existed have sentAt and no count.
+      const alreadySent = r.sentCount || (r.sentAt ? 1 : 0);
+      const moments = reminderMoments(r, b.startsAt, b.createdAt);
+      if (alreadySent >= moments.length) continue;               // all of them have gone
+      // The next one owed, and only if its moment has arrived. One per pass:
+      // a booking made after two of three moments had passed should not fire
+      // two emails in the same minute.
+      if (+moments[alreadySent] > now) continue;
 
       // Whoever is coming, and whoever was asked and said yes. Nobody who
       // declined, and nobody who has not answered — a reminder for a meeting
@@ -2415,11 +2437,13 @@ async function sweepReminders(): Promise<void> {
       if (!to.size) continue;
 
       // Claimed before the mail goes, so two passes overlapping cannot both
-      // send it. The cost is a reminder lost when the mail fails, which beats
+      // send it. The count in the filter is what makes that safe: a second
+      // pass reading the same row sees a number that has moved and claims
+      // nothing. The cost is a reminder lost when the mail fails, which beats
       // a mailbox with sixty copies of the same sentence in it.
       const claimed = await prisma.bookingReminder.updateMany({
-        where: { id: r.id, sentAt: null },
-        data: { sentAt: new Date() },
+        where: { id: r.id, sentCount: r.sentCount },
+        data: { sentCount: alreadySent + 1, sentAt: new Date() },
       });
       if (!claimed.count) continue;
 
@@ -2436,7 +2460,8 @@ async function sweepReminders(): Promise<void> {
           minutes: r.minutes, url, replyTo: host,
         }).catch((e) => console.warn(`[calendar] reminder to ${email} did not go:`, e));
       }
-      console.log(`[calendar] reminder for "${b.title}" sent to ${to.size} person(s)`);
+      console.log(`[calendar] reminder for "${b.title}" sent to ${to.size} person(s)`
+        + (moments.length > 1 ? ` (${alreadySent + 1} of ${moments.length})` : ""));
     }
   } catch (e) {
     console.warn("[calendar] could not send reminders:", e);

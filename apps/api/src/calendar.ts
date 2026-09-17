@@ -211,3 +211,54 @@ export function ics(name: string, events: IcsEvent[], opts: IcsOpts = {}): strin
   lines.push("END:VCALENDAR");
   return lines.map(fold).join("\r\n") + "\r\n";
 }
+
+/**
+ * How far apart the copies of a repeating reminder are.
+ *
+ * Weekdays is not an interval at all — it is a rule about which days count —
+ * so it is a day apart with the weekends skipped when the moments are worked
+ * out, not a different number here.
+ */
+export const REPEAT_MS: Record<string, number> = {
+  daily: 24 * 60 * 60_000,
+  weekdays: 24 * 60 * 60_000,
+  weekly: 7 * 24 * 60 * 60_000,
+};
+/** as many copies as anybody could want, and fewer than anybody would tolerate */
+export const REMINDER_MAX_TIMES = 10;
+
+/**
+ * Every moment this reminder should go off, oldest first.
+ *
+ * The last one is `minutes` before the meeting; the rest march backwards from
+ * it. Weekdays steps over Saturday and Sunday rather than counting them, which
+ * is what somebody means by "every working day until the meeting".
+ *
+ * Moments that had already passed when the booking was made are dropped. A
+ * meeting booked ten minutes before it starts, with a reminder set to repeat
+ * daily for three days, must not fire three emails at once for two days that
+ * were already over.
+ */
+export function reminderMoments(r: { minutes: number; repeat: string; times: number },
+  startsAt: Date, createdAt: Date): Date[] {
+  const last = +startsAt - r.minutes * 60_000;
+  const step = REPEAT_MS[r.repeat];
+  const want = step ? Math.max(1, Math.min(REMINDER_MAX_TIMES, r.times)) : 1;
+
+  const out: Date[] = [];
+  let at = last;
+  for (let i = 0; i < want; i++) {
+    out.unshift(new Date(at));
+    if (!step) break;
+    at -= step;
+    if (r.repeat === "weekdays") {
+      // Step back over the weekend rather than landing on it.
+      for (let guard = 0; guard < 3; guard++) {
+        const day = new Date(at).getDay();
+        if (day !== 0 && day !== 6) break;
+        at -= step;
+      }
+    }
+  }
+  return out.filter((d) => +d >= +createdAt);
+}

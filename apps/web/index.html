@@ -811,6 +811,12 @@
         border-radius: var(--r-ctl); border: 1px solid var(--border-2);
         background: var(--surface); color: var(--text);
         font: 12.5px "Segoe UI", sans-serif; padding: 0 6px; }
+      /* The repeat and its count, on email rows only. They go away rather than
+         grey out: a control that is there and refused is a question the form
+         asked and then would not accept an answer to. */
+      .cal-remind-rep { max-width: 140px; }
+      .cal-remind-times { width: 52px; }
+      .cal-remind-row select[hidden], .cal-remind-row input[hidden] { display: none; }
       .cal-remind-x { border: none; background: none; cursor: pointer; padding: 4px 6px;
         border-radius: var(--r-ctl); color: var(--muted); font-size: 12px; line-height: 1; }
       .cal-remind-x:hover { background: var(--danger-soft); color: var(--danger-ink); }

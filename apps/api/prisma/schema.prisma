@@ -302,16 +302,28 @@ model BookingReminder {
   booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   /// email | popup — a message, or a notice inside the app
   method    String
-  /// how long before it starts
+  /// how long before it starts, for the first one
   minutes   Int
-  /// when the email actually went. Null for a popup, which the browser does,
-  /// and null for one whose moment has not come. It is what stops a sweep that
-  /// runs every minute from sending the same reminder sixty times an hour.
+  /// none | daily | weekly | weekdays — how a reminder repeats before that.
+  /// Email only: a notice inside the app is seen by whoever is in the app, and
+  /// one repeated for three days is three chances to be looking at the wrong
+  /// moment rather than a reminder.
+  repeat    String   @default("none")
+  /// how many go in total, the first one included. 1 is the old behaviour.
+  times     Int      @default(1)
+  /// how many have actually gone. What stops a sweep that runs every minute
+  /// from sending the same reminder sixty times an hour, and what tells a
+  /// repeating one how far through it is.
+  sentCount Int      @default(0)
+  /// when the most recent one went. Kept rather than replaced by sentCount:
+  /// the container runs `prisma db push` before it starts, push refuses to drop
+  /// a column without being told to, and the two are joined by `&&` — so a
+  /// dropped column here is an API that does not come up at all.
   sentAt    DateTime?
 
   @@unique([bookingId, method, minutes])
   @@index([bookingId])
-  @@index([sentAt])
+  @@index([sentCount])
 }
 
 /// Somebody the host put on the meeting.
