@@ -13,6 +13,27 @@ watchSystemColorMode();
 applyLang();
 
 /**
+ * Have the typeface in hand before the first name tag is drawn.
+ *
+ * Name tags are canvas text baked into a texture once. Canvas does not ask for
+ * a webfont the way markup does, and it draws with whatever is available at
+ * that instant — so a tag made a moment too early is stuck in the fallback for
+ * as long as that player is on screen, while the panel beside it is in Sarabun.
+ *
+ * Capped, and never a reason not to start: a font that will not arrive is worth
+ * mismatched labels, not a map nobody can enter.
+ */
+function nameTagFont() {
+  if (!document.fonts?.load) return Promise.resolve();
+  const want = ["8px Sarabun", "600 10px Sarabun"].map((f) =>
+    document.fonts.load(f, "ก"));
+  return Promise.race([
+    Promise.all(want),
+    new Promise((go) => setTimeout(go, 1500)),
+  ]).catch(() => {});
+}
+
+/**
  * Fetch the map, then build the world out of it.
  *
  * The ordering is the point. OfficeScene reads its layout at import time, so it
@@ -25,7 +46,7 @@ applyLang();
  */
 async function boot() {
   const { loadMap, mapOrigin } = await import("./scenes/mapSource");
-  await loadMap();
+  await Promise.all([loadMap(), nameTagFont()]);
   console.log(`[map] ${mapOrigin()}`);
   const { OfficeScene } = await import("./scenes/OfficeScene");
 

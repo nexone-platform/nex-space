@@ -169,7 +169,7 @@ export async function sendLoginCode(to: string, code: string) {
     subject: `${code} คือรหัสเข้าสู่ระบบ NexSpace`,
     text: `รหัสเข้าสู่ระบบของคุณคือ ${code}\nรหัสนี้ใช้ได้ 10 นาที หากคุณไม่ได้ร้องขอ ให้ละเว้นอีเมลนี้`,
     html: `
-      <div style="font-family:'Segoe UI',sans-serif;max-width:420px;margin:0 auto;padding:28px 24px;color:#1c1b22">
+      <div style="font-family:'TH Sarabun New','TH SarabunPSK',Sarabun,'Leelawadee UI','Segoe UI',sans-serif;max-width:420px;margin:0 auto;padding:28px 24px;color:#1c1b22">
         <h2 style="margin:0 0 6px;font-size:19px">เข้าสู่ระบบ NexSpace</h2>
         <p style="margin:0 0 20px;color:#6b7280;font-size:14px">กรอกรหัส 6 หลักนี้ในหน้าเข้าสู่ระบบ</p>
         <div style="font-size:32px;font-weight:700;letter-spacing:9px;text-align:center;
@@ -231,7 +231,7 @@ export async function sendInvite(opts: {
     replyTo: invitedByEmail,
     text: lines.join("\n"),
     html: `
-      <div style="font-family:'Segoe UI',sans-serif;max-width:460px;margin:0 auto;padding:28px 24px;color:#1c1b22">
+      <div style="font-family:'TH Sarabun New','TH SarabunPSK',Sarabun,'Leelawadee UI','Segoe UI',sans-serif;max-width:460px;margin:0 auto;padding:28px 24px;color:#1c1b22">
         <h2 style="margin:0 0 6px;font-size:19px">${esc(invitedBy)} เชิญคุณเข้าร่วม ${esc(space)}</h2>
         <p style="margin:0 0 22px;color:#6b7280;font-size:14px">
           พื้นที่ทำงานเสมือนบน NexSpace — เดินไปคุยกับเพื่อนร่วมงานได้เหมือนอยู่ออฟฟิศเดียวกัน${
@@ -338,7 +338,7 @@ export async function sendBooking(opts: {
     replyTo: organizer?.email,
     text: lines.join("\n"),
     html: `
-      <div style="font-family:'Segoe UI',sans-serif;max-width:460px;margin:0 auto;padding:28px 24px;color:#1c1b22">
+      <div style="font-family:'TH Sarabun New','TH SarabunPSK',Sarabun,'Leelawadee UI','Segoe UI',sans-serif;max-width:460px;margin:0 auto;padding:28px 24px;color:#1c1b22">
         <p style="margin:0 0 4px;color:#6b7280;font-size:13px">
           ${off ? "การประชุมนี้ถูกยกเลิกแล้ว" : `${esc(b.hostName)} จองห้องประชุมไว้`}
         </p>
@@ -434,7 +434,7 @@ export async function sendReminder(opts: {
     replyTo,
     text: lines.join("\n"),
     html: `
-      <div style="font-family:'Segoe UI',sans-serif;max-width:460px;margin:0 auto;padding:28px 24px;color:#1c1b22">
+      <div style="font-family:'TH Sarabun New','TH SarabunPSK',Sarabun,'Leelawadee UI','Segoe UI',sans-serif;max-width:460px;margin:0 auto;padding:28px 24px;color:#1c1b22">
         <p style="margin:0 0 4px;color:#6b7280;font-size:13px">เริ่มในอีก ${esc(lead)}</p>
         <h2 style="margin:0 0 14px;font-size:19px">${esc(b.title)}</h2>
         <table style="border-collapse:collapse;font-size:14px;color:#1c1b22">

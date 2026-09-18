@@ -17,6 +17,66 @@
       } catch (e) { document.documentElement.dataset.theme = "light"; }
     </script>
     <style>
+      /* ---- typeface ----
+         TH Sarabun, self-hosted. Not a link to Google: a workplace tool should
+         not tell a third party who opened it and when, and eight files of ten
+         kilobytes cost less than the DNS lookup and handshake would.
+
+         "Sarabun" here is the web edition of TH Sarabun by the same foundry
+         (Cadson Demak, SIL Open Font License) — the desktop TH Sarabun New is
+         not a webfont and exists only on machines that installed it, so it
+         follows as the offline fallback rather than leading.
+
+         Thai and Latin are separate files with a unicode-range each, so an
+         English screen never downloads the Thai one. The version is in the
+         filename because /assets/ is cached for a year: a new cut is a new
+         name, never the same URL with different bytes. */
+
+      @font-face {
+        font-family: "Sarabun"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/sarabun-thai-400-v17.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Sarabun"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/sarabun-latin-400-v17.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Sarabun"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/sarabun-thai-500-v17.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Sarabun"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/sarabun-latin-500-v17.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Sarabun"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/sarabun-thai-600-v17.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Sarabun"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/sarabun-latin-600-v17.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Sarabun"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/sarabun-thai-700-v17.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Sarabun"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/sarabun-latin-700-v17.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+
+      /* One name for the typeface, so changing it is one line and not a hundred. */
+      :root { --sans: "Sarabun", "TH Sarabun New", "TH SarabunPSK", "Noto Sans Thai",
+                "Leelawadee UI", system-ui, sans-serif; }
+
       /* ---- palette ----
          Every colour the UI chrome uses goes through these, so "โหมดสี" is a
          variable swap rather than a second stylesheet. Roles, not shades:
@@ -66,15 +126,25 @@
       :where(#auth-overlay, #spaces-overlay, #wiz-overlay, #ws-modal, #sec-modal, #prefs-modal, #sidebar)
       :where(input, select, textarea, button) {
         background: var(--surface); color: var(--text); border: 1px solid var(--border-2);
-        border-radius: 9px; font-family: "Segoe UI", sans-serif;
+        border-radius: 9px; font-family: var(--sans);
       }
       :where(input, textarea)::placeholder { color: var(--faint); }
+      /* A control does not inherit a font from its parent the way a paragraph
+         does — left alone it takes the one the operating system picked. The
+         line above only reaches controls inside the overlays; this one reaches
+         the rest, and being :where() it yields to every rule that names a size
+         of its own. */
+      :where(input, select, textarea, button, optgroup) { font-family: var(--sans); }
       /* Corner radii, as three steps rather than the sixteen different values
          this file had grown. Cards and dialogs share one so the family looks
          related; boxes nested inside them take the smaller one, which is what
          keeps a rounded thing inside a rounded thing from looking wrong. */
       :root { --r-card: 20px; --r-box: 14px; --r-ctl: 12px; }
-      html, body { margin: 0; height: 100%; background: var(--surface-2); overflow: hidden; }
+      /* The typeface, once, for everything that inherits. Without it anything
+         that never named a font of its own fell through to the browser default,
+         which is a serif — easy to miss on a screen that is mostly styled. */
+      html, body { margin: 0; height: 100%; background: var(--surface-2); overflow: hidden;
+        font-family: var(--sans); }
       /* ---- the window is two panes, not one pile of overlays ----
          Left: the rail and the people list, a dock of a known width. Right: the
          stage — the map, the meeting view, a shared screen. Everything used to be
@@ -99,7 +169,7 @@
       canvas { image-rendering: pixelated; }
       .hint {
         position: fixed; left: calc(var(--dock) + 12px); bottom: 12px; z-index: 10;
-        font: 13px/1.5 "Segoe UI", sans-serif; color: #cbd3dc;
+        font: 13px/1.5 var(--sans); color: #cbd3dc;
         background: #00000066; padding: 8px 12px; border-radius: 8px;
       }
       /* Gather-style AV control bar */
@@ -111,7 +181,7 @@
         display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 16px;
         background: #2e3238e6; box-shadow: 0 6px 22px #0006; }
       #av-bar .ava { position: relative; width: 38px; height: 38px; border-radius: 50%; margin-right: 4px;
-        display: grid; place-items: center; background: #eaa0a0; color: #3a2b2b; font: 700 16px "Segoe UI", sans-serif; }
+        display: grid; place-items: center; background: #eaa0a0; color: #3a2b2b; font: 700 16px var(--sans); }
       #av-bar .ava .dot { position: absolute; right: 0; bottom: 1px; width: 10px; height: 10px;
         border-radius: 50%; background: #39d353; border: 2px solid #2e3238; }
       #av-bar .grp { display: flex; align-items: center; }
@@ -128,7 +198,7 @@
       #av-bar .ctl { position: relative; }
       #av-bar .badge { position: absolute; top: 2px; right: 2px; min-width: 16px; padding: 0 4px;
         border-radius: 9px; background: var(--danger); color: #fff; font-style: normal;
-        font: 700 10px "Segoe UI", sans-serif; line-height: 16px; text-align: center; }
+        font: 700 10px var(--sans); line-height: 16px; text-align: center; }
       #av-bar .badge[hidden] { display: none; }
       #av-bar .ctl.leave:hover { background: #ff6b6b22; }
       #av-bar .chev { width: 15px; height: 40px; border: none; background: transparent; color: #9aa3ad;
@@ -160,12 +230,12 @@
         position: fixed; z-index: 23; left: calc(var(--dock) + (100vw - var(--dock)) / 2); bottom: 108px;
         transform: translateX(-50%); display: flex; align-items: center; gap: 10px;
         background: #1c1b22e6; color: #fff; padding: 8px 10px 8px 14px; border-radius: 20px;
-        font: 13px "Segoe UI", sans-serif; box-shadow: 0 3px 12px #0004; white-space: nowrap;
+        font: 13px var(--sans); box-shadow: 0 3px 12px #0004; white-space: nowrap;
       }
       #place-hint[hidden] { display: none; }
       #place-hint button {
         border: none; background: #ffffff1f; color: #fff; border-radius: 14px;
-        padding: 4px 10px; font: 600 12px "Segoe UI", sans-serif; cursor: pointer;
+        padding: 4px 10px; font: 600 12px var(--sans); cursor: pointer;
       }
       #place-hint button:hover { background: #ffffff33; }
       /* zoom controls (right, vertical) */
@@ -200,7 +270,7 @@
         border-radius: 16px;
         box-shadow: 0 2px 6px #0000000d, 0 12px 32px #00000014;
         display: flex; flex-direction: column;
-        font-family: "Segoe UI", sans-serif; transition: transform .2s;
+        font-family: var(--sans); transition: transform .2s;
         /* nothing in here is ever wide enough to scroll sideways, and a panel
            with a horizontal scrollbar looks broken even when it is not */
         overflow: hidden; }
@@ -229,7 +299,7 @@
       .sb-search svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--faint); }
       #sb-search {
         flex: 1; min-width: 0; border: none; background: transparent; outline: none;
-        padding: 9px 0; font: 13px "Segoe UI", sans-serif; color: var(--text);
+        padding: 9px 0; font: 13px var(--sans); color: var(--text);
       }
       #sb-search::placeholder { color: var(--faint); }
 
@@ -252,7 +322,7 @@
       .sb-maps button {
         border: 1px solid var(--border); background: var(--surface-3); color: var(--text-3);
         border-radius: 20px; padding: 4px 11px; cursor: pointer;
-        font: 600 12px "Segoe UI", sans-serif;
+        font: 600 12px var(--sans);
         max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         transition: background .13s, border-color .13s, color .13s;
       }
@@ -294,7 +364,7 @@
       .invite-avas span {
         width: 26px; height: 26px; border-radius: 50%; margin-left: -8px;
         border: 2px solid var(--accent-soft); box-sizing: border-box;
-        display: grid; place-items: center; color: #2a2330; font: 700 11px "Segoe UI", sans-serif;
+        display: grid; place-items: center; color: #2a2330; font: 700 11px var(--sans);
       }
       .invite-avas span:first-child { margin-left: 0; }
       .invite-avas span.more { background: var(--surface); color: var(--text-3); }
@@ -303,7 +373,7 @@
       .invite-copy small { font-size: 11.5px; color: var(--text-2); }
       #btn-invite {
         width: 100%; border: none; border-radius: 10px; background: var(--accent); color: #fff;
-        padding: 9px; font: 600 13px "Segoe UI", sans-serif; cursor: pointer;
+        padding: 9px; font: 600 13px var(--sans); cursor: pointer;
         transition: background .13s;
       }
       #btn-invite:hover { background: var(--accent-hover); }
@@ -326,7 +396,7 @@
       #rail-settings svg { transition: transform .25s ease; }
       #rail-settings:hover svg { transform: rotate(30deg); }
       #rail .rail-badge { position: absolute; top: -2px; right: -2px; background: var(--danger); color: #fff;
-        font: 700 10px sans-serif; border-radius: 9px; padding: 0 5px; min-width: 16px; text-align: center; }
+        font: 700 10px var(--sans); border-radius: 9px; padding: 0 5px; min-width: 16px; text-align: center; }
       .sb-view { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
       .sb-view[hidden] { display: none; }
       /* chat panel */
@@ -363,13 +433,13 @@
       .rv-list { border-right: 1px solid var(--border); overflow-y: auto; background: var(--surface); }
       .rv-item { width: 100%; text-align: left; display: block; padding: 11px 14px; cursor: pointer;
         border: none; border-bottom: 1px solid var(--border); background: transparent; color: var(--text);
-        font-family: "Segoe UI", sans-serif; }
+        font-family: var(--sans); }
       .rv-item:hover { background: var(--surface-2); }
       .rv-item.on { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
       .rv-item b { display: block; font-size: 13.5px; font-weight: 600; }
       .rv-item small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
       .rv-state { display: inline-block; margin-top: 5px; padding: 1px 8px; border-radius: 999px;
-        font: 600 10.5px "Segoe UI", sans-serif; }
+        font: 600 10.5px var(--sans); }
       .rv-state.waiting, .rv-state.transcribing { background: var(--warn-soft); color: var(--warn-ink); }
       .rv-state.done { background: var(--accent-soft); color: var(--accent-ink); }
       .rv-state.failed { background: var(--danger-soft); color: var(--danger-ink); }
@@ -385,7 +455,7 @@
         border: 1px solid var(--border-2); border-radius: var(--r-box); background: var(--surface); }
       .rv-who h4 { margin: 0 0 6px; font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
       .rv-who .rv-text { font-size: 13.5px; }
-      .rv-tag { padding: 1px 7px; border-radius: 999px; font: 600 10.5px "Segoe UI", sans-serif;
+      .rv-tag { padding: 1px 7px; border-radius: 999px; font: 600 10.5px var(--sans);
         background: var(--surface-3); color: var(--muted); }
       .rv-tag.no { background: var(--danger-soft); color: var(--danger-ink); }
       /* Said where the summary is read, not only where consent was asked: a
@@ -403,17 +473,17 @@
         background: var(--surface); }
       .rv-share small { color: var(--muted); font-size: 12px; }
       .rv-send { height: 34px; padding: 0 16px; border: none; cursor: pointer;
-        border-radius: var(--r-ctl); font: 600 13px "Segoe UI", sans-serif;
+        border-radius: var(--r-ctl); font: 600 13px var(--sans);
         background: var(--teal); color: #fff; }
       .rv-send:hover { background: var(--teal-hover); }
       .rv-send:disabled { opacity: .55; cursor: default; }
       .rv-copybox { display: block; width: 100%; max-width: 68ch; margin-top: 10px;
         min-height: 180px; padding: 12px; border-radius: 10px; resize: vertical;
         border: 1px solid var(--border-2); background: var(--surface-2);
-        color: var(--text); font: 13px/1.7 "Segoe UI", sans-serif; }
+        color: var(--text); font: 13px/1.7 var(--sans); }
       .rv-acts { display: flex; gap: 8px; margin-top: 26px; max-width: 68ch; }
       .rv-acts button { height: 32px; padding: 0 14px; border-radius: var(--r-ctl); cursor: pointer;
-        font: 500 12.5px "Segoe UI", sans-serif;
+        font: 500 12.5px var(--sans);
         border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2); }
       .rv-acts .drop { border-color: var(--danger); color: var(--danger); }
       .rv-acts .drop:hover { background: var(--danger); color: #fff; }
@@ -435,7 +505,7 @@
       .rec-sheet {
         width: min(92vw, 420px); padding: 22px 22px 18px; border-radius: var(--r-card);
         background: var(--surface); color: var(--text);
-        box-shadow: 0 22px 60px #00000040; font-family: "Segoe UI", sans-serif;
+        box-shadow: 0 22px 60px #00000040; font-family: var(--sans);
       }
       .rec-sheet h3 { margin: 0 0 2px; font-size: 17px; display: flex; align-items: center; gap: 8px; }
       .rec-sheet h3 i { width: 10px; height: 10px; border-radius: 50%; background: var(--danger);
@@ -452,7 +522,7 @@
       .rec-note[hidden] { display: none; }
       .rec-acts { display: flex; gap: 8px; }
       .rec-acts button { flex: 1; height: 38px; border-radius: var(--r-ctl); cursor: pointer;
-        font: 600 13.5px "Segoe UI", sans-serif; }
+        font: 600 13.5px var(--sans); }
       .rec-yes { border: none; background: var(--teal); color: #fff; }
       .rec-yes:hover { background: var(--teal-hover); }
       .rec-no { border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2); }
@@ -463,13 +533,13 @@
         position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 43;
         display: flex; align-items: center; gap: 8px; padding: 6px 12px;
         border-radius: 999px; background: var(--danger); color: #fff;
-        font: 600 12.5px "Segoe UI", sans-serif; box-shadow: 0 6px 20px #00000030;
+        font: 600 12.5px var(--sans); box-shadow: 0 6px 20px #00000030;
       }
       #rec-chip[hidden] { display: none; }
       #rec-chip i { width: 8px; height: 8px; border-radius: 50%; background: #fff;
         animation: rec-pulse 1.6s ease-in-out infinite; }
       #rec-chip button { border: none; background: #ffffff2e; color: #fff; cursor: pointer;
-        border-radius: 8px; padding: 3px 9px; font: 600 12px "Segoe UI", sans-serif; }
+        border-radius: 8px; padding: 3px 9px; font: 600 12px var(--sans); }
       #rec-chip button:hover { background: #ffffff45; }
       #rec-chip small { opacity: .85; font-weight: 500; font-variant-numeric: tabular-nums; }
       body.has-screenshare #rec-chip, body.in-meeting #rec-chip { top: 58px; }
@@ -495,7 +565,7 @@
         display: grid; place-items: center; min-width: 32px; height: 32px; padding: 0 10px;
         border: 1px solid var(--border-2); border-radius: 9px;
         background: var(--surface); color: var(--text-2);
-        font: 500 13px "Segoe UI", sans-serif; cursor: pointer;
+        font: 500 13px var(--sans); cursor: pointer;
       }
       .cw-btn:hover { border-color: var(--accent-line); color: var(--accent); }
       .cw-primary { border: none; background: var(--teal); color: #fff; font-weight: 600; }
@@ -558,7 +628,7 @@
       .cw-now-chip {
         position: absolute; transform: translate(-100%, -50%); margin-left: -4px;
         padding: 1px 6px; border-radius: 6px; background: var(--danger); color: #fff;
-        font: 600 10.5px "Segoe UI", sans-serif; white-space: nowrap; pointer-events: none;
+        font: 600 10.5px var(--sans); white-space: nowrap; pointer-events: none;
         font-variant-numeric: tabular-nums;
       }
 
@@ -567,7 +637,7 @@
         position: fixed; z-index: 42; width: 268px; padding: 12px 13px;
         border: 1px solid var(--border-2); border-radius: var(--r-box);
         background: var(--surface); box-shadow: 0 14px 40px #00000026;
-        font-family: "Segoe UI", sans-serif; color: var(--text);
+        font-family: var(--sans); color: var(--text);
       }
       .cw-pop[hidden] { display: none; }
       .cw-pop h4 { margin: 0 0 2px; font-size: 14.5px; font-weight: 600; }
@@ -578,7 +648,7 @@
       .cw-pop-acts { display: flex; gap: 6px; margin-top: 12px; }
       .cw-pop-acts button {
         flex: 1; height: 30px; border-radius: 9px; cursor: pointer;
-        font: 500 12.5px "Segoe UI", sans-serif;
+        font: 500 12.5px var(--sans);
         border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2);
       }
       .cw-pop-acts button:hover { border-color: var(--accent-line); color: var(--accent); }
@@ -645,7 +715,7 @@
       .cv-tile .cv-initial {
         width: 46px; height: 46px; border-radius: 50%;
         display: flex; align-items: center; justify-content: center;
-        font: 600 18px "Segoe UI", sans-serif; color: #2a2330;
+        font: 600 18px var(--sans); color: #2a2330;
       }
       .cv-name {
         position: absolute; left: 6px; bottom: 6px; max-width: calc(100% - 12px);
@@ -687,16 +757,16 @@
         flex: 1 1 190px; min-width: 0; box-sizing: border-box;
         padding: 8px 11px; border: 1px solid var(--border-2);
         border-radius: 9px; background: var(--surface); color: var(--text);
-        font: 13px "Segoe UI", sans-serif; outline: none;
+        font: 13px var(--sans); outline: none;
       }
       .iv-tools input:focus { border-color: var(--teal); }
       .iv-tools select {
         flex: 0 0 auto; border: 1px solid var(--border-2); border-radius: 9px; padding: 0 7px;
-        background: var(--surface); color: var(--text-2); font: 13px "Segoe UI", sans-serif; outline: none;
+        background: var(--surface); color: var(--text-2); font: 13px var(--sans); outline: none;
       }
       .iv-send {
         flex: 0 0 auto; border: none; background: var(--accent); color: #fff;
-        border-radius: 9px; padding: 8px 13px; font: 600 12.5px "Segoe UI", sans-serif; cursor: pointer;
+        border-radius: 9px; padding: 8px 13px; font: 600 12.5px var(--sans); cursor: pointer;
       }
       .iv-send:hover { background: var(--accent-hover); }
       .iv-send:disabled { opacity: .6; cursor: default; }
@@ -789,12 +859,12 @@
         border: 1px solid var(--border-2); background: var(--surface); }
       .cal-chips:focus-within { border-color: var(--accent); }
       .cal-chips input { flex: 1; min-width: 110px; border: none; outline: none;
-        background: none; color: var(--text); font: 12.5px "Segoe UI", sans-serif;
+        background: none; color: var(--text); font: 12.5px var(--sans);
         padding: 3px 2px; }
       .cal-chip { display: inline-flex; align-items: center; gap: 4px;
         max-width: 100%; padding: 2px 4px 2px 8px; border-radius: 999px;
         background: var(--accent-soft); color: var(--accent-ink);
-        font: 12px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+        font: 12px var(--sans); overflow-wrap: anywhere; }
       .cal-chip button { border: none; cursor: pointer; background: none;
         color: var(--accent-ink); font-size: 11px; line-height: 1; padding: 2px 3px;
         border-radius: 999px; }
@@ -806,11 +876,11 @@
       .cal-remind-row select { flex: 0 1 auto; min-width: 0; height: 30px;
         border-radius: var(--r-ctl); border: 1px solid var(--border-2);
         background: var(--surface); color: var(--text);
-        font: 12.5px "Segoe UI", sans-serif; padding: 0 6px; }
+        font: 12.5px var(--sans); padding: 0 6px; }
       .cal-remind-row input[type="number"] { width: 62px; height: 30px; text-align: right;
         border-radius: var(--r-ctl); border: 1px solid var(--border-2);
         background: var(--surface); color: var(--text);
-        font: 12.5px "Segoe UI", sans-serif; padding: 0 6px; }
+        font: 12.5px var(--sans); padding: 0 6px; }
       /* The repeat and its count, on email rows only. They go away rather than
          grey out: a control that is there and refused is a question the form
          asked and then would not accept an answer to. */
@@ -822,7 +892,7 @@
         border-radius: var(--r-ctl); color: var(--muted); font-size: 12px; line-height: 1; }
       .cal-remind-x:hover { background: var(--danger-soft); color: var(--danger-ink); }
       .cal-remind-add { border: none; background: none; cursor: pointer; padding: 3px 2px;
-        color: var(--accent); font: 500 12.5px "Segoe UI", sans-serif; text-align: left; }
+        color: var(--accent); font: 500 12.5px var(--sans); text-align: left; }
       .cal-remind-add:hover { text-decoration: underline; }
       .cal-msg { min-height: 15px; font-size: 12px; color: var(--teal-ink); }
       .cal-msg.err { color: var(--danger); }
@@ -833,7 +903,7 @@
       .cal-row { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--text-3); }
       .cal-row input, .cal-row select {
         padding: 7px 9px; border: 1px solid var(--border-2); border-radius: 8px;
-        background: var(--surface); color: var(--text); font: 13px "Segoe UI", sans-serif; outline: none;
+        background: var(--surface); color: var(--text); font: 13px var(--sans); outline: none;
       }
       .cal-row input:focus, .cal-row select:focus { border-color: var(--teal); }
       .cal-actions { display: flex; gap: 7px; justify-content: flex-end; margin-top: 2px; }
@@ -974,7 +1044,7 @@
       .dm-row b { font-size: 14px; color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .dm-row small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .dm-row .dm-new { flex: 0 0 auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
-        background: var(--danger); color: #fff; font: 700 11px "Segoe UI", sans-serif; line-height: 18px; text-align: center; }
+        background: var(--danger); color: #fff; font: 700 11px var(--sans); line-height: 18px; text-align: center; }
       /* What you can do to somebody, on their own row. Hidden until the pointer
          is on the row: three icons on every line at rest is a wall of controls,
          and the list is read far more often than it is acted on. */
@@ -991,7 +1061,7 @@
       .p-act::after {
         content: attr(data-tip);
         position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
-        background: #23252df2; color: #eef0f4; font: 11.5px/1 "Segoe UI", sans-serif;
+        background: #23252df2; color: #eef0f4; font: 11.5px/1 var(--sans);
         padding: 5px 8px; border-radius: 7px; white-space: nowrap; pointer-events: none;
         opacity: 0; transition: opacity .1s; z-index: 3;
       }
@@ -1001,7 +1071,7 @@
       .nf-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px 8px; }
       .nf-head span { flex: 1; font-size: 13px; font-weight: 600; color: var(--muted); }
       .nf-head button { border: none; background: var(--surface-3); color: var(--text-3); cursor: pointer;
-        border-radius: 8px; padding: 4px 9px; font: 12px "Segoe UI", sans-serif; }
+        border-radius: 8px; padding: 4px 9px; font: 12px var(--sans); }
       .nf-head button:hover { background: var(--border-2); }
       .nf-head #nf-sound.off { opacity: .45; }
       #nf-list { overflow-y: auto; flex: 1; padding: 0 8px 12px; }
@@ -1040,7 +1110,7 @@
       .ma-text small { font-size: 11.5px; opacity: .8; }
       .ma-go { flex: 0 0 auto; height: 30px; padding: 0 14px; border: none;
         cursor: pointer; border-radius: var(--r-ctl); background: var(--teal);
-        color: #fff; font: 600 12.5px "Segoe UI", sans-serif; }
+        color: #fff; font: 600 12.5px var(--sans); }
       .ma-go:hover { background: var(--teal-hover); }
       .ma-x { flex: 0 0 auto; border: none; background: none; cursor: pointer;
         color: var(--warn-ink); opacity: .6; font-size: 12px; padding: 4px 6px; }
@@ -1052,7 +1122,7 @@
         background: var(--surface); border: 1px solid var(--border);
         border-radius: var(--r-card); box-shadow: 0 2px 6px #00000012, 0 16px 40px #00000024;
         padding: 14px 16px 14px;
-        font-family: "Segoe UI", sans-serif;
+        font-family: var(--sans);
         animation: nudge-in .18s cubic-bezier(.2, .8, .3, 1);
       }
       #nudge[hidden] { display: none; }
@@ -1070,7 +1140,7 @@
       .nudge-chip {
         position: relative; width: 40px; height: 40px; flex: 0 0 auto; border-radius: 50%;
         background: var(--pc-tint, #f6c453); color: #2a2330;
-        font: 700 16px "Segoe UI", sans-serif;
+        font: 700 16px var(--sans);
         display: flex; align-items: center; justify-content: center; overflow: hidden;
       }
       .nudge-chip img {
@@ -1091,7 +1161,7 @@
       #nudge-acts button {
         flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
         border-radius: 11px; padding: 10px 12px; cursor: pointer;
-        font: 600 13.5px "Segoe UI", sans-serif;
+        font: 600 13.5px var(--sans);
         border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text-2);
         transition: background .13s, border-color .13s, color .13s;
       }
@@ -1114,7 +1184,7 @@
         border: 1px solid #ffffff1f; border-radius: var(--r-card);
         box-shadow: 0 18px 44px #00000059;
         padding: 14px 14px 12px;
-        font-family: "Segoe UI", sans-serif; color: #eef0f4;
+        font-family: var(--sans); color: #eef0f4;
         animation: pc-in .13s cubic-bezier(.2, .8, .3, 1);
       }
       #person-card[hidden] { display: none; }
@@ -1152,7 +1222,7 @@
 
       .pc-role {
         flex: 0 0 auto; align-self: flex-start;
-        font: 600 11px "Segoe UI", sans-serif; letter-spacing: .01em;
+        font: 600 11px var(--sans); letter-spacing: .01em;
         padding: 4px 10px; border-radius: 20px;
         background: var(--pc-role-bg, #ffffff14); color: var(--pc-role-fg, #cfd4dc);
       }
@@ -1173,7 +1243,7 @@
         display: inline-flex; align-items: center; justify-content: center; gap: 7px;
         border: 1px solid #ffffff24; background: #ffffff0f; color: #e6e9ee;
         border-radius: 11px; padding: 9px 12px;
-        font: 600 12.5px "Segoe UI", sans-serif; cursor: pointer;
+        font: 600 12.5px var(--sans); cursor: pointer;
         transition: background .13s, border-color .13s, color .13s;
       }
       #pc-actions button svg { width: 16px; height: 16px; flex: 0 0 auto; }
@@ -1189,10 +1259,10 @@
       /* the form on your own card, on the same dark surface */
       #pc-edit { display: grid; gap: 10px; margin-top: 14px; }
       #pc-edit[hidden] { display: none; }
-      #pc-edit label { display: grid; gap: 4px; font: 600 11.5px "Segoe UI", sans-serif; color: #b6bcc6; }
+      #pc-edit label { display: grid; gap: 4px; font: 600 11.5px var(--sans); color: #b6bcc6; }
       #pc-edit input, #pc-edit textarea {
         box-sizing: border-box; width: 100%;
-        padding: 8px 11px; font: 13px/1.5 "Segoe UI", sans-serif;
+        padding: 8px 11px; font: 13px/1.5 var(--sans);
         color: #eef0f4; background: #ffffff0f;
         border: 1px solid #ffffff24; border-radius: 10px; resize: vertical;
       }
@@ -1202,7 +1272,7 @@
         outline: none; border-color: var(--teal); background: #ffffff17;
       }
       .pc-edit-actions { display: flex; gap: 8px; margin-top: 2px; }
-      .pc-edit-actions button { flex: 1; border-radius: 11px; padding: 9px 0; font: 600 13px "Segoe UI", sans-serif; cursor: pointer; }
+      .pc-edit-actions button { flex: 1; border-radius: 11px; padding: 9px 0; font: 600 13px var(--sans); cursor: pointer; }
       #pc-save { border: none; background: var(--teal); color: #fff; }
       #pc-save:hover { filter: brightness(1.08); }
       #pc-cancel { border: 1px solid #ffffff24; background: #ffffff0f; color: #cfd4dc; }
@@ -1211,7 +1281,7 @@
       /* interactive-object prompt + embed modal */
       #interact-hint { position: fixed; left: calc(var(--dock) + (100vw - var(--dock)) / 2); bottom: 74px;
         transform: translateX(-50%); z-index: 22;
-        background: #1c1b22e6; color: #fff; padding: 8px 14px; border-radius: 20px; font: 13px "Segoe UI", sans-serif;
+        background: #1c1b22e6; color: #fff; padding: 8px 14px; border-radius: 20px; font: 13px var(--sans);
         display: none; align-items: center; gap: 8px; box-shadow: 0 3px 12px #0004; }
       #interact-hint kbd { background: var(--teal); border-radius: 6px; padding: 2px 8px; font-weight: 700; font-family: inherit; }
 
@@ -1224,7 +1294,7 @@
         display: flex; align-items: center; gap: 8px;
         max-width: calc(100vw - var(--dock) - 32px);
         background: #1c1b22e6; color: #fff; border-radius: 20px; padding: 7px 14px 7px 12px;
-        font-family: "Segoe UI", sans-serif; box-shadow: 0 3px 12px #0004;
+        font-family: var(--sans); box-shadow: 0 3px 12px #0004;
       }
       #area-chip[hidden] { display: none; }
       #area-chip svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--teal); }
@@ -1239,7 +1309,7 @@
         display: none; align-items: center; gap: 11px;
         max-width: min(80vw, 430px); padding: 11px 18px 11px 13px;
         border-radius: var(--r-card); background: #23262ef5; color: #f3f5f8;
-        font: 500 14px/1.4 "Segoe UI", sans-serif; letter-spacing: .1px;
+        font: 500 14px/1.4 var(--sans); letter-spacing: .1px;
         border: 1px solid #ffffff1c; border-left: 3px solid var(--teal);
         box-shadow: 0 12px 34px #0008, inset 0 1px 0 #ffffff12;
         backdrop-filter: blur(10px); pointer-events: none; opacity: 0;
@@ -1256,13 +1326,13 @@
       #modal .modal-box { width: min(90vw, 1000px); height: min(85vh, 700px); background: var(--surface); border-radius: var(--r-card);
         overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 12px 40px #0007; }
       #modal .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
-        background: var(--surface-3); font: 600 14px "Segoe UI", sans-serif; color: var(--text); }
+        background: var(--surface-3); font: 600 14px var(--sans); color: var(--text); }
       #modal .modal-head button { border: none; background: var(--danger); color: #fff; width: 28px; height: 28px;
         border-radius: 8px; cursor: pointer; font-size: 15px; }
       #modal iframe { flex: 1; border: 0; width: 100%; background: var(--surface); }
       /* login / character-select overlay */
       #auth-overlay { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
-        background: radial-gradient(circle at 50% 25%, #2a3340, #14161b); font-family: "Segoe UI", sans-serif; }
+        background: radial-gradient(circle at 50% 25%, #2a3340, #14161b); font-family: var(--sans); }
       #auth-overlay .card { width: min(92vw, 350px); background: var(--surface); border-radius: var(--r-card); padding: 24px; box-shadow: 0 24px 60px #0008; }
       #auth-overlay h1 { margin: 0; font-size: 22px; color: var(--text); }
       #auth-overlay .sub { margin: 2px 0 16px; font-size: 13px; color: var(--muted); }
@@ -1287,30 +1357,30 @@
       /* --- sign in (Google + email code) --- */
       .auth-logo { width: 54px; height: 54px; margin: 4px auto 16px; border-radius: 15px; background: #1c1b22;
         color: #fff; display: grid; place-items: center;
-        font: 700 30px/1 "Segoe UI", sans-serif; letter-spacing: -1px; }
+        font: 700 30px/1 var(--sans); letter-spacing: -1px; }
       #auth-overlay h1.auth-title { text-align: center; font-size: 18px; }
       #auth-overlay #auth-step .sub, #auth-overlay #code-step .sub { text-align: center; }
       .btn-google { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
         padding: 11px; border: 1px solid var(--border-2); border-radius: 10px; background: var(--surface); cursor: pointer;
-        font: 600 14.5px "Segoe UI", sans-serif; color: var(--text); }
+        font: 600 14.5px var(--sans); color: var(--text); }
       .btn-google:hover { background: var(--surface-2); }
       .auth-or { display: flex; align-items: center; gap: 10px; margin: 14px 0; color: var(--fainter); font-size: 12.5px; }
       .auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--surface-3); }
       .code-boxes { display: flex; gap: 8px; justify-content: center; margin: 6px 0 14px; }
       .code-boxes input { width: 44px; height: 52px; margin: 0; padding: 0; text-align: center;
-        font: 700 22px "Segoe UI", sans-serif; color: var(--text); border: 1px solid var(--border-2); border-radius: 10px; }
+        font: 700 22px var(--sans); color: var(--text); border: 1px solid var(--border-2); border-radius: 10px; }
       .code-boxes input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px #2bb3a322; }
 
       /* --- spaces dashboard --- */
       #spaces-overlay { position: fixed; inset: 0; z-index: 61; background: var(--surface-3); display: none;
-        flex-direction: column; font-family: "Segoe UI", sans-serif; overflow-y: auto; }
+        flex-direction: column; font-family: var(--sans); overflow-y: auto; }
       .sp-head { display: flex; align-items: center; gap: 14px; padding: 14px 24px; background: var(--surface);
         border-bottom: 1px solid var(--border-2); position: sticky; top: 0; z-index: 2; }
       .sp-logo { width: 34px; height: 34px; border-radius: 10px; background: #1c1b22; color: #fff;
         display: grid; place-items: center; flex: 0 0 auto;
-        font: 700 19px/1 "Segoe UI", sans-serif; letter-spacing: -.5px; }
+        font: 700 19px/1 var(--sans); letter-spacing: -.5px; }
       .sp-head .sp-spacer { flex: 1; }
-      .sp-head button { border: none; border-radius: 9px; cursor: pointer; font: 600 13.5px "Segoe UI", sans-serif; }
+      .sp-head button { border: none; border-radius: 9px; cursor: pointer; font: 600 13.5px var(--sans); }
       #sp-create { background: var(--accent); color: #fff; padding: 9px 16px; }
       #sp-create:hover { background: var(--accent-hover); }
       #sp-logout { background: var(--surface-3); color: var(--text-2); padding: 9px 14px; }
@@ -1327,7 +1397,7 @@
       .sp-card { background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--r-box); overflow: hidden;
         display: flex; flex-direction: column; }
       .sp-thumb { height: 122px; background: linear-gradient(135deg, #dff3ef, #cfe6ff); display: grid;
-        place-items: center; color: var(--teal); font: 700 30px "Segoe UI", sans-serif; cursor: pointer; }
+        place-items: center; color: var(--teal); font: 700 30px var(--sans); cursor: pointer; }
       .sp-card-foot { display: flex; align-items: center; gap: 8px; padding: 11px 12px; }
       .sp-card-foot .sp-name { flex: 1; min-width: 0; }
       .sp-card-foot .sp-name b { display: block; font-size: 14px; color: var(--text);
@@ -1340,7 +1410,7 @@
 
       /* --- create-space wizard --- */
       #wiz-overlay { position: fixed; inset: 0; z-index: 65; background: var(--surface); display: none;
-        flex-direction: column; font-family: "Segoe UI", sans-serif; }
+        flex-direction: column; font-family: var(--sans); }
       .wiz-head { display: flex; align-items: center; gap: 12px; padding: 18px 22px 12px; }
       .wiz-head b { font-size: 16px; color: var(--text); }
       .wiz-progress { height: 6px; margin: 0 22px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
@@ -1349,12 +1419,12 @@
       .wiz-body { flex: 1; display: grid; place-items: center; padding: 24px; overflow-y: auto; }
       .wiz-card { width: min(92vw, 430px); }
       .wiz-back { border: none; background: transparent; color: var(--text-3); cursor: pointer;
-        font: 600 13.5px "Segoe UI", sans-serif; padding: 4px 0; margin-bottom: 12px; }
+        font: 600 13.5px var(--sans); padding: 4px 0; margin-bottom: 12px; }
       .wiz-back:hover { color: var(--text); }
       .wiz-card h2 { margin: 0 0 18px; font-size: 19px; color: var(--text); line-height: 1.35; }
       .wiz-opts { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; }
       .wiz-opt { border: 1px solid var(--border-2); background: var(--surface); border-radius: 22px; padding: 9px 18px;
-        cursor: pointer; font: 500 14px "Segoe UI", sans-serif; color: var(--text); text-align: left; }
+        cursor: pointer; font: 500 14px var(--sans); color: var(--text); text-align: left; }
       .wiz-opt:hover { border-color: var(--border-3); background: var(--surface-2); }
       .wiz-opt.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
       /* theme picker: a preview of the actual map instead of a label */
@@ -1377,11 +1447,11 @@
       .wiz-err { color: var(--danger); font-size: 12.5px; min-height: 18px; margin-top: 8px; }
       .wiz-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
       .wiz-next { border: none; border-radius: 22px; padding: 10px 22px; cursor: pointer;
-        background: var(--accent); color: #fff; font: 600 14px "Segoe UI", sans-serif; }
+        background: var(--accent); color: #fff; font: 600 14px var(--sans); }
       .wiz-next:hover:not(:disabled) { background: var(--accent-hover); }
       .wiz-next:disabled { background: var(--surface-3); color: var(--fainter); cursor: default; }
       .wiz-cancel { border: none; background: transparent; color: var(--muted); cursor: pointer;
-        font: 500 13.5px "Segoe UI", sans-serif; }
+        font: 500 13.5px var(--sans); }
       .wiz-cancel:hover { color: var(--text-2); }
       .wiz-check { display: flex; align-items: center; gap: 8px; margin-top: 12px;
         font-size: 13px; color: var(--text-2); }
@@ -1399,7 +1469,7 @@
       .wm-row { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--text-2); margin-top: 10px; }
       .wm-invite { display: flex; gap: 8px; margin-top: 5px; }
       .wm-invite input { flex: 1; font-family: monospace; }
-      .wm-btn { border: none; border-radius: 9px; padding: 9px 14px; cursor: pointer; font: 600 13px "Segoe UI", sans-serif; }
+      .wm-btn { border: none; border-radius: 9px; padding: 9px 14px; cursor: pointer; font: 600 13px var(--sans); }
       .wm-primary { background: var(--teal); color: #fff; }
       .wm-ghost { background: var(--surface-3); color: var(--text-2); }
       .wm-danger { background: var(--danger-soft); color: #d3373d; }
@@ -1412,7 +1482,7 @@
         transform: translate(-50%, -14px); z-index: 24;
         min-width: 216px; max-width: min(86vw, 460px); padding: 10px 12px 8px; border-radius: var(--r-card);
         background: #23242ae8; box-shadow: 0 10px 30px #0006; backdrop-filter: blur(6px);
-        font-family: "Segoe UI", sans-serif; opacity: 0; pointer-events: none;
+        font-family: var(--sans); opacity: 0; pointer-events: none;
         transition: opacity .18s ease, transform .18s ease; }
       #meet-panel.on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
       .meet-head { display: flex; align-items: center; gap: 8px; color: #eef0f4; }
@@ -1423,11 +1493,11 @@
       .meet-rec { width: 100%; margin-top: 6px; height: 32px; cursor: pointer;
         border: 1px solid var(--danger); border-radius: var(--r-ctl);
         background: transparent; color: var(--danger);
-        font: 600 12.5px "Segoe UI", sans-serif; }
+        font: 600 12.5px var(--sans); }
       .meet-rec:hover { background: var(--danger); color: #fff; }
       .meet-rec[hidden] { display: none; }
       .meet-count { padding: 1px 8px; border-radius: 999px; background: #ffffff1f;
-        font: 600 11.5px "Segoe UI", sans-serif; color: #cfd4dc; }
+        font: 600 11.5px var(--sans); color: #cfd4dc; }
       /* participant tiles, the shape a call grid uses */
       #meet-people { display: flex; gap: 8px; margin-top: 9px; overflow-x: auto; padding-bottom: 2px; }
       #meet-people::-webkit-scrollbar { height: 5px; }
@@ -1436,36 +1506,36 @@
         background: #17181c; display: grid; place-items: center; overflow: hidden; }
       .meet-who.self { box-shadow: inset 0 0 0 2px var(--teal); }
       .meet-who .mw-chip { position: relative; width: 38px; height: 38px; border-radius: 50%;
-        display: grid; place-items: center; color: #2a2330; font: 700 17px "Segoe UI", sans-serif; }
+        display: grid; place-items: center; color: #2a2330; font: 700 17px var(--sans); }
       .meet-who .mw-dot { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px;
         border-radius: 50%; border: 2px solid #17181c; }
       .mw-label { position: absolute; left: 5px; bottom: 5px; max-width: calc(100% - 10px);
         display: flex; align-items: center; gap: 4px; padding: 2px 7px 2px 5px; border-radius: 6px;
-        background: #000000a6; font: 500 11.5px "Segoe UI", sans-serif; color: #eef0f4; }
+        background: #000000a6; font: 500 11.5px var(--sans); color: #eef0f4; }
       .mw-label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .mw-label svg { width: 12px; height: 12px; flex: 0 0 auto; color: #ff6b6b; }
-      .meet-empty { font: 12.5px "Segoe UI", sans-serif; color: var(--faint); margin-top: 8px; }
+      .meet-empty { font: 12.5px var(--sans); color: var(--faint); margin-top: 8px; }
       /* the way from the map into the meeting view */
       #meet-enter { width: 100%; margin-top: 9px; padding: 8px; border: none; border-radius: 10px;
         background: var(--teal); color: #fff; cursor: pointer;
-        font: 600 12.5px "Segoe UI", sans-serif; }
+        font: 600 12.5px var(--sans); }
       #meet-enter:hover { background: var(--teal-hover); }
 
       /* ---- preferences modal: left nav + one pane at a time ---- */
       #prefs-modal { position: fixed; inset: 0; z-index: 72; background: #0b0b1066; display: none;
-        place-items: center; font-family: "Segoe UI", sans-serif; }
+        place-items: center; font-family: var(--sans); }
       #prefs-modal .pf-box { display: flex; width: min(96vw, 900px); height: min(88vh, 620px);
         background: var(--surface); border-radius: var(--r-card); overflow: hidden; box-shadow: 0 28px 70px #0006; }
       .pf-nav { width: 216px; flex: 0 0 auto; background: var(--surface-2); border-right: 1px solid var(--border);
         padding: 18px 10px; overflow-y: auto; }
       /* the member table needs the width more than the nav labels do */
       @media (max-width: 780px) { .pf-nav { width: 150px; padding: 14px 7px; } }
-      .pf-group { padding: 12px 10px 6px; font: 600 11.5px "Segoe UI", sans-serif; color: var(--faint);
+      .pf-group { padding: 12px 10px 6px; font: 600 11.5px var(--sans); color: var(--faint);
         letter-spacing: .3px; }
       .pf-group:first-child { padding-top: 0; }
       .pf-item { display: flex; align-items: center; gap: 10px; width: 100%; border: none; cursor: pointer;
         background: transparent; color: var(--text-2); padding: 9px 10px; border-radius: 9px; text-align: left;
-        font: 500 13.5px "Segoe UI", sans-serif; }
+        font: 500 13.5px var(--sans); }
       .pf-item:hover { background: var(--surface-3); }
       .pf-item.active { background: var(--accent); color: #fff; }
       .pf-item svg { width: 17px; height: 17px; flex: 0 0 auto; }
@@ -1481,12 +1551,12 @@
       /* segmented tabs */
       .pf-tabs { display: flex; gap: 4px; padding: 3px; background: var(--surface-3); border-radius: 11px; margin-bottom: 16px; }
       .pf-tabs button { flex: 1; border: none; background: transparent; cursor: pointer; padding: 9px;
-        border-radius: 9px; font: 600 13px "Segoe UI", sans-serif; color: var(--text-3); }
+        border-radius: 9px; font: 600 13px var(--sans); color: var(--text-3); }
       .pf-tabs button.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px #0000001f; }
       .pf-tabs button:disabled { color: var(--fainter); cursor: not-allowed; }
       /* a settings row: what it is on the left, the control on the right, one
          hairline between rows — the shape Gather's ทั่วไป pane uses */
-      .pf-sec { font: 600 11.5px "Segoe UI", sans-serif; color: var(--muted); letter-spacing: .3px;
+      .pf-sec { font: 600 11.5px var(--sans); color: var(--muted); letter-spacing: .3px;
         margin: 20px 0 2px; }
       .pf-sec:first-child { margin-top: 0; }
       .pf-set { display: flex; align-items: center; gap: 16px; padding: 13px 0;
@@ -1498,9 +1568,9 @@
          full-width control here squeezes the label into one word per line */
       #prefs-modal .pf-set select { flex: 0 0 auto; width: auto; min-width: 116px; padding: 7px 9px;
         border: 1px solid var(--border-2); border-radius: 9px; background: var(--surface);
-        font: 13px "Segoe UI", sans-serif; color: var(--text); outline: none; cursor: pointer; }
+        font: 13px var(--sans); color: var(--text); outline: none; cursor: pointer; }
       .pf-beta { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
-        background: var(--surface-3); color: var(--text-3); font: 600 10.5px "Segoe UI", sans-serif;
+        background: var(--surface-3); color: var(--text-3); font: 600 10.5px var(--sans);
         font-style: normal; vertical-align: 1px; }
       .pf-l { display: block; font-size: 12.5px; color: var(--text-3); margin: 14px 0 5px; font-weight: 600; }
       .pf-l:first-child { margin-top: 0; }
@@ -1520,11 +1590,11 @@
       .cr-row > b { flex: 0 0 74px; color: var(--text-3); font-weight: 600; }
       .cr-row > span { flex: 1; min-width: 0; color: var(--text-2); line-height: 1.6; word-break: break-word; }
       .cr-lic { display: inline-block; margin: 0 5px 4px 0; padding: 2px 7px; border-radius: 999px;
-        background: var(--accent-soft); color: var(--accent-ink); font: 600 11px "Segoe UI", sans-serif; }
+        background: var(--accent-soft); color: var(--accent-ink); font: 600 11px var(--sans); }
       .cr-card a { color: var(--accent); text-decoration: none; margin-right: 10px; }
       .cr-card a:hover { text-decoration: underline; }
 
-      .mp { display: flex; flex-direction: column; min-height: 0; font-family: "Segoe UI", sans-serif; }
+      .mp { display: flex; flex-direction: column; min-height: 0; font-family: var(--sans); }
       /* Both panels set their own display, which beats the browser's own rule for
          [hidden] — so `el.hidden = true` left them on screen, stacked on top of
          each other. The attribute has to be said again, with enough specificity
@@ -1535,7 +1605,7 @@
         border: 1px solid var(--border-2); border-radius: 9px; font-size: 13px; outline: none; background: var(--surface); }
       .mp-tools input:focus { border-color: var(--teal); }
       .mp-tools select { border: 1px solid var(--border-2); border-radius: 9px; padding: 0 6px; background: var(--surface);
-        font: 13px "Segoe UI", sans-serif; color: var(--text-2); outline: none; }
+        font: 13px var(--sans); color: var(--text-2); outline: none; }
       .mp-invite { flex: 0 0 auto; width: 34px; height: 34px; border: none; border-radius: 9px;
         background: var(--accent); color: #fff; cursor: pointer; font-size: 17px; line-height: 1; }
       .mp-invite:hover { background: var(--accent-hover); }
@@ -1554,19 +1624,19 @@
       .mp-info small { display: block; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .mp-meta { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; min-width: 0; }
       /* role chip — colour carries the rank at a glance */
-      .mp-role { flex: 0 0 auto; padding: 2px 8px; border-radius: 999px; font: 600 11px "Segoe UI", sans-serif; font-style: normal; }
+      .mp-role { flex: 0 0 auto; padding: 2px 8px; border-radius: 999px; font: 600 11px var(--sans); font-style: normal; }
       .mp-role.owner { background: #eee9ff; color: #6b46d6; }
       .mp-role.admin { background: #e6efff; color: #2f66c9; }
       .mp-role.member { background: var(--surface-3); color: var(--text-3); }
       .mp-role.guest { background: #fff2e3; color: #b06d1c; }
-      .mp-seen { font: 11px "Segoe UI", sans-serif; font-style: normal; color: var(--faint);
+      .mp-seen { font: 11px var(--sans); font-style: normal; color: var(--faint);
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       /* table variant: column headings above the rows, sortable */
       .mp-head { display: flex; align-items: center; gap: 10px; padding: 9px 11px; background: var(--surface-2);
         border: 1px solid var(--border); border-bottom: none; border-radius: 11px 11px 0 0; }
       .mp-head + .mp-list { border-radius: 0 0 11px 11px; }
       .mp-head button { border: none; background: transparent; cursor: pointer; padding: 0;
-        font: 600 12px "Segoe UI", sans-serif; color: var(--text-3); display: flex; align-items: center; gap: 4px; }
+        font: 600 12px var(--sans); color: var(--text-3); display: flex; align-items: center; gap: 4px; }
       .mp-head button:hover { color: var(--text); }
       .mp-head button i { font-style: normal; font-size: 9px; color: var(--fainter); }
       .mp-head button.sorted i { color: var(--accent); }
@@ -1596,7 +1666,7 @@
       .mp-menu.up { top: auto; bottom: 32px; }
       .mp-menu button { display: flex; align-items: center; gap: 9px; width: 100%; border: none;
         background: transparent; color: #eef0f4; cursor: pointer; padding: 8px 10px; border-radius: 8px;
-        font: 500 13px "Segoe UI", sans-serif; text-align: left; white-space: nowrap; }
+        font: 500 13px var(--sans); text-align: left; white-space: nowrap; }
       .mp-menu button:hover { background: #ffffff1a; }
       .mp-menu button.danger { color: #ff8085; }
       .mp-menu hr { border: none; border-top: 1px solid #ffffff1f; margin: 5px 2px; }
@@ -1607,7 +1677,7 @@
          not fit a narrow dialog and a second row would push the table down */
       .gp-tabs { display: flex; gap: 4px; margin: 10px 0 2px; overflow-x: auto; padding-bottom: 2px; }
       .gp-tabs button { flex: 0 0 auto; border: 1px solid var(--border-2); background: var(--surface); cursor: pointer;
-        padding: 6px 11px; border-radius: 9px; font: 600 12.5px "Segoe UI", sans-serif; color: var(--text-3); }
+        padding: 6px 11px; border-radius: 9px; font: 600 12.5px var(--sans); color: var(--text-3); }
       .gp-tabs button:hover { background: var(--surface-3); }
       .gp-tabs button.active { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent-ink); }
       .gp-ava { background: #b06d1c; }
@@ -1624,12 +1694,12 @@
         border: 1px solid var(--border-2); border-radius: 9px; font-size: 13px; outline: none; background: var(--surface); }
       .gp-form-row input:focus { border-color: var(--teal); }
       .gp-form-row select { flex: 0 0 auto; border: 1px solid var(--border-2); border-radius: 9px; padding: 0 8px;
-        background: var(--surface); font: 13px "Segoe UI", sans-serif; color: var(--text-2); outline: none; }
+        background: var(--surface); font: 13px var(--sans); color: var(--text-2); outline: none; }
       .gp-form .pf-note { margin: 9px 0 0; }
       .gp-made { display: flex; gap: 7px; margin-top: 10px; }
       .gp-made[hidden] { display: none; }
       .gp-made input { flex: 1; min-width: 0; box-sizing: border-box; padding: 8px 11px; border: 1px solid var(--accent-line);
-        border-radius: 9px; background: var(--surface); font: 12.5px "Segoe UI", sans-serif; color: var(--text); outline: none; }
+        border-radius: 9px; background: var(--surface); font: 12.5px var(--sans); color: var(--text); outline: none; }
 
       /* ---- dark mode exceptions ----
          The status badges are pastel fills with dark ink, which is the one
@@ -1665,7 +1735,7 @@
         font: 600 13.5px ui-monospace, "Consolas", monospace; color: var(--text); letter-spacing: .4px; }
       .sec-grid span.used { color: var(--fainter); text-decoration: line-through; }
       .sec-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
-        font: 600 12px "Segoe UI", sans-serif; background: #e7f7f4; color: var(--teal-ink); }
+        font: 600 12px var(--sans); background: #e7f7f4; color: var(--teal-ink); }
       .sec-badge.off { background: var(--surface-3); color: var(--text-3); }
 
       /* workspace picker */
@@ -1704,7 +1774,7 @@
       #top-nav-bar {
         position: fixed; top: 0; left: var(--dock); right: 0; height: 46px; z-index: 35;
         background: #181625; color: #e6e9ee; display: none; align-items: center;
-        justify-content: space-between; padding: 0 16px; font-family: "Segoe UI", sans-serif;
+        justify-content: space-between; padding: 0 16px; font-family: var(--sans);
         box-shadow: 0 2px 10px #0004; border-bottom: 1px solid #ffffff14;
       }
       body.has-screenshare #top-nav-bar { display: flex; }
@@ -1715,7 +1785,7 @@
       }
       .nav-tab {
         display: flex; align-items: center; gap: 6px; padding: 5px 16px; border: none; border-radius: 16px;
-        background: transparent; color: var(--faint); font: 600 13px "Segoe UI", sans-serif; cursor: pointer; transition: all .18s;
+        background: transparent; color: var(--faint); font: 600 13px var(--sans); cursor: pointer; transition: all .18s;
       }
       .nav-tab:hover { color: #fff; background: #ffffff12; }
       .nav-tab.active { background: #3b3952; color: #fff; box-shadow: 0 2px 8px #0004; }
@@ -1746,7 +1816,7 @@
       #call-view-overlay {
         position: fixed; top: 0; right: 0; bottom: 0; left: var(--dock); z-index: 24; background: #0f1017;
         display: none; grid-template-columns: 1fr 220px; gap: 12px; padding: 12px 16px 74px;
-        font-family: "Segoe UI", sans-serif; box-sizing: border-box;
+        font-family: var(--sans); box-sizing: border-box;
       }
       #call-view-overlay.sharing #call-main-stage { cursor: zoom-out; }
       #call-main-stage {
@@ -1836,7 +1906,7 @@
          is scaled hard rather than smoothed into mush. */
       .mt-face {
         width: 100%; height: 100%; display: grid; place-items: center;
-        color: #2a2330; font: 700 44px "Segoe UI", sans-serif;
+        color: #2a2330; font: 700 44px var(--sans);
       }
       .mt-face img {
         width: 68%; height: 68%; object-fit: contain; image-rendering: pixelated;
@@ -1844,7 +1914,7 @@
       .mt-name {
         position: absolute; left: 10px; bottom: 10px; max-width: calc(100% - 46px);
         display: flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 8px;
-        background: #000000a6; color: #eef0f4; font: 500 12.5px "Segoe UI", sans-serif;
+        background: #000000a6; color: #eef0f4; font: 500 12.5px var(--sans);
       }
       .mt-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .mt-name svg { width: 13px; height: 13px; flex: 0 0 auto; color: #ff6b6b; }
@@ -1860,12 +1930,12 @@
         display: grid; place-items: center; color: #fff;
       }
       .mt-badges svg { width: 12px; height: 12px; }
-      .mt-empty { color: var(--muted); font: 14px "Segoe UI", sans-serif; text-align: center; }
+      .mt-empty { color: var(--muted); font: 14px var(--sans); text-align: center; }
 
       /* ‹ 1 / 2 › — only when there are more people than fit */
       #call-pager {
         flex: 0 0 auto; display: none; align-items: center; justify-content: center;
-        gap: 10px; padding-top: 12px; color: #b9bfcd; font: 13px "Segoe UI", sans-serif;
+        gap: 10px; padding-top: 12px; color: #b9bfcd; font: 13px var(--sans);
       }
       #call-pager.on { display: flex; }
       #call-pager button {
@@ -1882,22 +1952,22 @@
         border: 1px solid #ffffff14; border-radius: var(--r-box); overflow: hidden; min-height: 0; }
       #call-view-overlay.chat-open #meet-chat { display: flex; }
       #meet-chat .mc-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px;
-        color: #eef0f4; font: 600 15px "Segoe UI", sans-serif; }
+        color: #eef0f4; font: 600 15px var(--sans); }
       #meet-chat .mc-head .sp { flex: 1; }
       #meet-chat .mc-x { border: none; background: transparent; color: var(--faint); cursor: pointer;
         width: 28px; height: 28px; border-radius: 8px; font-size: 15px; }
       #meet-chat .mc-x:hover { background: #ffffff14; color: #fff; }
       #meet-chat-log { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 14px;
         display: flex; flex-direction: column; gap: 7px; }
-      #meet-chat-log .msg { font: 13.5px/1.5 "Segoe UI", sans-serif; color: #cfd4dc; word-break: break-word; }
+      #meet-chat-log .msg { font: 13.5px/1.5 var(--sans); color: #cfd4dc; word-break: break-word; }
       #meet-chat-log .who { font-weight: 700; color: #eef0f4; }
       #meet-chat-log .who.me { color: var(--teal); }
       #meet-chat .mc-empty { margin: auto 0; text-align: center; color: var(--faint);
-        font: 13px "Segoe UI", sans-serif; }
+        font: 13px var(--sans); }
       #meet-chat .mc-compose { margin: 10px 12px 12px; padding: 8px 10px; border-radius: 12px;
         background: #23262e; border: 1px solid #ffffff12; }
       #meet-chat .mc-compose input { width: 100%; box-sizing: border-box; border: none; outline: none;
-        background: transparent; color: #eef0f4; font: 13.5px "Segoe UI", sans-serif; }
+        background: transparent; color: #eef0f4; font: 13.5px var(--sans); }
       #meet-chat .mc-compose input::placeholder { color: #6f757f; }
       #meet-chat .mc-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
       #meet-chat .mc-row .sp { flex: 1; }
@@ -1915,7 +1985,7 @@
       #meet-chat .mc-foot svg { width: 17px; height: 17px; }
       #meet-chat .mc-foot .badge { position: absolute; top: -2px; right: -2px; min-width: 15px;
         padding: 0 4px; border-radius: 8px; background: var(--accent); color: #fff;
-        font: 700 10px "Segoe UI", sans-serif; }
+        font: 700 10px var(--sans); }
       /* reopening it once closed */
       #meet-chat-open { position: fixed; right: 16px; bottom: 88px; z-index: 25; display: none;
         width: 42px; height: 42px; border: none; border-radius: 12px; background: #23262e;
@@ -2111,7 +2181,7 @@
           <input id="sp-search" type="text" placeholder="ค้นหา…" autocomplete="off" />
           <input id="sp-newname" type="text" placeholder="ชื่อ Space ใหม่" autocomplete="off" style="width:150px" />
           <input id="sp-code" type="text" placeholder="รหัสเชิญ" autocomplete="off" style="width:120px" />
-          <button id="sp-join" style="background:var(--surface-3);color:var(--text-2);padding:9px 14px;border:none;border-radius:9px;cursor:pointer;font:600 13.5px 'Segoe UI',sans-serif">เข้าร่วม</button>
+          <button id="sp-join" style="background:var(--surface-3);color:var(--text-2);padding:9px 14px;border:none;border-radius:9px;cursor:pointer;font:600 13.5px var(--sans)">เข้าร่วม</button>
         </div>
         <div class="err" id="sp-err" style="min-height:18px"></div>
         <div class="sp-grid" id="sp-grid"></div>
@@ -2677,7 +2747,7 @@
       style="position:fixed; left:calc(var(--dock) + (100vw - var(--dock)) / 2); bottom:56px;
              transform:translateX(-50%); z-index:20;
              width:min(420px,80vw); padding:9px 14px; border-radius:20px; border:2px solid #2bb3a3;
-             background:#fffef9; color:#2a2f36; font:14px 'Segoe UI',sans-serif; outline:none;
+             background:#fffef9; color:#2a2f36; font:14px var(--sans); outline:none;
              box-shadow:0 3px 12px #0002; display:none;" />
     <script type="module" src="/src/main.ts"></script>
   </body>

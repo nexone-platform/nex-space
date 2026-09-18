@@ -1,3 +1,63 @@
+      /* ---- typeface ----
+         TH Sarabun, self-hosted. Not a link to Google: a workplace tool should
+         not tell a third party who opened it and when, and eight files of ten
+         kilobytes cost less than the DNS lookup and handshake would.
+
+         "Sarabun" here is the web edition of TH Sarabun by the same foundry
+         (Cadson Demak, SIL Open Font License) — the desktop TH Sarabun New is
+         not a webfont and exists only on machines that installed it, so it
+         follows as the offline fallback rather than leading.
+
+         Thai and Latin are separate files with a unicode-range each, so an
+         English screen never downloads the Thai one. The version is in the
+         filename because /assets/ is cached for a year: a new cut is a new
+         name, never the same URL with different bytes. */
+
+      @font-face {
+        font-family: "Sarabun"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/sarabun-thai-400-v17.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Sarabun"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/sarabun-latin-400-v17.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Sarabun"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/sarabun-thai-500-v17.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Sarabun"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/sarabun-latin-500-v17.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Sarabun"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/sarabun-thai-600-v17.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Sarabun"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/sarabun-latin-600-v17.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Sarabun"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/sarabun-thai-700-v17.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Sarabun"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/sarabun-latin-700-v17.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+
+      /* One name for the typeface, so changing it is one line and not a hundred. */
+      :root { --sans: "Sarabun", "TH Sarabun New", "TH SarabunPSK", "Noto Sans Thai",
+                "Leelawadee UI", system-ui, sans-serif; }
+
       :root {
         --surface: #fff; --surface-2: #f7f8fa; --surface-3: #f2f3f6;
         /* a pane that lets a tint through without taking the wrong side in dark mode */
@@ -35,7 +95,7 @@
       :where(#auth-overlay, #spaces-overlay, #wiz-overlay, #ws-modal, #sec-modal, #prefs-modal, #sidebar)
       :where(input, select, textarea, button) {
         background: var(--surface); color: var(--text); border: 1px solid var(--border-2);
-        border-radius: 9px; font-family: "Segoe UI", sans-serif;
+        border-radius: 9px; font-family: var(--sans);
       }
       :where(input, textarea)::placeholder { color: var(--faint); }
       /* Corner radii, as three steps rather than the sixteen different values
@@ -64,7 +124,7 @@
         display: grid; place-items: center; min-width: 32px; height: 32px; padding: 0 10px;
         border: 1px solid var(--border-2); border-radius: 9px;
         background: var(--surface); color: var(--text-2);
-        font: 500 13px "Segoe UI", sans-serif; cursor: pointer;
+        font: 500 13px var(--sans); cursor: pointer;
       }
       .cw-btn:hover { border-color: var(--accent-line); color: var(--accent); }
       .cw-primary { border: none; background: var(--teal); color: #fff; font-weight: 600; }
@@ -119,7 +179,7 @@
       .cw-now-chip {
         position: absolute; transform: translate(-100%, -50%); margin-left: -4px;
         padding: 1px 6px; border-radius: 6px; background: var(--danger); color: #fff;
-        font: 600 10.5px "Segoe UI", sans-serif; white-space: nowrap; pointer-events: none;
+        font: 600 10.5px var(--sans); white-space: nowrap; pointer-events: none;
         font-variant-numeric: tabular-nums;
       }
 
@@ -128,7 +188,7 @@
         position: fixed; z-index: 42; width: 268px; padding: 12px 13px;
         border: 1px solid var(--border-2); border-radius: var(--r-box);
         background: var(--surface); box-shadow: 0 14px 40px #00000026;
-        font-family: "Segoe UI", sans-serif; color: var(--text);
+        font-family: var(--sans); color: var(--text);
       }
       .cw-pop[hidden] { display: none; }
       .cw-pop h4 { margin: 0 0 2px; font-size: 14.5px; font-weight: 600; }
@@ -139,7 +199,7 @@
       .cw-pop-acts { display: flex; gap: 6px; margin-top: 12px; }
       .cw-pop-acts button {
         flex: 1; height: 30px; border-radius: 9px; cursor: pointer;
-        font: 500 12.5px "Segoe UI", sans-serif;
+        font: 500 12.5px var(--sans);
         border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2);
       }
       .cw-pop-acts button:hover { border-color: var(--accent-line); color: var(--accent); }
@@ -180,7 +240,7 @@
       .cal-save, .cal-cancel {
       .cal-save { border: none; background: var(--teal); color: #fff; }
       .cal-cancel { border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2); }
-body { margin: 0; font-family: "Segoe UI", sans-serif; background: var(--surface-3); }
+body { margin: 0; font-family: var(--sans); background: var(--surface-3); }
 /* the only thing the probe changes: it is a page, not an overlay, so it can be
    seen next to its own results */
 #cal-view { position: static; height: 78vh; border-bottom: 2px solid var(--border-3); }

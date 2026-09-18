@@ -132,7 +132,7 @@ export function render(canvas: HTMLCanvasElement, doc: MapDoc, art: MapArt, o: O
 /** a small pill of text with a backing plate, so it reads over any floor */
 function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, fg: string, bg: string) {
   ctx.save();
-  ctx.font = '600 10px "Segoe UI", sans-serif';
+  ctx.font = '600 10px "Sarabun", "TH Sarabun New", "TH SarabunPSK", "Noto Sans Thai", "Leelawadee UI", system-ui, sans-serif';
   ctx.textBaseline = "top";
   const w = ctx.measureText(text).width;
   ctx.fillStyle = bg;

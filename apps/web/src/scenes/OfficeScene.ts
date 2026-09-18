@@ -3055,7 +3055,7 @@ export class OfficeScene extends Phaser.Scene {
       pop = document.createElement("div");
       pop.id = "dev-pop";
       pop.style.cssText = "position:fixed;z-index:22;background:#2e3238f2;border-radius:10px;padding:6px;" +
-        "min-width:210px;box-shadow:0 6px 20px #0006;font:13px 'Segoe UI',sans-serif;color:#e6e9ee;";
+        "min-width:210px;box-shadow:0 6px 20px #0006;font:13px var(--sans);color:#e6e9ee;";
       document.body.appendChild(pop);
     }
     if (pop.dataset.open === kind && pop.style.display !== "none") { pop.style.display = "none"; pop.dataset.open = ""; return; }
@@ -3077,7 +3077,7 @@ export class OfficeScene extends Phaser.Scene {
         const b = document.createElement("button");
         b.textContent = (cur === d.deviceId ? "✓ " : "") + (d.label || `${fb} ${i + 1}`);
         b.style.cssText = "display:block;width:100%;text-align:left;border:none;background:transparent;" +
-          "color:#e6e9ee;padding:6px 8px;border-radius:6px;cursor:pointer;font:13px 'Segoe UI',sans-serif;";
+          "color:#e6e9ee;padding:6px 8px;border-radius:6px;cursor:pointer;font:13px var(--sans);";
         b.onmouseenter = () => (b.style.background = "#ffffff1a");
         b.onmouseleave = () => (b.style.background = "transparent");
         b.onclick = () => { pick(d.deviceId); pop!.style.display = "none"; pop!.dataset.open = ""; };
@@ -3404,7 +3404,7 @@ export class OfficeScene extends Phaser.Scene {
    */
   private makeNameTag(x: number, y: number, label: string, accent = false): Phaser.GameObjects.Container {
     const t = this.add.text(0, 0, label, {
-      fontFamily: '"Segoe UI", system-ui, sans-serif',
+      fontFamily: '"Sarabun", "TH Sarabun New", "TH SarabunPSK", "Noto Sans Thai", "Leelawadee UI", system-ui, sans-serif',
       fontSize: "8px",
       color: accent ? "#8ff2e2" : "#f2f5f8",
       resolution: 3, // must be set at construction: Text only wires frame.source.resolution there
