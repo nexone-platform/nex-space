@@ -20,6 +20,7 @@ import { roleLabel } from "../memberPanel";
 import { propPath, type Interactive } from "./mapThemes";
 import { currentTheme, currentMapSlug, loadMapList, mapList } from "./mapSource";
 import { canHear, type PrivateArea } from "./areas";
+import { canvasStack } from "../typeface";
 
 const LPC_COLS = 9; // LPC walk sheet: 9 frames per direction row
 const LPC_SCALE = 0.5;    // 64px LPC frames render large vs 32px furniture -> scale down
@@ -3404,7 +3405,7 @@ export class OfficeScene extends Phaser.Scene {
    */
   private makeNameTag(x: number, y: number, label: string, accent = false): Phaser.GameObjects.Container {
     const t = this.add.text(0, 0, label, {
-      fontFamily: '"Sarabun", "TH Sarabun New", "TH SarabunPSK", "Noto Sans Thai", "Leelawadee UI", system-ui, sans-serif',
+      fontFamily: canvasStack(),
       fontSize: "8px",
       color: accent ? "#8ff2e2" : "#f2f5f8",
       resolution: 3, // must be set at construction: Text only wires frame.source.resolution there

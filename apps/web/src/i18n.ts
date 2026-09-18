@@ -251,6 +251,19 @@ const EN: Record<string, string> = {
   "เบต้า": "beta",
   "เลือกระหว่างโหมดสว่าง โหมดมืด หรือให้ตรงกับการตั้งค่าระบบของคุณ — แผนที่ในห้องเป็นพิกเซลอาร์ต จึงคงสีเดิมไว้":
     "Choose light, dark, or match your system — the map itself is pixel art, so it keeps its own colours",
+  "แบบอักษร": "Typeface",
+  "ทุกแบบรองรับทั้งไทยและอังกฤษ จึงไม่มีหน้าจอไหนถูกวางด้วยสองแบบอักษรปนกัน — ตัวอย่างอยู่ใต้ช่องเลือก":
+    "Every one of them draws Thai and English, so no screen is ever set in two typefaces at once — there is a sample below",
+  "ประชุมทีม 09:30 — Meeting room": "Team standup 09:30 — ประชุมทีม",
+  "แบบมีหัว อ่านง่าย เหมือนเอกสารราชการ": "looped, easy to read, the one on Thai official documents",
+  "แบบไม่มีหัว เรียบ กลางๆ": "loopless, plain, takes no side",
+  "แบบไม่มีหัว ทันสมัย ตัวโปร่ง": "loopless, modern, open letterforms",
+  "แบบไม่มีหัว ทรงกลม อ่านสบาย": "loopless, rounded, easy on the eye",
+  "แบบไม่มีหัว หนาชัด เหมาะกับหัวข้อ": "loopless, strong, at its best in headings",
+  "ขนาดตัวอักษร": "Text size",
+  "ขยายทั้งหน้าจอ ไม่ใช่แค่ตัวหนังสือ — กรอบ ปุ่ม และแถบรายชื่อโตตามไปด้วย แผนที่ในห้องเป็นพิกเซลอาร์ต จึงคงขนาดเดิม":
+    "Grows the whole interface, not only the words — boxes, buttons and the people list follow. The map is pixel art and keeps its own size",
+  "ขนาดเดิม": "as drawn",
   "สว่าง": "Light",
   "มืด": "Dark",
   "ตรงกับระบบ": "Match system",

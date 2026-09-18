@@ -10,6 +10,7 @@ import { mountInvitePanel } from "./invitePanel";
 import { mountGuestPanel, type GuestPanel } from "./guestPanel";
 import { inviteLink, themeOverride } from "./workspace";
 import { colorMode, setColorMode, micClean, setMicClean, type ColorMode } from "./appearance";
+import { FACES, SIZES, face, setFace, textSize, setTextSize, type FaceId } from "./typeface";
 import { THEMES } from "./scenes/mapThemes";
 import { ART_CREDITS } from "./artCredits";
 import { t, lang, setLang, onLangChange, type Lang } from "./i18n";
@@ -280,6 +281,51 @@ export function setupPrefsModal(
       language.value = lang();
       language.onchange = () => setLang(language.value as Lang);
     }
+    /**
+     * The typeface, shown rather than named.
+     *
+     * The options are built here and not written into the markup because each
+     * one is set in the face it offers — a list of five names all drawn in the
+     * same font tells somebody choosing nothing, and the whole question is what
+     * the letters look like.
+     */
+    const faceSel = $<HTMLSelectElement>("pf-face");
+    const eg = $("pf-face-eg");
+    const showFace = (id: string) => {
+      const chosen = FACES.find((f) => f.id === id);
+      if (eg && chosen) eg.style.fontFamily = `"${chosen.name}", sans-serif`;
+    };
+    if (faceSel && !faceSel.options.length) {
+      for (const f of FACES) {
+        const o = document.createElement("option");
+        o.value = f.id;
+        o.textContent = `${f.name} — ${t(f.note)}`;
+        o.style.fontFamily = `"${f.name}", sans-serif`;
+        faceSel.appendChild(o);
+      }
+    }
+    if (faceSel) {
+      faceSel.value = face();
+      showFace(faceSel.value);
+      faceSel.onchange = () => { setFace(faceSel.value as FaceId); showFace(faceSel.value); };
+    }
+
+    const sizeSel = $<HTMLSelectElement>("pf-size");
+    if (sizeSel && !sizeSel.options.length) {
+      for (const n of SIZES) {
+        const o = document.createElement("option");
+        o.value = String(n);
+        // The number means nothing on its own, so the two ends are named: the
+        // size the app was drawn at, and the one somebody asked for by name.
+        o.textContent = n === 13 ? `${n} — ${t("ขนาดเดิม")}` : String(n);
+        sizeSel.appendChild(o);
+      }
+    }
+    if (sizeSel) {
+      sizeSel.value = String(textSize());
+      sizeSel.onchange = () => setTextSize(Number(sizeSel.value));
+    }
+
     const mic = $<HTMLSelectElement>("pf-mic-clean");
     if (mic) {
       mic.value = micClean() ? "on" : "off";

@@ -6,19 +6,17 @@
   <title>แก้ไขแผนที่ — NexSpace</title>
   <style>
       /* ---- typeface ----
-         TH Sarabun, self-hosted. Not a link to Google: a workplace tool should
-         not tell a third party who opened it and when, and eight files of ten
-         kilobytes cost less than the DNS lookup and handshake would.
+         Five faces that draw Thai and English both, self-hosted. Not a link to
+         Google: a workplace tool should not tell a third party who opened it and
+         when, and ten kilobytes of woff2 cost less than the handshake would.
 
-         "Sarabun" here is the web edition of TH Sarabun by the same foundry
-         (Cadson Demak, SIL Open Font License) — the desktop TH Sarabun New is
-         not a webfont and exists only on machines that installed it, so it
-         follows as the offline fallback rather than leading.
+         A browser downloads only the face it is asked to draw with, and only the
+         script it needs — Thai and Latin are separate files with a unicode-range
+         each, so an English screen never fetches the Thai one. Declaring all
+         five costs nothing until one is chosen.
 
-         Thai and Latin are separate files with a unicode-range each, so an
-         English screen never downloads the Thai one. The version is in the
-         filename because /assets/ is cached for a year: a new cut is a new
-         name, never the same URL with different bytes. */
+         The versions are in the filenames because /assets/ is cached for a year:
+         a new cut is a new name, never the same URL with different bytes. */
 
       @font-face {
         font-family: "Sarabun"; font-style: normal; font-weight: 400; font-display: swap;
@@ -60,10 +58,182 @@
         src: url("/assets/fonts/sarabun-latin-700-v17.woff2") format("woff2");
         unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
       }
+      @font-face {
+        font-family: "Noto Sans Thai"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/noto-thai-400-v29.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Noto Sans Thai"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/noto-latin-400-v29.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Noto Sans Thai"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/noto-thai-500-v29.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Noto Sans Thai"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/noto-latin-500-v29.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Noto Sans Thai"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/noto-thai-600-v29.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Noto Sans Thai"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/noto-latin-600-v29.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Noto Sans Thai"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/noto-thai-700-v29.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Noto Sans Thai"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/noto-latin-700-v29.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "IBM Plex Sans Thai"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/plex-thai-400-v11.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "IBM Plex Sans Thai"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/plex-latin-400-v11.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "IBM Plex Sans Thai"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/plex-thai-500-v11.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "IBM Plex Sans Thai"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/plex-latin-500-v11.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "IBM Plex Sans Thai"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/plex-thai-600-v11.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "IBM Plex Sans Thai"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/plex-latin-600-v11.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "IBM Plex Sans Thai"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/plex-thai-700-v11.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "IBM Plex Sans Thai"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/plex-latin-700-v11.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Prompt"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/prompt-thai-400-v12.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Prompt"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/prompt-latin-400-v12.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Prompt"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/prompt-thai-500-v12.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Prompt"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/prompt-latin-500-v12.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Prompt"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/prompt-thai-600-v12.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Prompt"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/prompt-latin-600-v12.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Prompt"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/prompt-thai-700-v12.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Prompt"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/prompt-latin-700-v12.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Kanit"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/kanit-thai-400-v17.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Kanit"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/kanit-latin-400-v17.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Kanit"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/kanit-thai-500-v17.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Kanit"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/kanit-latin-500-v17.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Kanit"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/kanit-thai-600-v17.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Kanit"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/kanit-latin-600-v17.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Kanit"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/kanit-thai-700-v17.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Kanit"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/kanit-latin-700-v17.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
 
-      /* One name for the typeface, so changing it is one line and not a hundred. */
-      :root { --sans: "Sarabun", "TH Sarabun New", "TH SarabunPSK", "Noto Sans Thai",
-                "Leelawadee UI", system-ui, sans-serif; }
+      /* ---- which face, and how big ----
+         --sans is the one name every rule in this file uses, so the choice is a
+         single attribute on <html> rather than a hundred edits. --ui is the
+         scale: the interface was drawn at 13px, so a person asking for 20 gets
+         1.538, and every size in the file is that many times its drawn size.
+
+         Both are set before the first paint by the script in <head>, from the
+         same localStorage keys src/typeface.ts writes — a module import lands
+         after the first paint and the text would visibly jump. */
+      :root { --ui: 1.538; }
+      :root, html[data-face="sarabun"] { --sans: "Sarabun", "TH Sarabun New", "TH SarabunPSK", "Noto Sans Thai", "Leelawadee UI", system-ui, sans-serif; }
+      html[data-face="noto"] { --sans: "Noto Sans Thai", "Leelawadee UI", system-ui, sans-serif; }
+      html[data-face="plex"] { --sans: "IBM Plex Sans Thai", "Noto Sans Thai", "Leelawadee UI", system-ui, sans-serif; }
+      html[data-face="prompt"] { --sans: "Prompt", "Noto Sans Thai", "Leelawadee UI", system-ui, sans-serif; }
+      html[data-face="kanit"] { --sans: "Kanit", "Noto Sans Thai", "Leelawadee UI", system-ui, sans-serif; }
 
     /* The same tokens the app uses. Copied rather than imported because this is
        a separate entry point with its own bundle, and pulling in the app's
@@ -103,7 +273,7 @@
     html, body { height: 100%; }
     body {
       margin: 0; background: var(--surface-2); color: var(--text);
-      font: 14px var(--sans); -webkit-font-smoothing: antialiased;
+      font: calc(14px * var(--ui)) var(--sans); -webkit-font-smoothing: antialiased;
       display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100dvh;
     }
 
@@ -113,7 +283,7 @@
       background: var(--surface); border-bottom: 1px solid var(--border);
     }
     .brand { font-weight: 700; letter-spacing: -.01em; white-space: nowrap; }
-    .brand small { display: block; font-weight: 400; font-size: 11.5px; color: var(--muted); }
+    .brand small { display: block; font-weight: 400; font-size: calc(11.5px * var(--ui)); color: var(--muted); }
     .top .sp { flex: 1; }
     input[type="text"], input[type="number"], select {
       font: inherit; color: var(--text); background: var(--surface-3);
@@ -125,7 +295,7 @@
     /* the maps of this space, along the top bar where a document's tabs go */
     .maps { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
     .maps button {
-      border-radius: 20px; padding: 6px 12px; font-size: 12.5px;
+      border-radius: 20px; padding: 6px 12px; font-size: calc(12.5px * var(--ui));
       background: var(--surface-3); border-color: transparent; color: var(--text-3);
       max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
@@ -140,9 +310,9 @@
     .maps .tools button:hover:not(:disabled) { background: var(--surface-3); }
     .maps .tools button.danger { color: var(--danger); }
     .maps .tools button:disabled { opacity: .35; cursor: default; }
-    .maps .landing { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+    .maps .landing { font-size: calc(11.5px * var(--ui)); color: var(--muted); white-space: nowrap; }
     button {
-      font: 600 13px var(--sans); cursor: pointer; border-radius: 9px;
+      font: 600 calc(13px * var(--ui)) var(--sans); cursor: pointer; border-radius: 9px;
       border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2);
       padding: 8px 12px; transition: background .12s, border-color .12s, color .12s;
     }
@@ -164,7 +334,7 @@
     .side { border-left: 1px solid var(--border); }
     .grp { display: flex; flex-direction: column; gap: 7px; }
     .grp > h3 {
-      margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .07em;
+      margin: 0; font-size: calc(11px * var(--ui)); font-weight: 700; letter-spacing: .07em;
       text-transform: uppercase; color: var(--faint);
     }
 
@@ -172,11 +342,11 @@
     .tools { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
     .tool {
       display: flex; flex-direction: column; align-items: center; gap: 4px;
-      padding: 9px 4px; font-size: 12px; font-weight: 600;
+      padding: 9px 4px; font-size: calc(12px * var(--ui)); font-weight: 600;
       border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2);
       color: var(--text-2);
     }
-    .tool span.k { font-size: 17px; line-height: 1; }
+    .tool span.k { font-size: calc(17px * var(--ui)); line-height: 1; }
     .tool[aria-pressed="true"] {
       background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
     }
@@ -200,10 +370,10 @@
     }
     .prop img { max-width: 100%; max-height: 100%; image-rendering: pixelated; }
     .prop[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
-    .row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-3); }
+    .row { display: flex; align-items: center; gap: 8px; font-size: calc(12.5px * var(--ui)); color: var(--text-3); }
     .row label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
     .row input[type="number"] { width: 64px; }
-    .hint { font-size: 11.5px; line-height: 1.55; color: var(--muted); margin: 0; }
+    .hint { font-size: calc(11.5px * var(--ui)); line-height: 1.55; color: var(--muted); margin: 0; }
 
     /* ---- the map ---- */
     .stage { overflow: auto; padding: 18px; background: var(--surface-2); }
@@ -213,18 +383,18 @@
     /* ---- lists on the right ---- */
     .item {
       display: flex; align-items: center; gap: 8px; padding: 7px 9px;
-      border-radius: 9px; background: var(--surface-2); font-size: 12.5px;
+      border-radius: 9px; background: var(--surface-2); font-size: calc(12.5px * var(--ui));
     }
     .item b { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .item button { padding: 3px 7px; font-size: 11px; border-radius: 7px; }
+    .item button { padding: 3px 7px; font-size: calc(11px * var(--ui)); border-radius: 7px; }
     .item.meet { outline: 1px solid var(--accent); }
-    .empty { font-size: 12px; color: var(--faint); padding: 2px; }
+    .empty { font-size: calc(12px * var(--ui)); color: var(--faint); padding: 2px; }
 
     /* ---- status ---- */
     .status {
       display: flex; align-items: center; gap: 14px; padding: 7px 14px;
       background: var(--surface); border-top: 1px solid var(--border);
-      font-size: 12.5px; color: var(--muted); min-height: 34px;
+      font-size: calc(12.5px * var(--ui)); color: var(--muted); min-height: 34px;
     }
     .status .sp { flex: 1; }
     .status b { color: var(--text-2); font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -241,8 +411,8 @@
       background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
       padding: 26px 28px; max-width: 420px; box-shadow: 0 12px 36px #00000014;
     }
-    .wall h2 { margin: 0 0 8px; font-size: 18px; }
-    .wall p { margin: 0 0 14px; color: var(--muted); line-height: 1.6; font-size: 13.5px; }
+    .wall h2 { margin: 0 0 8px; font-size: calc(18px * var(--ui)); }
+    .wall p { margin: 0 0 14px; color: var(--muted); line-height: 1.6; font-size: calc(13.5px * var(--ui)); }
     .wall a { color: var(--accent); }
 
     @media (max-width: 1000px) {

@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { runAuthFlow } from "./authUI";
 import { applyColorMode, watchSystemColorMode } from "./appearance";
+import { applyTypeface, canvasStack } from "./typeface";
 import { applyLang } from "./i18n";
 import { splitLayout } from "./layout";
 import { makePanelsDraggable } from "./dragPanel";
@@ -9,6 +10,9 @@ import { makePanelsDraggable } from "./dragPanel";
 // same source of truth and starts following the OS while the choice is "system".
 applyColorMode();
 watchSystemColorMode();
+// The head script already stamped these from the same two keys; this repeats
+// it from the module that owns them, so the two can never drift apart.
+applyTypeface();
 // and put the markup in the chosen language before anyone reads it
 applyLang();
 
@@ -25,8 +29,11 @@ applyLang();
  */
 function nameTagFont() {
   if (!document.fonts?.load) return Promise.resolve();
-  const want = ["8px Sarabun", "600 10px Sarabun"].map((f) =>
-    document.fonts.load(f, "ก"));
+  // Whichever face is in force, not a name written down here — the two would
+  // part company the first time somebody changed the setting.
+  const family = canvasStack().split(",")[0].trim();
+  const want = [`8px ${family}`, `600 10px ${family}`].map((f) =>
+    document.fonts.load(f, "ก").catch(() => {}));
   return Promise.race([
     Promise.all(want),
     new Promise((go) => setTimeout(go, 1500)),

@@ -1,17 +1,15 @@
       /* ---- typeface ----
-         TH Sarabun, self-hosted. Not a link to Google: a workplace tool should
-         not tell a third party who opened it and when, and eight files of ten
-         kilobytes cost less than the DNS lookup and handshake would.
+         Five faces that draw Thai and English both, self-hosted. Not a link to
+         Google: a workplace tool should not tell a third party who opened it and
+         when, and ten kilobytes of woff2 cost less than the handshake would.
 
-         "Sarabun" here is the web edition of TH Sarabun by the same foundry
-         (Cadson Demak, SIL Open Font License) — the desktop TH Sarabun New is
-         not a webfont and exists only on machines that installed it, so it
-         follows as the offline fallback rather than leading.
+         A browser downloads only the face it is asked to draw with, and only the
+         script it needs — Thai and Latin are separate files with a unicode-range
+         each, so an English screen never fetches the Thai one. Declaring all
+         five costs nothing until one is chosen.
 
-         Thai and Latin are separate files with a unicode-range each, so an
-         English screen never downloads the Thai one. The version is in the
-         filename because /assets/ is cached for a year: a new cut is a new
-         name, never the same URL with different bytes. */
+         The versions are in the filenames because /assets/ is cached for a year:
+         a new cut is a new name, never the same URL with different bytes. */
 
       @font-face {
         font-family: "Sarabun"; font-style: normal; font-weight: 400; font-display: swap;
@@ -53,10 +51,182 @@
         src: url("/assets/fonts/sarabun-latin-700-v17.woff2") format("woff2");
         unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
       }
+      @font-face {
+        font-family: "Noto Sans Thai"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/noto-thai-400-v29.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Noto Sans Thai"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/noto-latin-400-v29.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Noto Sans Thai"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/noto-thai-500-v29.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Noto Sans Thai"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/noto-latin-500-v29.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Noto Sans Thai"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/noto-thai-600-v29.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Noto Sans Thai"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/noto-latin-600-v29.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Noto Sans Thai"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/noto-thai-700-v29.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Noto Sans Thai"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/noto-latin-700-v29.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "IBM Plex Sans Thai"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/plex-thai-400-v11.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "IBM Plex Sans Thai"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/plex-latin-400-v11.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "IBM Plex Sans Thai"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/plex-thai-500-v11.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "IBM Plex Sans Thai"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/plex-latin-500-v11.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "IBM Plex Sans Thai"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/plex-thai-600-v11.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "IBM Plex Sans Thai"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/plex-latin-600-v11.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "IBM Plex Sans Thai"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/plex-thai-700-v11.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "IBM Plex Sans Thai"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/plex-latin-700-v11.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Prompt"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/prompt-thai-400-v12.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Prompt"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/prompt-latin-400-v12.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Prompt"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/prompt-thai-500-v12.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Prompt"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/prompt-latin-500-v12.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Prompt"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/prompt-thai-600-v12.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Prompt"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/prompt-latin-600-v12.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Prompt"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/prompt-thai-700-v12.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Prompt"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/prompt-latin-700-v12.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Kanit"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/kanit-thai-400-v17.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Kanit"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/assets/fonts/kanit-latin-400-v17.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Kanit"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/kanit-thai-500-v17.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Kanit"; font-style: normal; font-weight: 500; font-display: swap;
+        src: url("/assets/fonts/kanit-latin-500-v17.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Kanit"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/kanit-thai-600-v17.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Kanit"; font-style: normal; font-weight: 600; font-display: swap;
+        src: url("/assets/fonts/kanit-latin-600-v17.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Kanit"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/kanit-thai-700-v17.woff2") format("woff2");
+        unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Kanit"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/assets/fonts/kanit-latin-700-v17.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
 
-      /* One name for the typeface, so changing it is one line and not a hundred. */
-      :root { --sans: "Sarabun", "TH Sarabun New", "TH SarabunPSK", "Noto Sans Thai",
-                "Leelawadee UI", system-ui, sans-serif; }
+      /* ---- which face, and how big ----
+         --sans is the one name every rule in this file uses, so the choice is a
+         single attribute on <html> rather than a hundred edits. --ui is the
+         scale: the interface was drawn at 13px, so a person asking for 20 gets
+         1.538, and every size in the file is that many times its drawn size.
+
+         Both are set before the first paint by the script in <head>, from the
+         same localStorage keys src/typeface.ts writes — a module import lands
+         after the first paint and the text would visibly jump. */
+      :root { --ui: 1.538; }
+      :root, html[data-face="sarabun"] { --sans: "Sarabun", "TH Sarabun New", "TH SarabunPSK", "Noto Sans Thai", "Leelawadee UI", system-ui, sans-serif; }
+      html[data-face="noto"] { --sans: "Noto Sans Thai", "Leelawadee UI", system-ui, sans-serif; }
+      html[data-face="plex"] { --sans: "IBM Plex Sans Thai", "Noto Sans Thai", "Leelawadee UI", system-ui, sans-serif; }
+      html[data-face="prompt"] { --sans: "Prompt", "Noto Sans Thai", "Leelawadee UI", system-ui, sans-serif; }
+      html[data-face="kanit"] { --sans: "Kanit", "Noto Sans Thai", "Leelawadee UI", system-ui, sans-serif; }
 
       :root {
         --surface: #fff; --surface-2: #f7f8fa; --surface-3: #f2f3f6;
@@ -119,12 +289,12 @@
         background: var(--surface);
       }
       .cw-head .sp { flex: 1; }
-      .cw-head b { font-size: 15px; font-weight: 600; }
+      .cw-head b { font-size: calc(15px * var(--ui)); font-weight: 600; }
       .cw-btn {
         display: grid; place-items: center; min-width: 32px; height: 32px; padding: 0 10px;
         border: 1px solid var(--border-2); border-radius: 9px;
         background: var(--surface); color: var(--text-2);
-        font: 500 13px var(--sans); cursor: pointer;
+        font: 500 calc(13px * var(--ui)) var(--sans); cursor: pointer;
       }
       .cw-btn:hover { border-color: var(--accent-line); color: var(--accent); }
       .cw-primary { border: none; background: var(--teal); color: #fff; font-weight: 600; }
@@ -136,9 +306,9 @@
         display: grid; flex: 0 0 auto;
         border-bottom: 1px solid var(--border); background: var(--surface);
       }
-      .cw-day { padding: 8px 4px; text-align: center; font-size: 12px; color: var(--text-3); }
+      .cw-day { padding: 8px 4px; text-align: center; font-size: calc(12px * var(--ui)); color: var(--text-3); }
       .cw-day b { display: inline-grid; place-items: center; min-width: 24px; height: 24px;
-        margin-left: 6px; border-radius: 50%; font-size: 13px; color: var(--text); }
+        margin-left: 6px; border-radius: 50%; font-size: calc(13px * var(--ui)); color: var(--text); }
       .cw-day.today b { background: var(--danger); color: #fff; }
       .cw-day.today { color: var(--danger); }
 
@@ -155,7 +325,7 @@
       .cw-hour.free:hover { background: var(--surface-2); }
       .cw-gutter {
         border-top: 1px solid transparent; padding-right: 8px;
-        text-align: right; font-size: 11px; color: var(--faint);
+        text-align: right; font-size: calc(11px * var(--ui)); color: var(--faint);
         font-variant-numeric: tabular-nums; transform: translateY(-7px);
       }
       .cw-col { border-left: 1px solid var(--border); }
@@ -165,9 +335,9 @@
         position: absolute; left: 3px; right: 3px; overflow: hidden;
         padding: 3px 6px; border-radius: 7px; border-left: 3px solid var(--teal);
         background: color-mix(in srgb, var(--teal) 16%, var(--surface));
-        font-size: 11.5px; line-height: 1.35; cursor: pointer; text-align: left;
+        font-size: calc(11.5px * var(--ui)); line-height: 1.35; cursor: pointer; text-align: left;
       }
-      .cw-ev b { display: block; font-size: 12px; font-weight: 600;
+      .cw-ev b { display: block; font-size: calc(12px * var(--ui)); font-weight: 600;
         overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .cw-ev small { color: var(--text-3); }
       .cw-ev.mine { border-left-color: var(--accent); }
@@ -179,7 +349,7 @@
       .cw-now-chip {
         position: absolute; transform: translate(-100%, -50%); margin-left: -4px;
         padding: 1px 6px; border-radius: 6px; background: var(--danger); color: #fff;
-        font: 600 10.5px var(--sans); white-space: nowrap; pointer-events: none;
+        font: 600 calc(10.5px * var(--ui)) var(--sans); white-space: nowrap; pointer-events: none;
         font-variant-numeric: tabular-nums;
       }
 
@@ -191,15 +361,15 @@
         font-family: var(--sans); color: var(--text);
       }
       .cw-pop[hidden] { display: none; }
-      .cw-pop h4 { margin: 0 0 2px; font-size: 14.5px; font-weight: 600; }
+      .cw-pop h4 { margin: 0 0 2px; font-size: calc(14.5px * var(--ui)); font-weight: 600; }
       .cw-pop dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px;
-        margin: 8px 0 0; font-size: 12.5px; }
+        margin: 8px 0 0; font-size: calc(12.5px * var(--ui)); }
       .cw-pop dt { color: var(--muted); }
       .cw-pop dd { margin: 0; }
       .cw-pop-acts { display: flex; gap: 6px; margin-top: 12px; }
       .cw-pop-acts button {
         flex: 1; height: 30px; border-radius: 9px; cursor: pointer;
-        font: 500 12.5px var(--sans);
+        font: 500 calc(12.5px * var(--ui)) var(--sans);
         border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2);
       }
       .cw-pop-acts button:hover { border-color: var(--accent-line); color: var(--accent); }
@@ -208,7 +378,7 @@
       .cw-pop-acts .drop:hover { background: var(--danger); color: #fff; }
       /* Asked in place rather than in a browser dialog, which cannot say which
          booking it means and cannot be styled to look like it belongs here. */
-      .cw-pop-sure { margin-top: 10px; font-size: 12.5px; color: var(--danger-ink); }
+      .cw-pop-sure { margin-top: 10px; font-size: calc(12.5px * var(--ui)); color: var(--danger-ink); }
       .cw-pop-sure[hidden] { display: none; }
       /* the booking form, borrowed from the sidebar and put in the middle */
       .cw-modal {
@@ -229,11 +399,11 @@
         .cw-day span { display: none; }
       }
 
-      .cal-msg { min-height: 15px; font-size: 12px; color: var(--teal-ink); }
+      .cal-msg { min-height: 15px; font-size: calc(12px * var(--ui)); color: var(--teal-ink); }
       .cal-msg.err { color: var(--danger); }
       .cal-form { display: flex; flex-direction: column; gap: 7px; padding: 10px;
       .cal-form[hidden] { display: none; }
-      .cal-row { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--text-3); }
+      .cal-row { display: flex; flex-direction: column; gap: 3px; font-size: calc(11.5px * var(--ui)); color: var(--text-3); }
       .cal-row input, .cal-row select {
       .cal-row input:focus, .cal-row select:focus { border-color: var(--teal); }
       .cal-actions { display: flex; gap: 7px; justify-content: flex-end; margin-top: 2px; }

@@ -56,4 +56,28 @@ if (missing.length) {
   }
   process.exit(1);
 }
-console.log(`all ${new Set(used).size} referenced custom properties are defined (${declared.size} declared, script included)`);
+/**
+ * And every size goes through the scale.
+ *
+ * The text size setting works by making each size in this file a multiple of
+ * the size it was drawn at. A plain font-size: 13px slipped in later does not
+ * break anything visible at the default — it simply stops growing when somebody
+ * sets the text larger, and sits at 13px in a screen of 20px text. Nothing
+ * reports that; a reader just finds one label they cannot read.
+ *
+ * Only inside @font-face is a bare px correct, and there are none there.
+ */
+const SIZE = new RegExp('(font-size:|font:(?:\\s+italic)?(?:\\s+\\d{3})?)\\s*([\\d.]+)px', 'g');
+const bare = [];
+for (const m of css.matchAll(SIZE)) {
+  const line = css.slice(0, m.index).split('\n').length;
+  bare.push(`${m[0].trim()}  at index.html:${line}`);
+}
+if (bare.length) {
+  console.error(`! ${bare.length} size(s) that will not follow the text size setting:`);
+  for (const b of bare) console.error(`    ${b}`);
+  console.error('    write them as calc(Npx * var(--ui))');
+  process.exit(1);
+}
+
+console.log(`all ${new Set(used).size} referenced custom properties are defined (${declared.size} declared, script included), and every size scales`);

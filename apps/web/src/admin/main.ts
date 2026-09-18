@@ -12,6 +12,7 @@ import { API, authToken } from "../api";
 import { WORKSPACE } from "../workspace";
 import { t, applyLang, locale } from "../i18n";
 import { applyColorMode, watchSystemColorMode } from "../appearance";
+import { applyTypeface } from "../typeface";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const SVG = "http://www.w3.org/2000/svg";
@@ -358,6 +359,10 @@ function paintRange() {
 async function boot() {
   // the light/dark choice made in the app, not just the operating system's
   applyColorMode();
+  // These two pages have no settings of their own; they follow the choice
+  // made in the room, so somebody who set the text larger there does not
+  // arrive here to find it small again.
+  applyTypeface();
   watchSystemColorMode();
   applyLang();
   $("which").textContent = `${t("แดชบอร์ดผู้ดูแล")} · ${WORKSPACE}`;
