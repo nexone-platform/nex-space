@@ -1723,10 +1723,16 @@
         place-items: center; font-family: var(--sans); }
       #prefs-modal .pf-box { display: flex; width: min(96vw, calc(900px * var(--ui))); height: min(88vh, 620px);
         background: var(--surface); border-radius: var(--r-card); overflow: hidden; box-shadow: 0 28px 70px #0006; }
-      .pf-nav { width: calc(216px * var(--ui)); flex: 0 0 auto; background: var(--surface-2); border-right: 1px solid var(--border);
+      /* A column, so the last item can be pushed to the floor of it rather than
+         to a position counted from the top — which stays right when the guests
+         item is hidden for a space that has none. */
+      .pf-nav { display: flex; flex-direction: column; width: calc(216px * var(--ui)); flex: 0 0 auto; background: var(--surface-2); border-right: 1px solid var(--border);
         padding: 18px 10px; overflow-y: auto; }
       /* the member table needs the width more than the nav labels do */
-      @media (max-width: 780px) { .pf-nav { width: 150px; padding: 14px 7px; } }
+      /* Narrow enough to leave a pane worth reading beside it, but still able to
+         grow — at 150px flat, "จัดการสมาชิก" wraps onto two lines the moment the
+         text is set larger. The vw half is what keeps it off half the screen. */
+      @media (max-width: 780px) { .pf-nav { width: min(34vw, calc(150px * var(--ui))); padding: 14px 7px; } }
       .pf-group { padding: 12px 10px 6px; font: 600 calc(11.5px * var(--ui)) var(--sans); color: var(--faint);
         letter-spacing: .3px; }
       .pf-group:first-child { padding-top: 0; }
@@ -1734,6 +1740,10 @@
         background: transparent; color: var(--text-2); padding: 9px 10px; border-radius: 9px; text-align: left;
         font: 500 calc(13.5px * var(--ui)) var(--sans); }
       .pf-item:hover { background: var(--surface-3); }
+      /* Credits are an obligation the art licences put on us, not a setting
+         anybody came here to change. Bottom of the column, out of the way of
+         the things people open this dialog for, and still one click away. */
+      .pf-item.pf-last { margin-top: auto; }
       .pf-item.active { background: var(--accent); color: #fff; }
       .pf-item svg { width: 17px; height: 17px; flex: 0 0 auto; }
       .pf-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -2505,10 +2515,6 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.1 14.5a1.4 1.4 0 0 0 .3 1.6 2 2 0 1 1-2.8 2.8 1.4 1.4 0 0 0-2.4 1v.2a2 2 0 1 1-4 0 1.4 1.4 0 0 0-2.4-1 2 2 0 1 1-2.8-2.8 1.4 1.4 0 0 0-1-2.4H4a2 2 0 1 1 0-4 1.4 1.4 0 0 0 1-2.4 2 2 0 1 1 2.8-2.8 1.4 1.4 0 0 0 2.4-1V4a2 2 0 1 1 4 0 1.4 1.4 0 0 0 2.4 1 2 2 0 1 1 2.8 2.8 1.4 1.4 0 0 0 1 2.4h.1a2 2 0 1 1 0 4h-.2a1.4 1.4 0 0 0-1.2.9z"/></svg>
             <span>ทั่วไป</span>
           </button>
-          <button class="pf-item" data-pane="credits">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M8 7.5h7M8 10.5h5"/></svg>
-            <span>เครดิตงานศิลป์</span>
-          </button>
           <div class="pf-group">ออฟฟิศ</div>
           <button class="pf-item active" data-pane="members">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6a3 3 0 0 1 0 6"/><path d="M18 20a6 6 0 0 0-3-5"/></svg>
@@ -2517,6 +2523,10 @@
           <button class="pf-item" data-pane="guests" id="pf-nav-guests">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="8" r="3.2"/><path d="M4 20a6 6 0 0 1 12 0"/><path d="M19 8v6M16 11h6"/></svg>
             <span id="pf-nav-guests-label">จัดการแขก</span>
+          </button>
+          <button class="pf-item pf-last" data-pane="credits">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M8 7.5h7M8 10.5h5"/></svg>
+            <span>เครดิตงานศิลป์</span>
           </button>
         </nav>
         <section class="pf-main">
