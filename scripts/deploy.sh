@@ -67,6 +67,30 @@ else
 fi
 [ -f .env ] || warn ".env is missing — Google sign-in, SMTP and LiveKit stay off"
 
+# ------------------------------------------------------------------ disk space
+# A build that runs out of disk fails while unpacking a layer, twenty minutes
+# in, and reports it as "no space left on device" against a path nobody
+# recognises — a sprite sheet deep inside a containerd snapshot. The cause is
+# never that file. Said here instead, before the build, with the way out.
+#
+# It fills up on its own: every deploy leaves the layers it replaced behind, and
+# the web image alone carries ~386 MB of avatar sprites.
+DOCKER_ROOT=$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true)
+[ -n "$DOCKER_ROOT" ] || DOCKER_ROOT=/var/lib/docker
+FREE_MB=$(df -Pm "$DOCKER_ROOT" 2>/dev/null | awk 'NR==2 {print $4}' || true)
+if [ -n "${FREE_MB:-}" ]; then
+  if [ "$FREE_MB" -lt 3000 ]; then
+    warn "only ${FREE_MB}MB free on $DOCKER_ROOT — a build needs a few GB"
+    warn "reclaim it with:  docker builder prune -af"
+    warn "then, if still tight:  docker image prune -af"
+    die  "never with --volumes: nexspace-api-data holds the database and the uploads"
+  elif [ "$FREE_MB" -lt 6000 ]; then
+    warn "${FREE_MB}MB free on $DOCKER_ROOT — tight. 'docker builder prune -af' reclaims the build cache"
+  else
+    ok "$((FREE_MB / 1024))GB free on $DOCKER_ROOT"
+  fi
+fi
+
 BEFORE=$(git rev-parse HEAD)
 SERVICES=""
 
@@ -197,6 +221,13 @@ else
   fi
   # shellcheck disable=SC2086
   $DC up -d --build $SERVICES
+
+  # And take last week's cache back, now that the build that might have reused
+  # it is over. Cache only — images and volumes are untouched, so a rollback
+  # still has something to roll back to.
+  if docker builder prune -f --filter until=168h >/dev/null 2>&1; then
+    ok "build cache older than a week cleared"
+  fi
 fi
 
 # --------------------------------------------------------------------- settling
