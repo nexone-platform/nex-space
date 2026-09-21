@@ -79,12 +79,12 @@ DOCKER_ROOT=$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true)
 [ -n "$DOCKER_ROOT" ] || DOCKER_ROOT=/var/lib/docker
 FREE_MB=$(df -Pm "$DOCKER_ROOT" 2>/dev/null | awk 'NR==2 {print $4}' || true)
 if [ -n "${FREE_MB:-}" ]; then
-  if [ "$FREE_MB" -lt 3000 ]; then
+  if [ "$FREE_MB" -lt 5000 ]; then
     warn "only ${FREE_MB}MB free on $DOCKER_ROOT — a build needs a few GB"
     warn "reclaim it with:  docker builder prune -af"
     warn "then, if still tight:  docker image prune -af"
     die  "never with --volumes: nexspace-api-data holds the database and the uploads"
-  elif [ "$FREE_MB" -lt 6000 ]; then
+  elif [ "$FREE_MB" -lt 20000 ]; then
     warn "${FREE_MB}MB free on $DOCKER_ROOT — tight. 'docker builder prune -af' reclaims the build cache"
   else
     ok "$((FREE_MB / 1024))GB free on $DOCKER_ROOT"
@@ -219,15 +219,20 @@ else
   else
     warn "no media server — above two people in a conversation the audio will run late"
   fi
-  # shellcheck disable=SC2086
-  $DC up -d --build $SERVICES
-
-  # And take last week's cache back, now that the build that might have reused
-  # it is over. Cache only — images and volumes are untouched, so a rollback
-  # still has something to roll back to.
+  # Last week's build cache goes back before the build, not after. After is the
+  # half that never runs: a deploy that dies partway never reaches its own
+  # tidy-up, and a run of failed deploys is exactly when the cache piles up —
+  # 80 GB of it, which is how this disk filled.
+  #
+  # A week is kept because that is the cache this build could actually reuse.
+  # Cache only: images and volumes are untouched, so a rollback still has
+  # something to roll back to.
   if docker builder prune -f --filter until=168h >/dev/null 2>&1; then
     ok "build cache older than a week cleared"
   fi
+
+  # shellcheck disable=SC2086
+  $DC up -d --build $SERVICES
 fi
 
 # --------------------------------------------------------------------- settling
