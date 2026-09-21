@@ -118,6 +118,10 @@ export const classicTheme: MapTheme = {
     // hall: reception and a walkway. The desks that used to be scattered here in
     // pairs now live in the team pod above, so this reads as an entrance again
     ["reception-desk", 15, 16, true], ["plant", 17, 16, true],
+    // The filing cabinet, in the open where people walk past it. Half size:
+    // the art is 64x96, and at full size a three-tile cabinet beside a
+    // one-tile person reads as a wardrobe.
+    ["office/cabinet", 11, 12, true, 0.5],
     ["rug", 15, 13, false],
     ["plant-large", 11, 17, true], ["plant-large", 20, 17, true],
     ["plant", 5, 11, false], ["plant", 26, 11, false],
@@ -186,7 +190,7 @@ export const classicTheme: MapTheme = {
   interactives: [
     { type: "whiteboard", x: 7, y: 1, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
     { type: "screen", x: 16, y: 0, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
-    { type: "cabinet", x: 10, y: 10, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
+    { type: "cabinet", x: 11, y: 12, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
     { type: "portal", x: 2, y: 7, label: "เทเลพอร์ตไปโซนขวา", icon: "✨", target: { x: 17, y: 11 } },
     { type: "portal", x: 17, y: 11, label: "เทเลพอร์ตกลับ", icon: "✨", target: { x: 2, y: 7 } },
   ],
@@ -266,6 +270,7 @@ export const departmentsTheme: MapTheme = {
     ...DEPT_STATIONS.flatMap((s) => seat(s.desk, s.chair, s.x, s.y)),
     // engineering
     ["whiteboard", 11, 3, true], ["bookshelf", 11.5, 9.5, true], ["plant", 3, 10, false],
+    ["office/cabinet", 13, 9.5, true, 0.5],
     // design
     ["plant-large", 14, 3, true], ["plant", 21, 10, false],
     ["side-table", 18, 8, false], ["floor-lamp", 20, 8, false],
@@ -325,7 +330,7 @@ export const departmentsTheme: MapTheme = {
   interactives: [
     { type: "whiteboard", x: 11, y: 3, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
     { type: "screen", x: 25.5, y: 3, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
-    { type: "cabinet", x: 11.5, y: 9.5, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
+    { type: "cabinet", x: 13, y: 9.5, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
   ],
 };
 
@@ -438,6 +443,7 @@ export const officeTheme: MapTheme = {
     // it read as a store cupboard with a table in it.
     ["office/credenza", 12.5, 12.6, true],
     ["office/copier", 17.5, 12.6, true], ["office/mailboxes", 18.5, 15.5, true],
+    ["office/cabinet", 15, 12.6, true, 0.5],
   ],
 
   outdoor: [
@@ -477,7 +483,7 @@ export const officeTheme: MapTheme = {
   interactives: [
     { type: "screen", x: 23, y: 3, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
     { type: "whiteboard", x: 18, y: 2, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
-    { type: "cabinet", x: 12.5, y: 12.6, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
+    { type: "cabinet", x: 15, y: 12.6, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
   ],
 };
 

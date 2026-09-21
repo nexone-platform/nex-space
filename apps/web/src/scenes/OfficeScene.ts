@@ -3153,6 +3153,17 @@ export class OfficeScene extends Phaser.Scene {
       const px = it.x * TILE + TILE / 2, py = it.y * TILE + TILE / 2;
       const ic = this.add.text(px, py - 22, it.icon, { fontSize: "16px" }).setOrigin(0.5).setDepth(90000);
       this.tweens.add({ targets: ic, y: py - 28, duration: 700, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+      /**
+       * And a nameplate on the cabinet, the same one the desks wear.
+       *
+       * A whiteboard and a screen are recognisable from their own art; a filing
+       * cabinet in a room full of furniture is a piece of furniture. Without a
+       * word on it, the only way to learn it opens is to walk into it — which
+       * is how the first version of this shipped, and nobody found it.
+       */
+      if (it.type === "cabinet") {
+        this.makeNameTag(px, py + 18, t("ตู้เก็บเอกสาร"), true).setDepth(89999);
+      }
     }
     document.getElementById("modal-close")?.addEventListener("click", () => this.closeModal());
     this.input.keyboard!.on("keydown-ESC", () => this.closeModal());
