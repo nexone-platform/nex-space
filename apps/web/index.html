@@ -1719,6 +1719,55 @@
       #meet-enter:hover { background: var(--teal-hover); }
 
       /* ---- preferences modal: left nav + one pane at a time ---- */
+      /* ---- the filing cabinet ----
+         Shaped like the workspace dialogs beside it, including the thing that
+         matters most on a list nobody can predict the length of: a ceiling and
+         a scrollbar, so the button at the bottom is always reachable. */
+      #cab-modal { position: fixed; inset: 0; z-index: 71; background: #0b0b1099; display: none; place-items: center; }
+      #cab-modal .cab-box { width: min(94vw, calc(560px * var(--ui))); max-height: 88vh; overflow-y: auto;
+        background: var(--surface); border-radius: var(--r-card); padding: 22px 24px 20px;
+        box-shadow: 0 24px 60px #0007; }
+      .cab-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+      .cab-head h2 { margin: 0; font-size: calc(18px * var(--ui)); color: var(--text); }
+      .cab-head button { background: none; border: none; color: var(--muted); cursor: pointer;
+        font-size: calc(16px * var(--ui)); line-height: 1; padding: 4px 6px; }
+      .cab-sub { margin: 2px 0 14px; font-size: calc(12.5px * var(--ui)); color: var(--muted); }
+      .cab-msg { min-height: calc(16px * var(--ui)); font-size: calc(12.5px * var(--ui)); color: var(--muted); }
+      .cab-msg.err { color: var(--danger, #a83c36); }
+      .cab-tools { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px;
+        padding: 12px; margin-bottom: 12px; border-radius: var(--r-box); background: var(--surface-2); }
+      .cab-field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 180px; }
+      .cab-field b { font-size: calc(11.5px * var(--ui)); color: var(--text-3); font-weight: 600; }
+      .cab-field input, .cab-field select { padding: 7px 9px; border-radius: 9px;
+        border: 1px solid var(--border-2); background: var(--surface); color: var(--text);
+        font: calc(13px * var(--ui)) var(--sans); }
+      .cab-doc { display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+        border: 1px solid var(--border); border-radius: var(--r-box); margin-bottom: 8px; }
+      .cab-doc-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+      .cab-doc-name { color: var(--text); font-weight: 600; font-size: calc(13.5px * var(--ui));
+        text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .cab-doc-name:hover { text-decoration: underline; }
+      .cab-doc-meta { color: var(--muted); font-size: calc(11.5px * var(--ui)); }
+      .cab-tag { font-style: normal; font-size: calc(11px * var(--ui)); color: var(--text-3);
+        background: var(--surface-3); border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+      .cab-mini { border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2);
+        border-radius: 9px; padding: 5px 11px; cursor: pointer; font: 600 calc(12px * var(--ui)) var(--sans); }
+      .cab-mini.danger { color: #a83c36; }
+      .cab-none { color: var(--muted); font-size: calc(13px * var(--ui)); padding: 14px 2px; margin: 0; }
+      .cab-adder { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+      .cab-adder input { flex: 1 1 160px; padding: 9px 11px; border-radius: 9px;
+        border: 1px solid var(--border-2); background: var(--surface); color: var(--text);
+        font: calc(13px * var(--ui)) var(--sans); }
+      .cab-adder button, .cab-save { border: none; background: var(--teal); color: #fff;
+        border-radius: 9px; padding: 9px 16px; cursor: pointer; font: 600 calc(13px * var(--ui)) var(--sans); }
+      #cab-grants { position: fixed; inset: 0; z-index: 73; background: #0b0b1099; display: none; place-items: center; }
+      #cab-grants .cab-grants-box { width: min(94vw, calc(460px * var(--ui))); max-height: 86vh; overflow-y: auto;
+        background: var(--surface); border-radius: var(--r-card); padding: 20px 22px; box-shadow: 0 24px 60px #0007; }
+      .cab-grant { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        padding: 8px 0; border-bottom: 1px solid var(--border); font-size: calc(13px * var(--ui)); color: var(--text); }
+      .cab-grant select { padding: 6px 8px; border-radius: 9px; border: 1px solid var(--border-2);
+        background: var(--surface); color: var(--text); font: calc(12.5px * var(--ui)) var(--sans); }
+      .cab-save { margin-top: 14px; width: 100%; }
       #prefs-modal { position: fixed; inset: 0; z-index: 72; background: #0b0b1066; display: none;
         place-items: center; font-family: var(--sans); }
       #prefs-modal .pf-box { display: flex; width: min(96vw, calc(900px * var(--ui))); height: min(88vh, 620px);
@@ -2770,6 +2819,36 @@
       <button id="area-book" title="จองห้องนี้" hidden>จองห้องนี้</button>
     </div>
     <div id="toast"><span class="t-ico"></span><span class="t-msg"></span></div>
+    <!-- The filing cabinet, opened by walking up to one and pressing E. Its own
+         dialog rather than the embed modal beside it: what is inside is a list
+         the server filtered, not a page to frame. -->
+    <div id="cab-modal">
+      <div class="cab-box">
+        <div class="cab-head">
+          <h2 id="cab-title">ตู้เก็บเอกสาร</h2>
+          <button id="cab-close" title="ปิด">✕</button>
+        </div>
+        <p class="cab-sub">เอกสารอยู่ที่เดิมของมัน — NexSpace เก็บแค่ชื่อกับทางเข้าถึง ไม่ได้คัดลอกไฟล์มา</p>
+        <div class="cab-msg" id="cab-msg"></div>
+        <div class="cab-tools" id="cab-tools" hidden></div>
+        <div id="cab-list"></div>
+        <form class="cab-adder" id="cab-add" hidden>
+          <input type="text" id="cab-add-title" placeholder="ชื่อเอกสาร" maxlength="200" />
+          <input type="url" id="cab-add-url" placeholder="วางลิงก์ Google Drive หรือ OneDrive" />
+          <button type="submit">เพิ่มเข้าตู้</button>
+        </form>
+        <div id="cab-grants">
+          <div class="cab-grants-box">
+            <div class="cab-head">
+              <h2 id="cab-grants-title">ใครเปิดตู้นี้ได้</h2>
+              <button id="cab-grants-close" title="ปิด">✕</button>
+            </div>
+            <div id="cab-grants-body"></div>
+            <button id="cab-grants-save" class="cab-save">บันทึกสิทธิ์</button>
+          </div>
+        </div>
+      </div>
+    </div>
     <div id="modal">
       <div class="modal-box">
         <div class="modal-head"><span id="modal-title"></span><button id="modal-close" title="ปิด">✕</button></div>

@@ -20,7 +20,7 @@ export type Flat = [key: string, x: number, y: number];
 export interface Desk { id: string; x: number; y: number; sx: number; sy: number }
 
 export interface Interactive {
-  type: "whiteboard" | "screen" | "portal" | "embed";
+  type: "whiteboard" | "screen" | "portal" | "embed" | "cabinet";
   x: number; y: number; label: string; icon: string;
   url?: string;
   target?: { x: number; y: number };
@@ -82,7 +82,7 @@ const isDesk = (v: any) =>
   !!v && typeof v.id === "string" && v.id.length <= 64
   && num(v.x) && num(v.y) && num(v.sx) && num(v.sy);
 
-const INTERACTIVE_KINDS = ["whiteboard", "screen", "portal", "embed"];
+const INTERACTIVE_KINDS = ["whiteboard", "screen", "portal", "embed", "cabinet"];
 const isInteractive = (v: any) =>
   !!v && INTERACTIVE_KINDS.indexOf(v.type) >= 0 && num(v.x) && num(v.y)
   && typeof v.label === "string" && v.label.length <= 60

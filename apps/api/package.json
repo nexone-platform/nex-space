@@ -34,7 +34,9 @@
     "test:consent": "node ../../node_modules/tsx/dist/cli.mjs scripts/consent.test.mts",
     "test:gcal": "node ../../node_modules/tsx/dist/cli.mjs scripts/gcal.test.mts",
     "test:mscal": "node ../../node_modules/tsx/dist/cli.mjs scripts/mscal.test.mts",
-    "test:remind": "node ../../node_modules/tsx/dist/cli.mjs scripts/remind.test.mts"
+    "test:remind": "node ../../node_modules/tsx/dist/cli.mjs scripts/remind.test.mts",
+    "test:cabinet": "tsx scripts/cabinet.test.mts",
+    "test:cabinets": "node scripts/cabinet-e2e.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

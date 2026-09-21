@@ -21,6 +21,7 @@ import { propPath, type Interactive } from "./mapThemes";
 import { currentTheme, currentMapSlug, loadMapList, mapList } from "./mapSource";
 import { canHear, type PrivateArea } from "./areas";
 import { canvasStack } from "../typeface";
+import { setupCabinetPanel } from "../cabinetPanel";
 
 const LPC_COLS = 9; // LPC walk sheet: 9 frames per direction row
 const LPC_SCALE = 0.5;    // 64px LPC frames render large vs 32px furniture -> scale down
@@ -233,6 +234,7 @@ export class OfficeScene extends Phaser.Scene {
   // Written out by hand once, and then it drifted from what the panel returns.
   // Taking the type from the function means it cannot drift again.
   private calPanel?: ReturnType<typeof mountCalendarPanel>;
+  private cabPanel?: ReturnType<typeof setupCabinetPanel>;
   /** every area label on this map, so a booking can be written over its door */
   private areaLabels = new Map<string, Phaser.GameObjects.Text>();
   /**
@@ -3177,6 +3179,14 @@ export class OfficeScene extends Phaser.Scene {
       return;
     }
     if (it.type === "screen") { await this.activateScreen(it); return; }
+    // The cabinet is opened by where it stands, not by an id: the map is what
+    // says one is here, and the server makes the record the first time somebody
+    // walks up to it.
+    if (it.type === "cabinet") {
+      this.cabPanel ??= setupCabinetPanel(WORKSPACE);
+      this.cabPanel.open(MAP_KEY, Math.round(it.x), Math.round(it.y));
+      return;
+    }
     if (it.url) this.openModal(it.label, it.url); // whiteboard / embed
   }
 

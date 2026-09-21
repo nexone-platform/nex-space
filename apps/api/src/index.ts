@@ -8,6 +8,10 @@ import {
   requireAuth, userFromToken, type AuthedRequest,
 } from "./auth";
 import { sendLoginCode, mailEnabled, mailTransport, sendInvite, sendBooking, sendReminder, mailCheck } from "./mailer";
+import {
+  levelForCabinet, levelForDoc, whyForDoc, atLeast, isLevel, isOpenTo, runsTheSpace,
+  type Level, type Because,
+} from "./cabinet.js";
 import { iceConfig, turnEnabled } from "./ice";
 import { mapDocProblem } from "./mapValidate";
 import {
@@ -3001,6 +3005,412 @@ app.post(
     res.json({ attachment: attachView(saved) });
   },
 );
+
+// ------------------------------------------------------------------ cabinets ---
+/**
+ * The filing cabinets standing in the rooms.
+ *
+ * Every answer on these routes runs through src/cabinet.ts. Not because it is
+ * tidier — because it is the only way the rule that was tested is the rule that
+ * runs. A second copy of "can this person see this" written inline is a second
+ * rule, and the day they disagree nothing says so.
+ *
+ * Two shapes of refusal, deliberately different:
+ *   · a cabinet or document this person may not see is **404**, not 403. A 403
+ *     confirms that the thing exists, which for a cabinet called "เงินเดือน"
+ *     is most of what somebody was trying to learn.
+ *   · a thing they may see but may not change is **403**, because they already
+ *     know it is there.
+ */
+
+/** what the browser is given for one cabinet */
+const cabinetView = (
+  c: { id: string; label: string; openTo: string; mapSlug: string; x: number; y: number },
+  level: Level,
+  docs?: number,
+) => ({
+  id: c.id, label: c.label, openTo: c.openTo,
+  at: { map: c.mapSlug, x: c.x, y: c.y },
+  level, mayManage: level === "file", ...(docs === undefined ? {} : { docs }),
+});
+
+const docView = (
+  d: {
+    id: string; title: string; provider: string; url: string; mime: string | null;
+    iconUrl: string | null; openTo: string | null; addedAt: Date;
+    addedBy?: { name: string | null; email: string } | null;
+  },
+  level: Level,
+  why: Because,
+) => ({
+  id: d.id, title: d.title, provider: d.provider, url: d.url,
+  mime: d.mime, iconUrl: d.iconUrl, openTo: d.openTo,
+  addedAt: d.addedAt.toISOString(),
+  addedBy: d.addedBy ? (d.addedBy.name || d.addedBy.email) : null,
+  level, why, mayManage: level === "file",
+});
+
+/**
+ * Find the cabinet standing at a spot, making the record if this is the first
+ * time anybody opened it.
+ *
+ * The map is what says a cabinet is there. Requiring an admin to create a row
+ * as well would mean a piece of furniture that does nothing until somebody
+ * notices a setting — so the first person to walk up to it brings it into
+ * being, with the safest setting it could have.
+ */
+async function cabinetAt(workspaceId: string, mapSlug: string, x: number, y: number,
+  madeBy: string) {
+  const found = await prisma.cabinet.findUnique({
+    where: { workspaceId_mapSlug_x_y: { workspaceId, mapSlug, x, y } },
+    include: { grants: true },
+  });
+  if (found) return found;
+  const made = await prisma.cabinet.create({
+    data: { workspaceId, mapSlug, x, y, createdBy: madeBy },
+  }).catch(async () => prisma.cabinet.findUnique({
+    // two people walking up at once is one cabinet, not an error
+    where: { workspaceId_mapSlug_x_y: { workspaceId, mapSlug, x, y } },
+  }));
+  return made ? { ...made, grants: [] as { userId: string; level: string }[] } : null;
+}
+
+const asGrants = (rows: { userId: string; level: string }[]) =>
+  rows.map((g) => ({ userId: g.userId, level: g.level as Level }));
+
+/** the cabinets on one map, and what this person may do with each */
+app.get("/workspaces/:slug/cabinets", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can) return res.status(403).json({ error: "forbidden" });
+
+  const rows = await prisma.cabinet.findMany({
+    where: { workspaceId: w.id, ...(req.query.map ? { mapSlug: String(req.query.map) } : {}) },
+    include: { grants: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const who = { userId: can.me.id, role: can.role };
+  const out = [];
+  for (const c of rows) {
+    const level = levelForCabinet({ openTo: c.openTo, grants: asGrants(c.grants) }, who);
+    // A cabinet they cannot open may still hold one document that is theirs, and
+    // hiding the cabinet would hide that document with it.
+    const docs = await prisma.cabinetDoc.findMany({
+      where: { cabinetId: c.id }, include: { grants: true },
+    });
+    const mine = docs.filter((d) => levelForDoc(
+      { openTo: c.openTo, grants: asGrants(c.grants) },
+      { openTo: d.openTo, grants: asGrants(d.grants) }, who,
+    ) !== "none");
+    if (level === "none" && !mine.length) continue;
+    out.push(cabinetView(c, level, mine.length));
+  }
+  res.json({ cabinets: out });
+});
+
+/**
+ * Open the cabinet at a spot on the map.
+ *
+ * A place, not an id: the browser knows where the furniture is and nothing
+ * else, and an id in the URL would be an id somebody could try changing.
+ */
+app.get("/workspaces/:slug/cabinets/at/:map/:x/:y", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can) return res.status(403).json({ error: "forbidden" });
+
+  const x = Number(req.params.x), y = Number(req.params.y);
+  if (!Number.isInteger(x) || !Number.isInteger(y)) return res.status(400).json({ error: "bad spot" });
+  const c = await cabinetAt(w.id, String(req.params.map), x, y, can.me.id);
+  if (!c) return res.status(500).json({ error: "could not open it" });
+
+  const who = { userId: can.me.id, role: can.role };
+  const cab = { openTo: c.openTo, grants: asGrants(c.grants) };
+  const level = levelForCabinet(cab, who);
+
+  const rows = await prisma.cabinetDoc.findMany({
+    where: { cabinetId: c.id },
+    include: { grants: true, addedBy: { select: { name: true, email: true } } },
+    orderBy: { addedAt: "desc" },
+  });
+  const docs = [];
+  for (const d of rows) {
+    const doc = { openTo: d.openTo, grants: asGrants(d.grants) };
+    const lv = levelForDoc(cab, doc, who);
+    if (lv === "none") continue;
+    docs.push(docView(d, lv, whyForDoc(cab, doc, who)));
+  }
+  if (level === "none" && !docs.length) return res.status(404).json({ error: "not found" });
+
+  res.json({ cabinet: cabinetView(c, level, docs.length), docs });
+});
+
+/** rename it, or change who it stands open to — the space's own only */
+app.patch("/workspaces/:slug/cabinets/:id", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can) return res.status(403).json({ error: "forbidden" });
+  const c = await prisma.cabinet.findUnique({ where: { id: String(req.params.id) } });
+  if (!c || c.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
+  if (!runsTheSpace(can.role)) return res.status(403).json({ error: "only an owner or admin" });
+
+  const data: { label?: string; openTo?: string } = {};
+  if (req.body?.label !== undefined) {
+    const label = String(req.body.label).trim().slice(0, 60);
+    if (!label) return res.status(400).json({ error: "a cabinet needs a name" });
+    data.label = label;
+  }
+  if (req.body?.openTo !== undefined) {
+    if (!isOpenTo(req.body.openTo)) return res.status(400).json({ error: "bad openTo" });
+    data.openTo = req.body.openTo;
+  }
+  const saved = await prisma.cabinet.update({ where: { id: c.id }, data });
+  console.log(`[cabinet] ${can.me.email} set "${saved.label}" to ${saved.openTo}`);
+  res.json({ cabinet: cabinetView(saved, "file") });
+});
+
+/**
+ * The names on a cabinet: read them, and write the whole list at once.
+ *
+ * Whole list rather than one name at a time, because that is the shape of the
+ * question being answered — "who may open this" — and a screen that sends each
+ * change on its own has a state where half of it went.
+ */
+app.get("/workspaces/:slug/cabinets/:id/grants", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can || !runsTheSpace(can.role)) return res.status(403).json({ error: "only an owner or admin" });
+  const c = await prisma.cabinet.findUnique({
+    where: { id: String(req.params.id) },
+    include: { grants: { include: { user: { select: { id: true, name: true, email: true } } } } },
+  });
+  if (!c || c.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
+
+  res.json({
+    openTo: c.openTo,
+    grants: c.grants.map((g) => ({
+      userId: g.userId, level: g.level,
+      name: g.user.name || g.user.email, email: g.user.email,
+    })),
+  });
+});
+
+app.put("/workspaces/:slug/cabinets/:id/grants", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can || !runsTheSpace(can.role)) return res.status(403).json({ error: "only an owner or admin" });
+  const c = await prisma.cabinet.findUnique({ where: { id: String(req.params.id) } });
+  if (!c || c.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
+
+  const want = Array.isArray(req.body?.grants) ? req.body.grants : null;
+  if (!want) return res.status(400).json({ error: "grants must be a list" });
+  if (want.length > 200) return res.status(413).json({ error: "too many names" });
+  for (const g of want) {
+    if (typeof g?.userId !== "string" || !isLevel(g?.level)) {
+      return res.status(400).json({ error: "each grant needs a userId and a level" });
+    }
+  }
+  // Only people who are actually in this space. A userId from somewhere else
+  // would sit in the list looking like access nobody can account for.
+  const ids: string[] = [...new Set<string>(want.map((g: { userId: string }) => String(g.userId)))];
+  const members = await prisma.membership.findMany({
+    where: { workspaceId: w.id, userId: { in: ids }, role: { not: "guest" } },
+    select: { userId: true },
+  });
+  const inSpace = new Set(members.map((m) => m.userId));
+  const strangers = ids.filter((id) => !inSpace.has(id));
+  if (strangers.length) {
+    return res.status(400).json({ error: "not members of this space", n: strangers.length });
+  }
+
+  await prisma.$transaction([
+    prisma.cabinetGrant.deleteMany({ where: { cabinetId: c.id } }),
+    ...want.map((g: { userId: string; level: Level }) => prisma.cabinetGrant.create({
+      data: { cabinetId: c.id, userId: g.userId, level: g.level },
+    })),
+  ]);
+  console.log(`[cabinet] ${can.me.email} set ${want.length} name(s) on "${c.label}"`);
+  res.json({ ok: true, grants: want.length });
+});
+
+/**
+ * Put a document in.
+ *
+ * A link, for now, or a file reached through somebody's own Drive or OneDrive
+ * connection — in which case the row remembers whose, because the listing has
+ * to be able to say so. Nothing about the file is copied here: NexSpace keeps
+ * the name and the way back, and the document stays where its owner put it.
+ */
+app.post("/workspaces/:slug/cabinets/:id/docs", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can) return res.status(403).json({ error: "forbidden" });
+  const c = await prisma.cabinet.findUnique({
+    where: { id: String(req.params.id) }, include: { grants: true },
+  });
+  if (!c || c.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
+
+  const who = { userId: can.me.id, role: can.role };
+  const cab = { openTo: c.openTo, grants: asGrants(c.grants) };
+  const level = levelForCabinet(cab, who);
+  if (!atLeast(level, "file")) {
+    /**
+     * 404 or 403 turns on one question: does this person already know the
+     * cabinet is here? Somebody named on a single document inside it does —
+     * they were shown it, holding that one — so "not found" would be a lie
+     * told to a person looking straight at it. Somebody it is entirely shut to
+     * gets the answer that says nothing.
+     */
+    const inside = await prisma.cabinetDoc.findMany({
+      where: { cabinetId: c.id }, include: { grants: true },
+    });
+    const sees = level !== "none" || inside.some((d) => levelForDoc(
+      cab, { openTo: d.openTo, grants: asGrants(d.grants) }, who,
+    ) !== "none");
+    return sees
+      ? res.status(403).json({ error: "you may read this cabinet, not file in it" })
+      : res.status(404).json({ error: "not found" });
+  }
+
+  const title = String(req.body?.title ?? "").trim().slice(0, 200);
+  const url = String(req.body?.url ?? "").trim();
+  if (!title) return res.status(400).json({ error: "a document needs a name" });
+  // http(s) only. A javascript: or data: URL in a list everybody clicks is the
+  // whole of the attack, and the list is rendered by every member of the space.
+  let parsed: URL;
+  try { parsed = new URL(url); } catch { return res.status(400).json({ error: "that is not a link" }); }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    return res.status(400).json({ error: "only http and https links" });
+  }
+  const provider = ["link", "google", "microsoft"].includes(String(req.body?.provider))
+    ? String(req.body.provider) : "link";
+  const openTo = req.body?.openTo === null || req.body?.openTo === undefined
+    ? null : (isOpenTo(req.body.openTo) ? req.body.openTo : undefined);
+  if (openTo === undefined) return res.status(400).json({ error: "bad openTo" });
+
+  const doc = await prisma.cabinetDoc.create({
+    data: {
+      cabinetId: c.id, title, url: parsed.toString(), provider,
+      fileId: req.body?.fileId ? String(req.body.fileId).slice(0, 200) : null,
+      mime: req.body?.mime ? String(req.body.mime).slice(0, 120) : null,
+      iconUrl: null, openTo, addedById: can.me.id,
+    },
+    include: { addedBy: { select: { name: true, email: true } } },
+  });
+  console.log(`[cabinet] ${can.me.email} filed "${title}" in "${c.label}"`);
+  res.status(201).json({ doc: docView(doc, "file", "runs-the-space") });
+});
+
+/** change one document's own setting, or take it out */
+app.patch("/workspaces/:slug/cabinets/:id/docs/:docId", async (req, res) => {
+  const found = await docFor(req, res);
+  if (!found) return;
+  const { doc, level } = found;
+  if (!atLeast(level, "file")) return res.status(403).json({ error: "you may read this, not change it" });
+
+  const data: { title?: string; openTo?: string | null } = {};
+  if (req.body?.title !== undefined) {
+    const title = String(req.body.title).trim().slice(0, 200);
+    if (!title) return res.status(400).json({ error: "a document needs a name" });
+    data.title = title;
+  }
+  if (req.body?.openTo !== undefined) {
+    if (req.body.openTo !== null && !isOpenTo(req.body.openTo)) {
+      return res.status(400).json({ error: "bad openTo" });
+    }
+    data.openTo = req.body.openTo;
+  }
+  const saved = await prisma.cabinetDoc.update({
+    where: { id: doc.id }, data,
+    include: { addedBy: { select: { name: true, email: true } } },
+  });
+  res.json({ doc: docView(saved, level, "runs-the-space") });
+});
+
+app.delete("/workspaces/:slug/cabinets/:id/docs/:docId", async (req, res) => {
+  const found = await docFor(req, res);
+  if (!found) return;
+  if (!atLeast(found.level, "file")) {
+    return res.status(403).json({ error: "you may read this, not remove it" });
+  }
+  await prisma.cabinetDoc.delete({ where: { id: found.doc.id } });
+  res.json({ ok: true });
+});
+
+/**
+ * One document, and what this person may do with it — the shared first half of
+ * every route above. Written once because the 404-not-403 rule is easy to get
+ * right in one place and easy to forget in four.
+ */
+async function docFor(req: express.Request, res: express.Response) {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) { res.status(404).json({ error: "not found" }); return null; }
+  const can = await booker(req, w);
+  if (!can) { res.status(403).json({ error: "forbidden" }); return null; }
+  const c = await prisma.cabinet.findUnique({
+    where: { id: String(req.params.id) }, include: { grants: true },
+  });
+  if (!c || c.workspaceId !== w.id) { res.status(404).json({ error: "not found" }); return null; }
+  const doc = await prisma.cabinetDoc.findUnique({
+    where: { id: String(req.params.docId) }, include: { grants: true },
+  });
+  if (!doc || doc.cabinetId !== c.id) { res.status(404).json({ error: "not found" }); return null; }
+
+  const who = { userId: can.me.id, role: can.role };
+  const level = levelForDoc(
+    { openTo: c.openTo, grants: asGrants(c.grants) },
+    { openTo: doc.openTo, grants: asGrants(doc.grants) }, who,
+  );
+  if (level === "none") { res.status(404).json({ error: "not found" }); return null; }
+  return { w, can, cabinet: c, doc, level };
+}
+
+/** the names on one document — the exception inside the exception */
+app.put("/workspaces/:slug/cabinets/:id/docs/:docId/grants", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can || !runsTheSpace(can.role)) return res.status(403).json({ error: "only an owner or admin" });
+  const doc = await prisma.cabinetDoc.findUnique({
+    where: { id: String(req.params.docId) }, include: { cabinet: true },
+  });
+  if (!doc || doc.cabinet.workspaceId !== w.id || doc.cabinetId !== String(req.params.id)) {
+    return res.status(404).json({ error: "not found" });
+  }
+
+  const want = Array.isArray(req.body?.grants) ? req.body.grants : null;
+  if (!want) return res.status(400).json({ error: "grants must be a list" });
+  if (want.length > 200) return res.status(413).json({ error: "too many names" });
+  for (const g of want) {
+    if (typeof g?.userId !== "string" || !isLevel(g?.level)) {
+      return res.status(400).json({ error: "each grant needs a userId and a level" });
+    }
+  }
+  const ids: string[] = [...new Set<string>(want.map((g: { userId: string }) => String(g.userId)))];
+  const members = await prisma.membership.findMany({
+    where: { workspaceId: w.id, userId: { in: ids }, role: { not: "guest" } },
+    select: { userId: true },
+  });
+  const inSpace = new Set(members.map((m) => m.userId));
+  if (ids.some((id) => !inSpace.has(id))) {
+    return res.status(400).json({ error: "not members of this space" });
+  }
+
+  await prisma.$transaction([
+    prisma.docGrant.deleteMany({ where: { docId: doc.id } }),
+    ...want.map((g: { userId: string; level: Level }) => prisma.docGrant.create({
+      data: { docId: doc.id, userId: g.userId, level: g.level },
+    })),
+  ]);
+  console.log(`[cabinet] ${can.me.email} set ${want.length} name(s) on "${doc.title}"`);
+  res.json({ ok: true, grants: want.length });
+});
 
 /**
  * Hand the file back.

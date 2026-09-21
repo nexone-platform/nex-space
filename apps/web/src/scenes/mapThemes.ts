@@ -16,7 +16,7 @@ export type Prop = [key: string, x: number, y: number, solid: boolean, scale?: n
 export type Flat = [key: string, x: number, y: number];
 
 export interface Interactive {
-  type: "whiteboard" | "screen" | "portal" | "embed";
+  type: "whiteboard" | "screen" | "portal" | "embed" | "cabinet";
   x: number; y: number; label: string; icon: string;
   url?: string;
   target?: { x: number; y: number };
@@ -186,6 +186,7 @@ export const classicTheme: MapTheme = {
   interactives: [
     { type: "whiteboard", x: 7, y: 1, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
     { type: "screen", x: 16, y: 0, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
+    { type: "cabinet", x: 10, y: 10, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
     { type: "portal", x: 2, y: 7, label: "เทเลพอร์ตไปโซนขวา", icon: "✨", target: { x: 17, y: 11 } },
     { type: "portal", x: 17, y: 11, label: "เทเลพอร์ตกลับ", icon: "✨", target: { x: 2, y: 7 } },
   ],
@@ -324,6 +325,7 @@ export const departmentsTheme: MapTheme = {
   interactives: [
     { type: "whiteboard", x: 11, y: 3, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
     { type: "screen", x: 25.5, y: 3, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
+    { type: "cabinet", x: 11.5, y: 9.5, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
   ],
 };
 
@@ -475,6 +477,7 @@ export const officeTheme: MapTheme = {
   interactives: [
     { type: "screen", x: 23, y: 3, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
     { type: "whiteboard", x: 18, y: 2, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
+    { type: "cabinet", x: 12.5, y: 12.6, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
   ],
 };
 

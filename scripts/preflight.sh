@@ -179,7 +179,7 @@ fi
 say "Outgoing messages, and the consent switch"
 # These need nothing running — fetch is replaced and the body is read back — so
 # unlike the suites below they are never skipped.
-for suite in invitemail bookingmail consent gcal mscal remind; do
+for suite in invitemail bookingmail consent gcal mscal remind cabinet; do
   if out=$(npm run --silent "test:$suite" -w @nexspace/api 2>&1); then
     ok "$suite — $(echo "$out" | grep -oE '[0-9]+ passed, [0-9]+ failed' | tail -1)"
   else
@@ -203,7 +203,7 @@ api_up=0; game_up=0
 listening http://localhost:3001/health && api_up=1
 listening http://localhost:2567/ && game_up=1
 if [ "$api_up" = 1 ] && [ "$game_up" = 1 ]; then
-  for suite in roles desk guests totp ice chat dm profile presence areas map stats emote roles2 files calendar invite invited rec summary; do
+  for suite in roles desk guests totp ice chat dm profile presence areas map stats emote roles2 files calendar invite invited rec summary cabinets; do
     if out=$(npm run --silent "test:$suite" -w @nexspace/api 2>&1); then
       ok "$suite — $(echo "$out" | grep -oE '[0-9]+ passed, [0-9]+ failed' | tail -1)"
     else

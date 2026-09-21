@@ -51,6 +51,9 @@ model User {
   received      Message[]    @relation("MessagesReceived")
   dmReads       DmRead[]
   visits        Visit[]
+  filed         CabinetDoc[]     @relation("DocsFiled")
+  cabinetGrants CabinetGrant[]
+  docGrants     DocGrant[]
 }
 
 // A company / community space. People join via its invite code; the owner
@@ -81,6 +84,7 @@ model Workspace {
   invites     Invite[]
   maps        WorkspaceMap[]
   visits      Visit[]
+  cabinets    Cabinet[]
   createdAt   DateTime       @default(now())
 }
 
@@ -580,4 +584,90 @@ model MicrosoftCalendar {
   connectedAt  DateTime @default(now())
   lastError    String?
   lastErrorAt  DateTime?
+}
+
+
+// ---------------------------------------------------------------- cabinets ---
+// A filing cabinet standing in a room. The furniture is already on the map; the
+// row is what gives it a name, an access list and something inside.
+//
+// Keyed by where it stands rather than by an id somebody has to place, so the
+// map can say "there is a cabinet at 11,9" and the first person to open it
+// brings the record into being. A map that moves its furniture leaves an
+// orphan, which is a cabinet nobody can walk to — recoverable, and much better
+// than a cabinet whose contents silently attach to a different piece.
+model Cabinet {
+  id          String    @id @default(cuid())
+  workspaceId String
+  mapSlug     String
+  x           Int
+  y           Int
+  label       String    @default("ตู้เก็บเอกสาร")
+  /// members | listed — see src/cabinet.ts. Never open to guests, whatever it says.
+  openTo      String    @default("members")
+  createdAt   DateTime  @default(now())
+  createdBy   String?
+
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  docs        CabinetDoc[]
+  grants      CabinetGrant[]
+
+  @@unique([workspaceId, mapSlug, x, y])
+  @@index([workspaceId])
+}
+
+/// One person named on a whole cabinet.
+model CabinetGrant {
+  id        String   @id @default(cuid())
+  cabinetId String
+  userId    String
+  /// none | read | file
+  level     String   @default("read")
+  createdAt DateTime @default(now())
+
+  cabinet   Cabinet  @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([cabinetId, userId])
+}
+
+/// A document in a cabinet: a link, or a file in somebody's Drive or OneDrive.
+model CabinetDoc {
+  id        String   @id @default(cuid())
+  cabinetId String
+  title     String
+  /// link | google | microsoft — where it lives
+  provider  String   @default("link")
+  /// the provider's own id, when there is one; a plain link has none
+  fileId    String?
+  /// where it opens. For a provider file this is its own viewer.
+  url       String
+  mime      String?
+  iconUrl   String?
+  /// null = follows the cabinet. A value here is an exception written on purpose.
+  openTo    String?
+  /// whose connection this file was reached through, so the listing can say so
+  addedById String?
+  addedAt   DateTime @default(now())
+
+  cabinet   Cabinet    @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  addedBy   User?      @relation("DocsFiled", fields: [addedById], references: [id], onDelete: SetNull)
+  grants    DocGrant[]
+
+  @@index([cabinetId])
+}
+
+/// One person named on a single document — the exception inside the exception.
+model DocGrant {
+  id        String   @id @default(cuid())
+  docId     String
+  userId    String
+  /// none | read | file
+  level     String   @default("read")
+  createdAt DateTime @default(now())
+
+  doc       CabinetDoc @relation(fields: [docId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([docId, userId])
 }
