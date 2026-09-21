@@ -11,6 +11,7 @@
 // and the day the two disagreed it would be the wrong one that people saw.
 import { API, authHeaders } from "./api";
 import { t } from "./i18n";
+import { pickerConfig, pickFromDrive } from "./drivePicker";
 
 interface Doc {
   id: string;
@@ -376,6 +377,48 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
 
   // ---- putting one in --------------------------------------------------------------
 
+  /**
+   * The button that opens Google's own picker.
+   *
+   * Shown only where it can work — a deployment with no key gets the paste-a-link
+   * field alone, and no button that fails when pressed. Everything the picker
+   * returns is posted to the same route a pasted link goes through, so there is
+   * one way in and one set of checks on it.
+   */
+  const wirePicker = async () => {
+    const button = $<HTMLButtonElement>("cab-pick");
+    if (!button) return;
+    const cfg = await pickerConfig();
+    button.hidden = !cfg.available;
+    if (!cfg.available) return;
+    button.onclick = async () => {
+      button.disabled = true;
+      say(t("กำลังเปิด Google Drive…"));
+      try {
+        const picked = await pickFromDrive();
+        if (!picked) { say(""); return; }
+        const said = await ask("POST", `/workspaces/${slug}/cabinets/${cab!.id}/docs`, {
+          title: picked.title, url: picked.url, provider: "google",
+          fileId: picked.fileId, mime: picked.mime,
+        });
+        if (said.status !== 201) {
+          say(said.error ? String(said.error) : t("เพิ่มเอกสารไม่สำเร็จ"), true);
+          return;
+        }
+        docs.unshift(said.doc);
+        draw();
+        say(t("เพิ่มแล้ว"));
+      } catch (e) {
+        // Google blocked, offline, or the person closed the consent window.
+        // One sentence beside the button; the paste field still works.
+        say(t("เปิด Google Drive ไม่ได้ — วางลิงก์แทนได้"), true);
+        console.warn("[picker]", e);
+      } finally {
+        button.disabled = false;
+      }
+    };
+  };
+
   const wireAdder = () => {
     const form = $<HTMLFormElement>("cab-add");
     if (!form) return;
@@ -423,6 +466,7 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
   });
   modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
   wireAdder();
+  void wirePicker();
 
   return {
     open(map, x, y) {

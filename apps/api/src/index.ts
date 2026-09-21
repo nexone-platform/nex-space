@@ -245,6 +245,15 @@ app.post("/auth/code/verify", async (req, res) => {
 
 // ---- sign in with Google ----
 const GOOGLE_ID = process.env.GOOGLE_CLIENT_ID || "";
+/**
+ * The browser key the Google Picker needs.
+ *
+ * Not a secret the way a client secret is — it ships to the page and anybody
+ * can read it — but it is still rationed: restricted to this origin in the
+ * console, and handed out here only to somebody who is signed in, so it is not
+ * a key sitting in a file the whole internet can fetch.
+ */
+const PICKER_KEY = process.env.GOOGLE_PICKER_KEY || "";
 const GOOGLE_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
 const googleEnabled = !!(GOOGLE_ID && GOOGLE_SECRET);
 
@@ -3006,6 +3015,30 @@ app.post(
   },
 );
 
+/**
+ * What the browser needs to open Google's own file picker.
+ *
+ * The picker runs in the page, so the page has to be told the key and the
+ * client id. Served from here rather than built into the bundle, because a
+ * value baked in at build time is a value that needs a rebuild and a deploy to
+ * change — and this one lives in .env beside everything else.
+ *
+ * drive.file and nothing wider. Google classes drive.readonly and even
+ * drive.metadata.readonly as restricted scopes, which need a paid security
+ * assessment before an app may go past a hundred users; drive.file is
+ * non-sensitive and grants access only to the files somebody picked. That is
+ * also the better shape for a shared cabinet: consent one file at a time,
+ * rather than a blanket reading of somebody's whole Drive.
+ */
+app.get("/me/drive-picker", requireAuth, (_req: AuthedRequest, res) => {
+  res.json({
+    available: !!(PICKER_KEY && GOOGLE_ID),
+    key: PICKER_KEY || null,
+    clientId: GOOGLE_ID || null,
+    scope: "https://www.googleapis.com/auth/drive.file",
+  });
+});
+
 // ------------------------------------------------------------------ cabinets ---
 /**
  * The filing cabinets standing in the rooms.
@@ -4070,6 +4103,9 @@ if (!turnEnabled) console.warn("[ice] no TURN relay configured — calls will fa
  * pasting a fetch into a console. It sends nothing: the check opens the
  * connection, or reads a key, and stops.
  */
+console.log(PICKER_KEY && GOOGLE_ID
+  ? "[picker] Google Drive picker on — people can put their own files in a cabinet"
+  : "[picker] no Drive picker (set GOOGLE_PICKER_KEY, and GOOGLE_CLIENT_ID) — cabinets take pasted links only");
 console.log(gcalEnabled
   ? "[gcal] Google Calendar can be connected — each person grants it for their own account"
   : "[gcal] no Google credentials — bookings reach a calendar only through the subscribed feed and the email");

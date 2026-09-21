@@ -1758,6 +1758,8 @@
       .cab-adder input { flex: 1 1 160px; padding: 9px 11px; border-radius: 9px;
         border: 1px solid var(--border-2); background: var(--surface); color: var(--text);
         font: calc(13px * var(--ui)) var(--sans); }
+      .cab-pick { border: 1px solid var(--border-2) !important; background: var(--surface) !important;
+        color: var(--text-2) !important; }
       .cab-adder button, .cab-save { border: none; background: var(--teal); color: #fff;
         border-radius: 9px; padding: 9px 16px; cursor: pointer; font: 600 calc(13px * var(--ui)) var(--sans); }
       #cab-grants { position: fixed; inset: 0; z-index: 73; background: #0b0b1099; display: none; place-items: center; }
@@ -2835,6 +2837,7 @@
         <form class="cab-adder" id="cab-add" hidden>
           <input type="text" id="cab-add-title" placeholder="ชื่อเอกสาร" maxlength="200" />
           <input type="url" id="cab-add-url" placeholder="วางลิงก์ Google Drive หรือ OneDrive" />
+          <button type="button" id="cab-pick" class="cab-pick" hidden>เลือกจาก Google Drive</button>
           <button type="submit">เพิ่มเข้าตู้</button>
         </form>
         <div id="cab-grants">

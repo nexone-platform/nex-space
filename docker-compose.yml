@@ -54,6 +54,7 @@ services:
       # Authorised redirect URI in Google Cloud: https://<your-host>/auth/google/callback
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_PICKER_KEY=${GOOGLE_PICKER_KEY:-}
       # Both are derived from the forwarded host by default. Set them only if the
       # app sits behind extra proxies and the derived URLs come out wrong.
       - APP_URL=${APP_URL:-}
