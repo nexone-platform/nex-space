@@ -9,7 +9,8 @@
  *   npm run test:cabinet -w @nexspace/api
  */
 import {
-  levelForCabinet, levelForDoc, whyForDoc, atLeast, isLevel, isOpenTo,
+  levelForCabinet, levelForFolder, levelForDoc, whyForDoc, whyForFolder,
+  atLeast, isLevel, isOpenTo,
 } from "../src/cabinet.js";
 
 let pass = 0, fail = 0;
@@ -37,7 +38,7 @@ console.log("\nwho may open which drawer\n");
     ok(`an ${boss.role} may file in a cabinet shut to everyone`,
       levelForCabinet(shutCabinet, boss) === "file");
     ok(`  · and read a document shut to everyone`,
-      levelForDoc(shutCabinet, { openTo: "listed", grants: [] }, boss) === "file");
+      levelForDoc(shutCabinet, null, { openTo: "listed", grants: [] }, boss) === "file");
   }
   /**
    * The one that has to hold however the lists are written. Somebody handing
@@ -48,7 +49,7 @@ console.log("\nwho may open which drawer\n");
   ok("an admin named as 'none' is still an admin", levelForCabinet(spite, admin) === "file",
     "the list does not outrank the role");
   ok("  · and is told plainly why they can see it",
-    whyForDoc(spite, plain, admin) === "runs-the-space");
+    whyForDoc(spite, null, plain, admin) === "runs-the-space");
 }
 
 // ---- guests ------------------------------------------------------------------------
@@ -59,7 +60,7 @@ console.log("\nwho may open which drawer\n");
   ok("  · and nothing from being named on one", levelForCabinet(invited, guest) === "none",
     "a visitor's pass opens doors, not drawers");
   ok("  · with no explanation offered, because there is nothing to explain",
-    whyForDoc(invited, plain, guest) === "no");
+    whyForDoc(invited, null, plain, guest) === "no");
 }
 
 // ---- the cabinet, when the document says nothing ------------------------------------
@@ -69,24 +70,24 @@ console.log("\nwho may open which drawer\n");
   ok("  · to read, not to file in", !atLeast(levelForCabinet(openCabinet, member), "file"));
   ok("a cabinet open to nobody is shut to a member",
     levelForCabinet(shutCabinet, member) === "none");
-  ok("  · and its documents with it", levelForDoc(shutCabinet, plain, member) === "none");
+  ok("  · and its documents with it", levelForDoc(shutCabinet, null, plain, member) === "none");
   ok("  · because the document said nothing and followed it",
-    whyForDoc(shutCabinet, plain, member) === "no");
+    whyForDoc(shutCabinet, null, plain, member) === "no");
 
   const listed = { openTo: "listed", grants: [{ userId: "u_member", level: "read" as const }] };
   ok("a name on a shut cabinet opens it", levelForCabinet(listed, member) === "read");
   ok("  · for that person and not the one beside them",
     levelForCabinet(listed, other) === "none");
   ok("  · and says which of the two reasons it was",
-    whyForDoc(listed, plain, member) === "named-on-cabinet"
-    && whyForDoc(openCabinet, plain, member) === "cabinet-open");
+    whyForDoc(listed, null, plain, member) === "named-on-cabinet"
+    && whyForDoc(openCabinet, null, plain, member) === "cabinet-open");
 }
 
 // ---- the document's own word -------------------------------------------------------
 {
   const shutDoc = { openTo: "listed", grants: [] };
   ok("one document can be shut inside an open cabinet",
-    levelForDoc(openCabinet, shutDoc, member) === "none",
+    levelForDoc(openCabinet, null, shutDoc, member) === "none",
     "the payroll in the cabinet everybody uses");
   ok("  · while the cabinet around it stays open",
     levelForCabinet(openCabinet, member) === "read");
@@ -98,32 +99,32 @@ console.log("\nwho may open which drawer\n");
    */
   const mineOnly = { openTo: null, grants: [{ userId: "u_member", level: "read" as const }] };
   ok("a name on one document reaches into a cabinet that is shut",
-    levelForDoc(shutCabinet, mineOnly, member) === "read");
+    levelForDoc(shutCabinet, null, mineOnly, member) === "read");
   ok("  · without opening the cabinet itself",
     levelForCabinet(shutCabinet, member) === "none",
     "they see that one document and no other");
   ok("  · and the reason given is the document, not the cabinet",
-    whyForDoc(shutCabinet, mineOnly, member) === "named-on-document");
+    whyForDoc(shutCabinet, null, mineOnly, member) === "named-on-document");
 
   const openDoc = { openTo: "members", grants: [] };
   ok("a document opened to the space does so inside a shut cabinet",
-    levelForDoc(shutCabinet, openDoc, member) === "read");
-  ok("  · said as the document's doing", whyForDoc(shutCabinet, openDoc, member) === "document-open");
+    levelForDoc(shutCabinet, null, openDoc, member) === "read");
+  ok("  · said as the document's doing", whyForDoc(shutCabinet, null, openDoc, member) === "document-open");
 }
 
 // ---- a name beats the setting beside it ---------------------------------------------
 {
   const barred = { openTo: null, grants: [{ userId: "u_member", level: "none" as const }] };
   ok("a name saying 'none' shuts a document inside an open cabinet",
-    levelForDoc(openCabinet, barred, member) === "none",
+    levelForDoc(openCabinet, null, barred, member) === "none",
     "one person left off one file");
-  ok("  · and the others are unaffected", levelForDoc(openCabinet, barred, other) === "read");
+  ok("  · and the others are unaffected", levelForDoc(openCabinet, null, barred, other) === "read");
   ok("  · with 'no' as the reason, not a reason that sounds like yes",
-    whyForDoc(openCabinet, barred, member) === "no");
+    whyForDoc(openCabinet, null, barred, member) === "no");
 
   const filer = { openTo: "listed", grants: [{ userId: "u_member", level: "file" as const }] };
   ok("somebody can be given filing rights without being an admin",
-    levelForDoc(shutCabinet, filer, member) === "file");
+    levelForDoc(shutCabinet, null, filer, member) === "file");
   ok("  · which is more than read", atLeast("file", "read") && !atLeast("read", "file"));
 }
 
@@ -136,6 +137,71 @@ console.log("\nwho may open which drawer\n");
     isOpenTo("members") && isOpenTo("listed")
     && !isOpenTo("everyone") && !isOpenTo("public") && !isOpenTo(null),
     "'everyone' is the word that would have to mean guests too");
+}
+
+// ---- the drawer in between ----------------------------------------------------------
+{
+  const plainFolder = { openTo: null, grants: [] };
+  const shutFolder = { openTo: "listed", grants: [] };
+  const openFolder = { openTo: "members", grants: [] };
+
+  ok("a folder that says nothing follows its cabinet",
+    levelForFolder(openCabinet, plainFolder, member) === "read"
+    && levelForFolder(shutCabinet, plainFolder, member) === "none");
+  ok("  · and so does a document that says nothing, through it",
+    levelForDoc(openCabinet, plainFolder, plain, member) === "read"
+    && levelForDoc(shutCabinet, plainFolder, plain, member) === "none");
+
+  /**
+   * The drawer everybody was actually asking for: one folder of contracts
+   * inside a cabinet the whole space uses.
+   */
+  ok("a folder can be shut inside an open cabinet",
+    levelForFolder(openCabinet, shutFolder, member) === "none");
+  ok("  · taking the documents in it with it",
+    levelForDoc(openCabinet, shutFolder, plain, member) === "none",
+    "they said nothing, so the folder spoke for them");
+  ok("  · while a document lying loose in the same cabinet is still open",
+    levelForDoc(openCabinet, null, plain, member) === "read");
+  ok("  · and the reason names the folder, not the cabinet",
+    whyForDoc(openCabinet, shutFolder, plain, member) === "no"
+    && whyForFolder(openCabinet, shutFolder, member) === "no");
+
+  ok("a folder can be opened inside a shut cabinet",
+    levelForFolder(shutCabinet, openFolder, member) === "read");
+  ok("  · said as the folder doing it",
+    whyForFolder(shutCabinet, openFolder, member) === "folder-open"
+    && whyForDoc(shutCabinet, openFolder, plain, member) === "folder-open");
+
+  const mine = { openTo: "listed", grants: [{ userId: "u_member", level: "file" as const }] };
+  ok("a name on a folder opens it and everything in it",
+    levelForFolder(shutCabinet, mine, member) === "file"
+    && levelForDoc(shutCabinet, mine, plain, member) === "file");
+  ok("  · for that person and not the one beside them",
+    levelForFolder(shutCabinet, mine, other) === "none");
+  ok("  · named as the folder, which is where they would go to change it",
+    whyForDoc(shutCabinet, mine, plain, member) === "named-on-folder");
+
+  /**
+   * And the step that makes the order matter: one document inside a drawer
+   * that is shut to somebody, opened to them by name. Without the document
+   * being asked first, this is unreachable.
+   */
+  const oneOfThem = { openTo: null, grants: [{ userId: "u_member", level: "read" as const }] };
+  ok("one document reaches out of a folder that is shut",
+    levelForDoc(openCabinet, shutFolder, oneOfThem, member) === "read");
+  ok("  · without opening the folder around it",
+    levelForFolder(openCabinet, shutFolder, member) === "none",
+    "they see that one document and no other in the drawer");
+  ok("  · and the other way: one document shut inside an open folder",
+    levelForDoc(shutCabinet, openFolder, { openTo: "listed", grants: [] }, member) === "none");
+
+  ok("an admin opens a folder shut to everyone",
+    levelForFolder(shutCabinet, shutFolder, admin) === "file"
+    && whyForFolder(shutCabinet, shutFolder, admin) === "runs-the-space");
+  ok("  · and a guest opens none of it, however the drawer is written",
+    levelForFolder(openCabinet, openFolder, guest) === "none"
+    && whyForFolder(openCabinet, openFolder, guest) === "no");
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

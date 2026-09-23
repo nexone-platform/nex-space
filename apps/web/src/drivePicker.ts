@@ -40,6 +40,8 @@ export interface Picked {
   title: string;
   url: string;
   mime: string | null;
+  /** file | folder — a Drive folder can go in a cabinet as an entry of its own */
+  kind: "file" | "folder";
 }
 
 interface Config {
@@ -132,9 +134,12 @@ export async function pickFromDrive(): Promise<Picked | null> {
 
   const picker = (window.google as unknown as { picker: any }).picker;
   return new Promise<Picked | null>((done) => {
+    // Folders are selectable as well as browsable: a cabinet entry can be a
+    // whole Drive folder, which is often what somebody means by "put the
+    // contracts in there".
     const view = new picker.DocsView(picker.ViewId.DOCS)
       .setIncludeFolders(true)
-      .setSelectFolderEnabled(false);
+      .setSelectFolderEnabled(true);
     const built = new picker.PickerBuilder()
       .setDeveloperKey(cfg.key!)
       .setOAuthToken(access)
@@ -144,7 +149,9 @@ export async function pickFromDrive(): Promise<Picked | null> {
         if (data.action !== picker.Action.PICKED) return;
         const d = data.docs?.[0];
         if (!d) { done(null); return; }
+        const isFolder = d.mimeType === "application/vnd.google-apps.folder";
         done({
+          kind: isFolder ? "folder" : "file",
           fileId: d.id,
           title: d.name || d.id,
           // The picker gives a viewer link; a Drive file id always has one, and

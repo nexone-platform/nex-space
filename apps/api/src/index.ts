@@ -9,7 +9,8 @@ import {
 } from "./auth";
 import { sendLoginCode, mailEnabled, mailTransport, sendInvite, sendBooking, sendReminder, mailCheck } from "./mailer";
 import {
-  levelForCabinet, levelForDoc, whyForDoc, atLeast, isLevel, isOpenTo, runsTheSpace,
+  levelForCabinet, levelForFolder, levelForDoc, whyForDoc, whyForFolder,
+  atLeast, isLevel, isOpenTo, runsTheSpace,
   type Level, type Because,
 } from "./cabinet.js";
 import { iceConfig, turnEnabled } from "./ice";
@@ -3070,17 +3071,29 @@ const cabinetView = (
 const docView = (
   d: {
     id: string; title: string; provider: string; url: string; mime: string | null;
-    iconUrl: string | null; openTo: string | null; addedAt: Date;
+    iconUrl: string | null; openTo: string | null; addedAt: Date; kind: string;
+    folderId: string | null;
     addedBy?: { name: string | null; email: string } | null;
   },
   level: Level,
   why: Because,
 ) => ({
-  id: d.id, title: d.title, provider: d.provider, url: d.url,
+  id: d.id, title: d.title, provider: d.provider, url: d.url, kind: d.kind,
+  folderId: d.folderId,
   mime: d.mime, iconUrl: d.iconUrl, openTo: d.openTo,
   addedAt: d.addedAt.toISOString(),
   addedBy: d.addedBy ? (d.addedBy.name || d.addedBy.email) : null,
   level, why, mayManage: level === "file",
+});
+
+const folderView = (
+  f: { id: string; name: string; openTo: string | null },
+  level: Level,
+  why: Because,
+  docs: number,
+) => ({
+  id: f.id, name: f.name, openTo: f.openTo, level, why, docs,
+  mayManage: level === "file",
 });
 
 /**
@@ -3132,8 +3145,14 @@ app.get("/workspaces/:slug/cabinets", async (req, res) => {
     const docs = await prisma.cabinetDoc.findMany({
       where: { cabinetId: c.id }, include: { grants: true },
     });
+    const folders = await prisma.cabinetFolder.findMany({
+      where: { cabinetId: c.id }, include: { grants: true },
+    });
+    const drawer = new Map(folders.map((f) => [f.id,
+      { openTo: f.openTo, grants: asGrants(f.grants) }]));
     const mine = docs.filter((d) => levelForDoc(
       { openTo: c.openTo, grants: asGrants(c.grants) },
+      d.folderId ? drawer.get(d.folderId) ?? null : null,
       { openTo: d.openTo, grants: asGrants(d.grants) }, who,
     ) !== "none");
     if (level === "none" && !mine.length) continue;
@@ -3163,21 +3182,48 @@ app.get("/workspaces/:slug/cabinets/at/:map/:x/:y", async (req, res) => {
   const cab = { openTo: c.openTo, grants: asGrants(c.grants) };
   const level = levelForCabinet(cab, who);
 
+  const folderRows = await prisma.cabinetFolder.findMany({
+    where: { cabinetId: c.id }, include: { grants: true }, orderBy: { name: "asc" },
+  });
+  const drawer = new Map(folderRows.map((f) => [f.id,
+    { openTo: f.openTo, grants: asGrants(f.grants) }]));
+
   const rows = await prisma.cabinetDoc.findMany({
     where: { cabinetId: c.id },
     include: { grants: true, addedBy: { select: { name: true, email: true } } },
     orderBy: { addedAt: "desc" },
   });
   const docs = [];
+  const perFolder = new Map<string, number>();
   for (const d of rows) {
     const doc = { openTo: d.openTo, grants: asGrants(d.grants) };
-    const lv = levelForDoc(cab, doc, who);
+    const f = d.folderId ? drawer.get(d.folderId) ?? null : null;
+    const lv = levelForDoc(cab, f, doc, who);
     if (lv === "none") continue;
-    docs.push(docView(d, lv, whyForDoc(cab, doc, who)));
+    if (d.folderId) perFolder.set(d.folderId, (perFolder.get(d.folderId) ?? 0) + 1);
+    docs.push(docView(d, lv, whyForDoc(cab, f, doc, who)));
   }
-  if (level === "none" && !docs.length) return res.status(404).json({ error: "not found" });
 
-  res.json({ cabinet: cabinetView(c, level, docs.length), docs });
+  /**
+   * A drawer is listed when it can be opened, or when something inside it can
+   * be — the same rule the cabinet itself follows. A folder shut to somebody
+   * that holds one document named to them still has to appear, or that
+   * document has nowhere to be shown.
+   */
+  const folders = [];
+  for (const f of folderRows) {
+    const one = { openTo: f.openTo, grants: asGrants(f.grants) };
+    const lv = levelForFolder(cab, one, who);
+    const n = perFolder.get(f.id) ?? 0;
+    if (lv === "none" && !n) continue;
+    folders.push(folderView(f, lv, whyForFolder(cab, one, who), n));
+  }
+
+  if (level === "none" && !docs.length && !folders.length) {
+    return res.status(404).json({ error: "not found" });
+  }
+
+  res.json({ cabinet: cabinetView(c, level, docs.length), folders, docs });
 });
 
 /** rename it, or change who it stands open to — the space's own only */
@@ -3291,23 +3337,48 @@ app.post("/workspaces/:slug/cabinets/:id/docs", async (req, res) => {
 
   const who = { userId: can.me.id, role: can.role };
   const cab = { openTo: c.openTo, grants: asGrants(c.grants) };
-  const level = levelForCabinet(cab, who);
+
+  /**
+   * Which drawer this is going into, resolved before anything is checked.
+   *
+   * The order matters and got it wrong once: the cabinet was asked first, so
+   * somebody given filing rights on one drawer of a cabinet they may only read
+   * was refused — which is the whole point of naming them on the drawer. What
+   * is being filed *into* is what decides. A document lying loose is filed into
+   * the cabinet, and then the cabinet decides.
+   */
+  let folderId: string | null = null;
+  let level: Level;
+  if (req.body?.folderId) {
+    const f = await prisma.cabinetFolder.findUnique({
+      where: { id: String(req.body.folderId) }, include: { grants: true },
+    });
+    if (!f || f.cabinetId !== c.id) return res.status(404).json({ error: "no such folder" });
+    folderId = f.id;
+    level = levelForFolder(cab, { openTo: f.openTo, grants: asGrants(f.grants) }, who);
+  } else {
+    level = levelForCabinet(cab, who);
+  }
+
   if (!atLeast(level, "file")) {
     /**
-     * 404 or 403 turns on one question: does this person already know the
-     * cabinet is here? Somebody named on a single document inside it does —
-     * they were shown it, holding that one — so "not found" would be a lie
-     * told to a person looking straight at it. Somebody it is entirely shut to
-     * gets the answer that says nothing.
+     * 404 or 403 turns on one question: does this person already know this is
+     * here? Somebody named on a single document inside does — they were shown
+     * it, holding that one — so "not found" would be a lie told to a person
+     * looking straight at it. Somebody it is entirely shut to gets the answer
+     * that says nothing.
      */
     const inside = await prisma.cabinetDoc.findMany({
       where: { cabinetId: c.id }, include: { grants: true },
     });
-    const sees = level !== "none" || inside.some((d) => levelForDoc(
-      cab, { openTo: d.openTo, grants: asGrants(d.grants) }, who,
-    ) !== "none");
+    const sees = level !== "none" || levelForCabinet(cab, who) !== "none"
+      || inside.some((d) => levelForDoc(
+        cab, null, { openTo: d.openTo, grants: asGrants(d.grants) }, who,
+      ) !== "none");
     return sees
-      ? res.status(403).json({ error: "you may read this cabinet, not file in it" })
+      ? res.status(403).json({ error: folderId
+        ? "you may read that folder, not file into it"
+        : "you may read this cabinet, not file in it" })
       : res.status(404).json({ error: "not found" });
   }
 
@@ -3323,13 +3394,15 @@ app.post("/workspaces/:slug/cabinets/:id/docs", async (req, res) => {
   }
   const provider = ["link", "google", "microsoft"].includes(String(req.body?.provider))
     ? String(req.body.provider) : "link";
+  const kind = req.body?.kind === "folder" ? "folder" : "file";
+
   const openTo = req.body?.openTo === null || req.body?.openTo === undefined
     ? null : (isOpenTo(req.body.openTo) ? req.body.openTo : undefined);
   if (openTo === undefined) return res.status(400).json({ error: "bad openTo" });
 
   const doc = await prisma.cabinetDoc.create({
     data: {
-      cabinetId: c.id, title, url: parsed.toString(), provider,
+      cabinetId: c.id, title, url: parsed.toString(), provider, kind, folderId,
       fileId: req.body?.fileId ? String(req.body.fileId).slice(0, 200) : null,
       mime: req.body?.mime ? String(req.body.mime).slice(0, 120) : null,
       iconUrl: null, openTo, addedById: can.me.id,
@@ -3347,7 +3420,7 @@ app.patch("/workspaces/:slug/cabinets/:id/docs/:docId", async (req, res) => {
   const { doc, level } = found;
   if (!atLeast(level, "file")) return res.status(403).json({ error: "you may read this, not change it" });
 
-  const data: { title?: string; openTo?: string | null } = {};
+  const data: { title?: string; openTo?: string | null; folderId?: string | null } = {};
   if (req.body?.title !== undefined) {
     const title = String(req.body.title).trim().slice(0, 200);
     if (!title) return res.status(400).json({ error: "a document needs a name" });
@@ -3358,6 +3431,27 @@ app.patch("/workspaces/:slug/cabinets/:id/docs/:docId", async (req, res) => {
       return res.status(400).json({ error: "bad openTo" });
     }
     data.openTo = req.body.openTo;
+  }
+  // Moving it into a drawer is filing into that drawer, and is checked as such.
+  if (req.body?.folderId !== undefined) {
+    if (req.body.folderId === null) data.folderId = null;
+    else {
+      const f = await prisma.cabinetFolder.findUnique({
+        where: { id: String(req.body.folderId) }, include: { grants: true },
+      });
+      if (!f || f.cabinetId !== found.cabinet.id) {
+        return res.status(404).json({ error: "no such folder" });
+      }
+      const fl = levelForFolder(
+        { openTo: found.cabinet.openTo, grants: asGrants(found.cabinet.grants) },
+        { openTo: f.openTo, grants: asGrants(f.grants) },
+        { userId: found.can.me.id, role: found.can.role },
+      );
+      if (!atLeast(fl, "file")) {
+        return res.status(403).json({ error: "you may not file into that folder" });
+      }
+      data.folderId = f.id;
+    }
   }
   const saved = await prisma.cabinetDoc.update({
     where: { id: doc.id }, data,
@@ -3396,12 +3490,182 @@ async function docFor(req: express.Request, res: express.Response) {
   if (!doc || doc.cabinetId !== c.id) { res.status(404).json({ error: "not found" }); return null; }
 
   const who = { userId: can.me.id, role: can.role };
+  const folder = doc.folderId
+    ? await prisma.cabinetFolder.findUnique({
+      where: { id: doc.folderId }, include: { grants: true },
+    })
+    : null;
   const level = levelForDoc(
     { openTo: c.openTo, grants: asGrants(c.grants) },
+    folder ? { openTo: folder.openTo, grants: asGrants(folder.grants) } : null,
     { openTo: doc.openTo, grants: asGrants(doc.grants) }, who,
   );
   if (level === "none") { res.status(404).json({ error: "not found" }); return null; }
-  return { w, can, cabinet: c, doc, level };
+  return { w, can, cabinet: c, doc, folder, level };
+}
+
+/**
+ * Drawers.
+ *
+ * Making one needs filing rights on the cabinet — the same thing that lets you
+ * put a document in, because a drawer is a thing you put in. Renaming one, or
+ * deciding who may open it, is the space's own: exactly like the cabinet, and
+ * for the same reason.
+ */
+app.post("/workspaces/:slug/cabinets/:id/folders", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can) return res.status(403).json({ error: "forbidden" });
+  const c = await prisma.cabinet.findUnique({
+    where: { id: String(req.params.id) }, include: { grants: true },
+  });
+  if (!c || c.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
+
+  const who = { userId: can.me.id, role: can.role };
+  const level = levelForCabinet({ openTo: c.openTo, grants: asGrants(c.grants) }, who);
+  if (level === "none") return res.status(404).json({ error: "not found" });
+  if (!atLeast(level, "file")) {
+    return res.status(403).json({ error: "you may read this cabinet, not file in it" });
+  }
+
+  const name = String(req.body?.name ?? "").trim().slice(0, 60);
+  if (!name) return res.status(400).json({ error: "a folder needs a name" });
+  const openTo = req.body?.openTo === null || req.body?.openTo === undefined
+    ? null : (isOpenTo(req.body.openTo) ? req.body.openTo : undefined);
+  if (openTo === undefined) return res.status(400).json({ error: "bad openTo" });
+
+  const folder = await prisma.cabinetFolder.create({
+    data: { cabinetId: c.id, name, openTo, createdById: can.me.id },
+  });
+  console.log(`[cabinet] ${can.me.email} made the folder "${name}" in "${c.label}"`);
+  res.status(201).json({ folder: folderView(folder, "file", "runs-the-space", 0) });
+});
+
+/** rename a drawer, or change who it stands open to — the space's own only */
+app.patch("/workspaces/:slug/cabinets/:id/folders/:folderId", async (req, res) => {
+  const found = await folderFor(req, res, true);
+  if (!found) return;
+
+  const data: { name?: string; openTo?: string | null } = {};
+  if (req.body?.name !== undefined) {
+    const name = String(req.body.name).trim().slice(0, 60);
+    if (!name) return res.status(400).json({ error: "a folder needs a name" });
+    data.name = name;
+  }
+  if (req.body?.openTo !== undefined) {
+    if (req.body.openTo !== null && !isOpenTo(req.body.openTo)) {
+      return res.status(400).json({ error: "bad openTo" });
+    }
+    data.openTo = req.body.openTo;
+  }
+  const saved = await prisma.cabinetFolder.update({ where: { id: found.folder.id }, data });
+  const n = await prisma.cabinetDoc.count({ where: { folderId: saved.id } });
+  res.json({ folder: folderView(saved, "file", "runs-the-space", n) });
+});
+
+/**
+ * Take a drawer out.
+ *
+ * The documents in it are not deleted — they go back to lying loose in the
+ * cabinet. "I meant to tidy up" must not be able to mean "and forty contracts
+ * are gone", and the answer says how many came back so nobody has to guess
+ * where they went.
+ */
+app.delete("/workspaces/:slug/cabinets/:id/folders/:folderId", async (req, res) => {
+  const found = await folderFor(req, res, true);
+  if (!found) return;
+  const loose = await prisma.cabinetDoc.updateMany({
+    where: { folderId: found.folder.id }, data: { folderId: null },
+  });
+  await prisma.cabinetFolder.delete({ where: { id: found.folder.id } });
+  console.log(`[cabinet] ${found.can.me.email} removed the folder "${found.folder.name}"`
+    + ` — ${loose.count} document(s) went back into the cabinet`);
+  res.json({ ok: true, loosened: loose.count });
+});
+
+/** the names on one drawer */
+app.get("/workspaces/:slug/cabinets/:id/folders/:folderId/grants", async (req, res) => {
+  const found = await folderFor(req, res, true);
+  if (!found) return;
+  const rows = await prisma.folderGrant.findMany({
+    where: { folderId: found.folder.id },
+    include: { user: { select: { name: true, email: true } } },
+  });
+  res.json({
+    openTo: found.folder.openTo,
+    grants: rows.map((g) => ({
+      userId: g.userId, level: g.level,
+      name: g.user.name || g.user.email, email: g.user.email,
+    })),
+  });
+});
+
+app.put("/workspaces/:slug/cabinets/:id/folders/:folderId/grants", async (req, res) => {
+  const found = await folderFor(req, res, true);
+  if (!found) return;
+
+  const want = Array.isArray(req.body?.grants) ? req.body.grants : null;
+  if (!want) return res.status(400).json({ error: "grants must be a list" });
+  if (want.length > 200) return res.status(413).json({ error: "too many names" });
+  for (const g of want) {
+    if (typeof g?.userId !== "string" || !isLevel(g?.level)) {
+      return res.status(400).json({ error: "each grant needs a userId and a level" });
+    }
+  }
+  const ids: string[] = [...new Set<string>(want.map((g: { userId: string }) => String(g.userId)))];
+  const members = await prisma.membership.findMany({
+    where: { workspaceId: found.w.id, userId: { in: ids }, role: { not: "guest" } },
+    select: { userId: true },
+  });
+  const inSpace = new Set(members.map((m) => m.userId));
+  if (ids.some((id) => !inSpace.has(id))) {
+    return res.status(400).json({ error: "not members of this space" });
+  }
+
+  await prisma.$transaction([
+    prisma.folderGrant.deleteMany({ where: { folderId: found.folder.id } }),
+    ...want.map((g: { userId: string; level: Level }) => prisma.folderGrant.create({
+      data: { folderId: found.folder.id, userId: g.userId, level: g.level },
+    })),
+  ]);
+  console.log(`[cabinet] ${found.can.me.email} set ${want.length} name(s) on the folder "${found.folder.name}"`);
+  res.json({ ok: true, grants: want.length });
+});
+
+/**
+ * One drawer, and whether this person may be here at all.
+ *
+ * `staffOnly` is every route that changes it: naming a drawer, deciding who
+ * opens it, taking it away. Those are the space's own, like the cabinet's.
+ * A drawer somebody may not see is 404 either way.
+ */
+async function folderFor(req: express.Request, res: express.Response, staffOnly: boolean) {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) { res.status(404).json({ error: "not found" }); return null; }
+  const can = await booker(req, w);
+  if (!can) { res.status(403).json({ error: "forbidden" }); return null; }
+  const c = await prisma.cabinet.findUnique({
+    where: { id: String(req.params.id) }, include: { grants: true },
+  });
+  if (!c || c.workspaceId !== w.id) { res.status(404).json({ error: "not found" }); return null; }
+  const folder = await prisma.cabinetFolder.findUnique({
+    where: { id: String(req.params.folderId) }, include: { grants: true },
+  });
+  if (!folder || folder.cabinetId !== c.id) {
+    res.status(404).json({ error: "not found" }); return null;
+  }
+
+  const who = { userId: can.me.id, role: can.role };
+  const cab = { openTo: c.openTo, grants: asGrants(c.grants) };
+  const level = levelForFolder(cab, { openTo: folder.openTo, grants: asGrants(folder.grants) }, who);
+  const docsInside = await prisma.cabinetDoc.count({ where: { folderId: folder.id } });
+  // A drawer they cannot open, holding nothing they can see, is not there.
+  if (level === "none" && !docsInside) { res.status(404).json({ error: "not found" }); return null; }
+  if (staffOnly && !runsTheSpace(can.role)) {
+    res.status(403).json({ error: "only an owner or admin" }); return null;
+  }
+  return { w, can, cabinet: c, folder, level };
 }
 
 /** the names on one document — the exception inside the exception */

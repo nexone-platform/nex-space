@@ -1743,6 +1743,16 @@
         font: calc(13px * var(--ui)) var(--sans); }
       .cab-doc { display: flex; align-items: center; gap: 10px; padding: 10px 12px;
         border: 1px solid var(--border); border-radius: var(--r-box); margin-bottom: 8px; }
+      /* A drawer and what is in it. The indent is the only thing saying "these
+         belong to that", so it is a real step and not a decorative one. */
+      .cab-folder { display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+        border: 1px solid var(--border-2); background: var(--surface-2);
+        border-radius: var(--r-box); margin-bottom: 8px; }
+      .cab-folder-name { color: var(--text); font-size: calc(13.5px * var(--ui)); }
+      .cab-in { margin-left: calc(26px * var(--ui)); }
+      .cab-open { border: none; background: none; cursor: pointer; color: var(--text-3);
+        font-size: calc(13px * var(--ui)); padding: 0 2px; line-height: 1; }
+      #cab-newfolder { margin-top: 10px; }
       .cab-doc-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
       .cab-doc-name { color: var(--text); font-weight: 600; font-size: calc(13.5px * var(--ui));
         text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1757,9 +1767,10 @@
       .cab-ways { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
       .cab-or { color: var(--muted); font-size: calc(12px * var(--ui)); }
       .cab-adder { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-      .cab-adder input { flex: 1 1 160px; padding: 9px 11px; border-radius: 9px;
+      .cab-adder input, .cab-adder select { flex: 1 1 160px; padding: 9px 11px; border-radius: 9px;
         border: 1px solid var(--border-2); background: var(--surface); color: var(--text);
         font: calc(13px * var(--ui)) var(--sans); }
+      .cab-adder select { flex: 0 1 auto; }
       .cab-pick { border: 1px solid var(--border-2) !important; background: var(--surface) !important;
         color: var(--text-2) !important; }
       .cab-adder button, .cab-save { border: none; background: var(--teal); color: #fff;
@@ -2847,8 +2858,10 @@
         <form class="cab-adder" id="cab-add" hidden>
           <input type="text" id="cab-add-title" placeholder="ชื่อเอกสาร" maxlength="200" />
           <input type="url" id="cab-add-url" placeholder="วางลิงก์ Google Drive หรือ OneDrive" />
+          <select id="cab-add-folder" hidden></select>
           <button type="submit">เพิ่มเข้าตู้</button>
         </form>
+        <button type="button" class="cab-mini" id="cab-newfolder" hidden>＋ สร้างโฟลเดอร์</button>
         <div id="cab-grants">
           <div class="cab-grants-box">
             <div class="cab-head">

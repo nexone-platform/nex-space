@@ -54,6 +54,8 @@ model User {
   filed         CabinetDoc[]     @relation("DocsFiled")
   cabinetGrants CabinetGrant[]
   docGrants     DocGrant[]
+  folderGrants  FolderGrant[]
+  foldersMade   CabinetFolder[]  @relation("FoldersMade")
 }
 
 // A company / community space. People join via its invite code; the owner
@@ -610,6 +612,7 @@ model Cabinet {
 
   workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   docs        CabinetDoc[]
+  folders     CabinetFolder[]
   grants      CabinetGrant[]
 
   @@unique([workspaceId, mapSlug, x, y])
@@ -632,9 +635,51 @@ model CabinetGrant {
 }
 
 /// A document in a cabinet: a link, or a file in somebody's Drive or OneDrive.
+/// A drawer inside a cabinet: a name, an access list of its own, and the
+/// documents filed under it.
+///
+/// Deleting one never destroys a document. Its papers go back to lying loose in
+/// the cabinet, because "I meant to tidy up" should not be able to mean "and
+/// forty contracts are gone".
+model CabinetFolder {
+  id          String   @id @default(cuid())
+  cabinetId   String
+  name        String
+  /// null = follows the cabinet. A value here is an exception written on purpose.
+  openTo      String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  cabinet     Cabinet       @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  createdBy   User?         @relation("FoldersMade", fields: [createdById], references: [id], onDelete: SetNull)
+  docs        CabinetDoc[]
+  grants      FolderGrant[]
+
+  @@index([cabinetId])
+}
+
+/// One person named on a folder.
+model FolderGrant {
+  id        String   @id @default(cuid())
+  folderId  String
+  userId    String
+  /// none | read | file
+  level     String   @default("read")
+  createdAt DateTime @default(now())
+
+  folder    CabinetFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([folderId, userId])
+}
+
 model CabinetDoc {
   id        String   @id @default(cuid())
   cabinetId String
+  /// which drawer it is filed in; null is lying loose in the cabinet
+  folderId  String?
+  /// file | folder — a Drive folder is an entry too, it just opens a folder
+  kind      String   @default("file")
   title     String
   /// link | google | microsoft — where it lives
   provider  String   @default("link")
@@ -650,11 +695,14 @@ model CabinetDoc {
   addedById String?
   addedAt   DateTime @default(now())
 
-  cabinet   Cabinet    @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
-  addedBy   User?      @relation("DocsFiled", fields: [addedById], references: [id], onDelete: SetNull)
+  cabinet   Cabinet        @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  /// SetNull, not Cascade: losing the drawer must not lose the papers in it
+  folder    CabinetFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  addedBy   User?          @relation("DocsFiled", fields: [addedById], references: [id], onDelete: SetNull)
   grants    DocGrant[]
 
   @@index([cabinetId])
+  @@index([folderId])
 }
 
 /// One person named on a single document — the exception inside the exception.

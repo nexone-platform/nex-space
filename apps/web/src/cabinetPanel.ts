@@ -16,6 +16,10 @@ import { pickerConfig, pickFromDrive } from "./drivePicker";
 interface Doc {
   id: string;
   title: string;
+  /** file | folder — a Drive folder is an entry too, it just opens a folder */
+  kind: string;
+  /** the drawer it is filed in, or null for one lying loose in the cabinet */
+  folderId: string | null;
   provider: string;
   url: string;
   mime: string | null;
@@ -36,6 +40,16 @@ interface Cab {
   mayManage: boolean;
 }
 
+interface Folder {
+  id: string;
+  name: string;
+  openTo: string | null;
+  level: "none" | "read" | "file";
+  why: string;
+  docs: number;
+  mayManage: boolean;
+}
+
 interface Member { id: string; name: string; email: string; role: string }
 
 /** why somebody can see a row, in words rather than a rule */
@@ -43,6 +57,8 @@ const WHY: Record<string, string> = {
   "runs-the-space": "คุณดูแล Space นี้",
   "named-on-document": "คุณถูกระบุชื่อบนเอกสารนี้",
   "document-open": "เอกสารนี้เปิดให้ทุกคนในทีม",
+  "named-on-folder": "คุณถูกระบุชื่อบนโฟลเดอร์นี้",
+  "folder-open": "โฟลเดอร์นี้เปิดให้ทุกคนในทีม",
   "named-on-cabinet": "คุณถูกระบุชื่อบนตู้นี้",
   "cabinet-open": "ตู้นี้เปิดให้ทุกคนในทีม",
 };
@@ -64,6 +80,9 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
     document.getElementById(id) as T | null;
 
   let cab: Cab | null = null;
+  let folders: Folder[] = [];
+  /** which drawers are standing open, so a redraw does not shut them */
+  const opened = new Set<string>();
   let docs: Doc[] = [];
   let members: Member[] = [];
   let where = { map: "", x: 0, y: 0 };
@@ -95,13 +114,13 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
       // The refusal a shut cabinet gives. Said the same way here as the server
       // says it, because "you may not" and "there is nothing here" are the same
       // sentence to somebody who was never meant to know which.
-      cab = null; docs = [];
+      cab = null; docs = []; folders = [];
       draw();
       say(t("ตู้นี้ไม่ได้เปิดให้คุณ"), true);
       return;
     }
     if (got.status !== 200) { say(t("เปิดตู้ไม่สำเร็จ"), true); return; }
-    cab = got.cabinet; docs = got.docs ?? [];
+    cab = got.cabinet; docs = got.docs ?? []; folders = got.folders ?? [];
     say("");
     draw();
     if (cab?.mayManage) void loadMembers();
@@ -135,7 +154,7 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
     list.innerHTML = "";
     if (!cab) return;
 
-    if (!docs.length) {
+    if (!docs.length && !folders.length) {
       const none = document.createElement("p");
       none.className = "cab-none";
       none.textContent = cab.mayManage
@@ -143,13 +162,136 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
         : t("ยังไม่มีเอกสารที่คุณเปิดได้ในตู้นี้");
       list.appendChild(none);
     }
-    for (const d of docs) list.appendChild(docRow(d));
 
-    const mayFile = cab.level === "file";
+    /**
+     * Drawers first, each holding its own, then whatever is lying loose.
+     *
+     * A drawer somebody cannot open still appears when it holds one document
+     * that is theirs — the server sends it for exactly that reason, and hiding
+     * it here would leave that document with nowhere to be shown.
+     */
+    for (const f of folders) {
+      list.appendChild(folderRow(f));
+      if (!opened.has(f.id)) continue;
+      const inside = docs.filter((d) => d.folderId === f.id);
+      if (!inside.length) {
+        const none = document.createElement("p");
+        none.className = "cab-none cab-in";
+        none.textContent = t("โฟลเดอร์นี้ว่าง");
+        list.appendChild(none);
+      }
+      for (const d of inside) {
+        const row = docRow(d);
+        row.classList.add("cab-in");
+        list.appendChild(row);
+      }
+    }
+    for (const d of docs.filter((x) => !x.folderId)) list.appendChild(docRow(d));
+
+    const mayFile = cab.level === "file" || folders.some((f) => f.level === "file");
     const adder = $("cab-add");
     if (adder) adder.hidden = !mayFile;
     const ways = $("cab-add-ways");
     if (ways) ways.hidden = !mayFile || !$("cab-pick") || $("cab-pick")!.hidden;
+    const newFolder = $("cab-newfolder");
+    // Making a drawer is filing into the cabinet itself, not into a drawer.
+    if (newFolder) newFolder.hidden = cab.level !== "file";
+    drawFolderChoice();
+  };
+
+  /** the drawers this person may actually put something into */
+  const drawFolderChoice = () => {
+    const sel = $<HTMLSelectElement>("cab-add-folder");
+    if (!sel) return;
+    const was = sel.value;
+    sel.innerHTML = "";
+    const loose = document.createElement("option");
+    loose.value = "";
+    loose.textContent = t("ไม่อยู่ในโฟลเดอร์");
+    sel.appendChild(loose);
+    for (const f of folders) {
+      if (f.level !== "file") continue;
+      const o = document.createElement("option");
+      o.value = f.id;
+      o.textContent = f.name;
+      sel.appendChild(o);
+    }
+    sel.value = was;
+    // Only worth showing when there is somewhere else to put it.
+    sel.hidden = sel.options.length < 2 || cab?.level !== "file";
+    if (sel.hidden && cab?.level === "file") sel.hidden = sel.options.length < 2;
+  };
+
+  const folderRow = (f: Folder) => {
+    const row = document.createElement("div");
+    row.className = "cab-folder";
+
+    const toggle = document.createElement("button");
+    toggle.className = "cab-open";
+    toggle.textContent = opened.has(f.id) ? "▾" : "▸";
+    toggle.onclick = () => {
+      opened.has(f.id) ? opened.delete(f.id) : opened.add(f.id);
+      draw();
+    };
+
+    const name = document.createElement("b");
+    name.className = "cab-folder-name";
+    name.textContent = f.name;
+
+    const meta = document.createElement("small");
+    meta.className = "cab-doc-meta";
+    const bits = [t("{n} รายการ").replace("{n}", String(f.docs))];
+    if (WHY[f.why]) bits.push(t(WHY[f.why]));
+    meta.textContent = bits.join(" · ");
+
+    const left = document.createElement("div");
+    left.className = "cab-doc-t";
+    left.append(name, meta);
+    row.append(toggle, left);
+
+    if (f.openTo === "listed") {
+      const shut = document.createElement("i");
+      shut.className = "cab-tag";
+      shut.textContent = t("เฉพาะที่ระบุชื่อ");
+      row.appendChild(shut);
+    }
+
+    if (cab?.mayManage) {
+      const who = document.createElement("button");
+      who.className = "cab-mini";
+      who.textContent = t("สิทธิ์เข้าถึง");
+      who.onclick = () => openFolderGrants(f);
+      row.appendChild(who);
+
+      const rename = document.createElement("button");
+      rename.className = "cab-mini";
+      rename.textContent = t("เปลี่ยนชื่อ");
+      rename.onclick = async () => {
+        const next = prompt(t("ชื่อโฟลเดอร์"), f.name);
+        if (next === null) return;
+        const said = await ask("PATCH", `/workspaces/${slug}/cabinets/${cab!.id}/folders/${f.id}`,
+          { name: next });
+        if (said.status !== 200) { say(t("เปลี่ยนชื่อไม่สำเร็จ"), true); return; }
+        void load();
+      };
+      row.appendChild(rename);
+
+      const out = document.createElement("button");
+      out.className = "cab-mini danger";
+      out.textContent = t("ลบโฟลเดอร์");
+      out.onclick = async () => {
+        const said = await ask("DELETE", `/workspaces/${slug}/cabinets/${cab!.id}/folders/${f.id}`);
+        if (said.status !== 200) { say(t("ลบโฟลเดอร์ไม่สำเร็จ"), true); return; }
+        // Said out loud, because "delete" beside a folder full of contracts is
+        // the word people are most afraid of here.
+        say(t("ลบโฟลเดอร์แล้ว — เอกสาร {n} รายการกลับไปอยู่ในตู้")
+          .replace("{n}", String(said.loosened ?? 0)));
+        opened.delete(f.id);
+        void load();
+      };
+      row.appendChild(out);
+    }
+    return row;
   };
 
   const docRow = (d: Doc) => {
@@ -167,7 +309,7 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
 
     const meta = document.createElement("small");
     meta.className = "cab-doc-meta";
-    const bits = [t(PROVIDER[d.provider] ?? d.provider)];
+    const bits = [t(d.kind === "folder" ? "โฟลเดอร์" : (PROVIDER[d.provider] ?? d.provider))];
     if (d.addedBy) bits.push(t("โดย {name}").replace("{name}", d.addedBy));
     if (WHY[d.why]) bits.push(t(WHY[d.why]));
     meta.textContent = bits.join(" · ");
@@ -199,6 +341,7 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
         const said = await ask("DELETE", `/workspaces/${slug}/cabinets/${cab!.id}/docs/${d.id}`);
         if (said.status !== 200) { say(t("นำออกไม่สำเร็จ"), true); return; }
         docs = docs.filter((x) => x.id !== d.id);
+        countShift(d.folderId, -1);
         draw();
       };
       row.appendChild(out);
@@ -271,7 +414,16 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
    *
    * `doc` null means the cabinet.
    */
-  const openGrants = async (doc: Doc | null) => {
+  /**
+   * The same editor, pointed at a drawer.
+   *
+   * Written as a wrapper rather than a third copy: a folder answers the same
+   * question as a cabinet and a document, and a screen that looked almost the
+   * same would be the one where the rule quietly differed.
+   */
+  const openFolderGrants = (f: Folder) => openGrants(null, f);
+
+  const openGrants = async (doc: Doc | null, folder: Folder | null = null) => {
     await loadMembers();
     const box = $("cab-grants");
     const body = $("cab-grants-body");
@@ -280,11 +432,15 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
 
     head.textContent = doc
       ? t("ใครเปิดเอกสารนี้ได้ — {name}").replace("{name}", doc.title)
-      : t("ใครเปิดตู้นี้ได้");
+      : folder
+        ? t("ใครเปิดโฟลเดอร์นี้ได้ — {name}").replace("{name}", folder.name)
+        : t("ใครเปิดตู้นี้ได้");
 
     const path = doc
       ? `/workspaces/${slug}/cabinets/${cab!.id}/docs/${doc.id}/grants`
-      : `/workspaces/${slug}/cabinets/${cab!.id}/grants`;
+      : folder
+        ? `/workspaces/${slug}/cabinets/${cab!.id}/folders/${folder.id}/grants`
+        : `/workspaces/${slug}/cabinets/${cab!.id}/grants`;
 
     const current = new Map<string, string>();
     if (!doc) {
@@ -294,11 +450,11 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
 
     body.innerHTML = "";
 
-    if (doc) {
+    if (doc || folder) {
       const wrap = document.createElement("label");
       wrap.className = "cab-field";
       const b = document.createElement("b");
-      b.textContent = t("เอกสารนี้");
+      b.textContent = doc ? t("เอกสารนี้") : t("โฟลเดอร์นี้");
       const sel = document.createElement("select");
       for (const [value, label] of [
         ["", t("ตามการตั้งค่าของตู้")],
@@ -309,9 +465,12 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
         o.value = value; o.textContent = label;
         sel.appendChild(o);
       }
-      sel.value = doc.openTo ?? "";
+      sel.value = (doc ? doc.openTo : folder!.openTo) ?? "";
       sel.onchange = async () => {
-        const said = await ask("PATCH", `/workspaces/${slug}/cabinets/${cab!.id}/docs/${doc.id}`,
+        const where = doc
+          ? `/workspaces/${slug}/cabinets/${cab!.id}/docs/${doc.id}`
+          : `/workspaces/${slug}/cabinets/${cab!.id}/folders/${folder!.id}`;
+        const said = await ask("PATCH", where,
           { openTo: sel.value === "" ? null : sel.value });
         if (said.status !== 200) { say(t("เปลี่ยนไม่สำเร็จ"), true); return; }
         void load();
@@ -406,7 +565,8 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
         if (!picked) { say(""); return; }
         const said = await ask("POST", `/workspaces/${slug}/cabinets/${cab!.id}/docs`, {
           title: picked.title, url: picked.url, provider: "google",
-          fileId: picked.fileId, mime: picked.mime,
+          fileId: picked.fileId, mime: picked.mime, kind: picked.kind,
+          folderId: chosenFolder(),
         });
         if (said.status !== 201) {
           say(said.error ? String(said.error) : t("เพิ่มเอกสารไม่สำเร็จ"), true);
@@ -417,6 +577,7 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
         $<HTMLInputElement>("cab-add-title")!.value = "";
         $<HTMLInputElement>("cab-add-url")!.value = "";
         docs.unshift(said.doc);
+        countShift(said.doc.folderId, 1);
         draw();
         say(t("เพิ่มแล้ว"));
       } catch (e) {
@@ -427,6 +588,44 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
       } finally {
         button.disabled = false;
       }
+    };
+  };
+
+  /**
+   * Keep a drawer's count honest without a round trip.
+   *
+   * The number beside a folder comes from the server, so filing into one left
+   * it reading "0 รายการ" beside the document that had just gone in — which
+   * looks like the filing not having worked.
+   */
+  const countShift = (folderId: string | null, by: number) => {
+    if (!folderId) return;
+    const f = folders.find((x) => x.id === folderId);
+    if (f) f.docs = Math.max(0, f.docs + by);
+  };
+
+  /** which drawer the next document goes into, or null for loose in the cabinet */
+  const chosenFolder = () => {
+    const sel = $<HTMLSelectElement>("cab-add-folder");
+    return sel && !sel.hidden && sel.value ? sel.value : null;
+  };
+
+  const wireNewFolder = () => {
+    const button = $<HTMLButtonElement>("cab-newfolder");
+    if (!button) return;
+    button.onclick = async () => {
+      const name = prompt(t("ชื่อโฟลเดอร์"), "");
+      if (name === null) return;
+      if (!name.trim()) { say(t("โฟลเดอร์ต้องมีชื่อ"), true); return; }
+      const said = await ask("POST", `/workspaces/${slug}/cabinets/${cab!.id}/folders`,
+        { name });
+      if (said.status !== 201) {
+        say(said.error ? String(said.error) : t("สร้างโฟลเดอร์ไม่สำเร็จ"), true);
+        return;
+      }
+      opened.add(said.folder.id);
+      say(t("สร้างโฟลเดอร์แล้ว"));
+      void load();
     };
   };
 
@@ -443,7 +642,7 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
       if (!title) { say(t("ใส่ชื่อของเอกสาร"), true); return; }
       if (!url) { say(t("ใส่ลิงก์ของเอกสาร"), true); return; }
       const said = await ask("POST", `/workspaces/${slug}/cabinets/${cab!.id}/docs`,
-        { title, url, provider: guessProvider(url) });
+        { title, url, provider: guessProvider(url), folderId: chosenFolder() });
       if (said.status !== 201) {
         say(said.error ? String(said.error) : t("เพิ่มเอกสารไม่สำเร็จ"), true);
         return;
@@ -451,6 +650,7 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
       $<HTMLInputElement>("cab-add-title")!.value = "";
       $<HTMLInputElement>("cab-add-url")!.value = "";
       docs.unshift(said.doc);
+      countShift(said.doc.folderId, 1);
       draw();
       say(t("เพิ่มแล้ว"));
     };
@@ -481,6 +681,7 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
   });
   modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
   wireAdder();
+  wireNewFolder();
   void wirePicker();
 
   return {
