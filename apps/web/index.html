@@ -1754,7 +1754,9 @@
         border-radius: 9px; padding: 5px 11px; cursor: pointer; font: 600 calc(12px * var(--ui)) var(--sans); }
       .cab-mini.danger { color: #a83c36; }
       .cab-none { color: var(--muted); font-size: calc(13px * var(--ui)); padding: 14px 2px; margin: 0; }
-      .cab-adder { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+      .cab-ways { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+      .cab-or { color: var(--muted); font-size: calc(12px * var(--ui)); }
+      .cab-adder { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
       .cab-adder input { flex: 1 1 160px; padding: 9px 11px; border-radius: 9px;
         border: 1px solid var(--border-2); background: var(--surface); color: var(--text);
         font: calc(13px * var(--ui)) var(--sans); }
@@ -2834,10 +2836,17 @@
         <div class="cab-msg" id="cab-msg"></div>
         <div class="cab-tools" id="cab-tools" hidden></div>
         <div id="cab-list"></div>
+        <!-- Two ways to file a document, laid out as two. They used to sit in one
+             row sharing one message line, so a half-typed name left over from
+             one of them came back as a refusal beside a document the other had
+             just filed successfully. -->
+        <div class="cab-ways" id="cab-add-ways" hidden>
+          <button type="button" id="cab-pick" class="cab-pick" hidden>เลือกจาก Google Drive</button>
+          <span class="cab-or" id="cab-or" hidden>หรือวางลิงก์เอง</span>
+        </div>
         <form class="cab-adder" id="cab-add" hidden>
           <input type="text" id="cab-add-title" placeholder="ชื่อเอกสาร" maxlength="200" />
           <input type="url" id="cab-add-url" placeholder="วางลิงก์ Google Drive หรือ OneDrive" />
-          <button type="button" id="cab-pick" class="cab-pick" hidden>เลือกจาก Google Drive</button>
           <button type="submit">เพิ่มเข้าตู้</button>
         </form>
         <div id="cab-grants">

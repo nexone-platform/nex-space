@@ -145,8 +145,11 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
     }
     for (const d of docs) list.appendChild(docRow(d));
 
+    const mayFile = cab.level === "file";
     const adder = $("cab-add");
-    if (adder) adder.hidden = cab.level !== "file";
+    if (adder) adder.hidden = !mayFile;
+    const ways = $("cab-add-ways");
+    if (ways) ways.hidden = !mayFile || !$("cab-pick") || $("cab-pick")!.hidden;
   };
 
   const docRow = (d: Doc) => {
@@ -390,6 +393,10 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
     if (!button) return;
     const cfg = await pickerConfig();
     button.hidden = !cfg.available;
+    const or = $("cab-or");
+    if (or) or.hidden = !cfg.available;
+    const ways = $("cab-add-ways");
+    if (ways && cfg.available && cab?.level === "file") ways.hidden = false;
     if (!cfg.available) return;
     button.onclick = async () => {
       button.disabled = true;
@@ -405,6 +412,10 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
           say(said.error ? String(said.error) : t("เพิ่มเอกสารไม่สำเร็จ"), true);
           return;
         }
+        // Whatever was half-typed in the paste fields is gone: the document is
+        // in, and leaving the other way in loaded invites pressing its button.
+        $<HTMLInputElement>("cab-add-title")!.value = "";
+        $<HTMLInputElement>("cab-add-url")!.value = "";
         docs.unshift(said.doc);
         draw();
         say(t("เพิ่มแล้ว"));
@@ -426,7 +437,11 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
       e.preventDefault();
       const title = $<HTMLInputElement>("cab-add-title")!.value.trim();
       const url = $<HTMLInputElement>("cab-add-url")!.value.trim();
-      if (!title || !url) { say(t("ใส่ชื่อและลิงก์ของเอกสาร"), true); return; }
+      // Said one at a time, and about the field that is actually empty. "Put in
+      // a name and a link" next to a filled-in name is a sentence that reads as
+      // the app not having noticed.
+      if (!title) { say(t("ใส่ชื่อของเอกสาร"), true); return; }
+      if (!url) { say(t("ใส่ลิงก์ของเอกสาร"), true); return; }
       const said = await ask("POST", `/workspaces/${slug}/cabinets/${cab!.id}/docs`,
         { title, url, provider: guessProvider(url) });
       if (said.status !== 201) {
