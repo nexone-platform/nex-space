@@ -450,6 +450,61 @@ let INSIDE = "";
 }
 
 
+// ---- only me, over the wire -------------------------------------------------------------
+{
+  await patch(C, { openTo: "members" }, owner.token);
+  await put(`${C}/grants`, { grants: [{ userId: staff.id, level: "file" }] }, owner.token);
+
+  const drawer = (await post(`${C}/folders`, { name: "ของฉัน", openTo: "private" }, staff.token)).folder;
+  ok("a member makes a drawer that is only theirs", !!drawer?.id, JSON.stringify(drawer?.openTo));
+
+  const filed = await post(`${C}/docs`, {
+    title: "บันทึกส่วนตัว", url: "https://example.test/mine", folderId: drawer.id,
+  }, staff.token);
+  ok("  · and files into it, because private still means theirs to use",
+    filed.status === 201, String(filed.status));
+
+  const mine = await get(AT, staff.token);
+  ok("  · they see it", mine.folders?.some((f) => f.id === drawer.id));
+  ok("  · and are told it is theirs", mine.folders?.find((f) => f.id === drawer.id)?.why === "yours",
+    mine.folders?.find((f) => f.id === drawer.id)?.why);
+
+  const others = await get(AT, hr.token);
+  ok("  · a colleague in the same open cabinet does not",
+    !others.folders?.some((f) => f.id === drawer.id), `${others.folders?.length} folder(s)`);
+  ok("  · nor the document inside it",
+    !others.docs?.some((d) => d.id === filed.doc.id), `${others.docs?.length} document(s)`);
+  ok("  · while the cabinet itself is still open to them",
+    others.status === 200 && others.cabinet?.level !== "none", String(others.cabinet?.level));
+  const intruder = await post(`${C}/docs`, {
+    title: "แอบใส่", url: "https://example.test/x", folderId: drawer.id,
+  }, hr.token);
+  ok("  · and they cannot file into it by naming it", intruder.status === 403,
+    String(intruder.status));
+
+  const boss = await get(AT, admin.token);
+  ok("whoever runs the space sees it anyway, as they always did",
+    boss.folders?.some((f) => f.id === drawer.id));
+  ok("  · told it is the role and not the drawer",
+    boss.folders?.find((f) => f.id === drawer.id)?.why === "runs-the-space",
+    boss.folders?.find((f) => f.id === drawer.id)?.why);
+
+  const oneDoc = await post(`${C}/docs`, {
+    title: "ร่างของฉัน", url: "https://example.test/draft", openTo: "private",
+  }, staff.token);
+  ok("a single document can be private without a drawer", oneDoc.status === 201,
+    String(oneDoc.status));
+  ok("  · seen by the person who filed it",
+    (await get(AT, staff.token)).docs?.some((d) => d.id === oneDoc.doc.id));
+  ok("  · and by nobody else in the cabinet",
+    !(await get(AT, hr.token)).docs?.some((d) => d.id === oneDoc.doc.id));
+
+  const onCabinet = await patch(C, { openTo: "private" }, owner.token);
+  ok("a cabinet will not take it", onCabinet.status === 400,
+    "furniture made by whoever walked up to it first belongs to nobody");
+}
+
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 stop();
 process.exit(fail ? 1 : 0);

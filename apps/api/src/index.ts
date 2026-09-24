@@ -10,7 +10,7 @@ import {
 import { sendLoginCode, mailEnabled, mailTransport, sendInvite, sendBooking, sendReminder, mailCheck } from "./mailer";
 import {
   levelForCabinet, levelForFolder, levelForDoc, whyForDoc, whyForFolder,
-  atLeast, isLevel, isOpenTo, runsTheSpace,
+  atLeast, isLevel, isOpenTo, isCabinetOpenTo, runsTheSpace,
   type Level, type Because,
 } from "./cabinet.js";
 import { iceConfig, turnEnabled } from "./ice";
@@ -3166,11 +3166,11 @@ app.get("/workspaces/:slug/cabinets", async (req, res) => {
       where: { cabinetId: c.id }, include: { grants: true },
     });
     const drawer = new Map(folders.map((f) => [f.id,
-      { openTo: f.openTo, grants: asGrants(f.grants) }]));
+      { openTo: f.openTo, grants: asGrants(f.grants), ownerId: f.createdById }]));
     const mine = docs.filter((d) => levelForDoc(
       { openTo: c.openTo, grants: asGrants(c.grants) },
       d.folderId ? drawer.get(d.folderId) ?? null : null,
-      { openTo: d.openTo, grants: asGrants(d.grants) }, who,
+      { openTo: d.openTo, grants: asGrants(d.grants), ownerId: d.addedById }, who,
     ) !== "none");
     if (level === "none" && !mine.length) continue;
     out.push(cabinetView(c, level, mine.length));
@@ -3203,7 +3203,7 @@ app.get("/workspaces/:slug/cabinets/at/:map/:x/:y", async (req, res) => {
     where: { cabinetId: c.id }, include: { grants: true }, orderBy: { name: "asc" },
   });
   const drawer = new Map(folderRows.map((f) => [f.id,
-    { openTo: f.openTo, grants: asGrants(f.grants) }]));
+    { openTo: f.openTo, grants: asGrants(f.grants), ownerId: f.createdById }]));
 
   const rows = await prisma.cabinetDoc.findMany({
     where: { cabinetId: c.id },
@@ -3213,7 +3213,7 @@ app.get("/workspaces/:slug/cabinets/at/:map/:x/:y", async (req, res) => {
   const docs = [];
   const perFolder = new Map<string, number>();
   for (const d of rows) {
-    const doc = { openTo: d.openTo, grants: asGrants(d.grants) };
+    const doc = { openTo: d.openTo, grants: asGrants(d.grants), ownerId: d.addedById };
     const f = d.folderId ? drawer.get(d.folderId) ?? null : null;
     const lv = levelForDoc(cab, f, doc, who);
     if (lv === "none") continue;
@@ -3229,7 +3229,7 @@ app.get("/workspaces/:slug/cabinets/at/:map/:x/:y", async (req, res) => {
    */
   const folders = [];
   for (const f of folderRows) {
-    const one = { openTo: f.openTo, grants: asGrants(f.grants) };
+    const one = { openTo: f.openTo, grants: asGrants(f.grants), ownerId: f.createdById };
     const lv = levelForFolder(cab, one, who);
     const n = perFolder.get(f.id) ?? 0;
     if (lv === "none" && !n) continue;
@@ -3260,7 +3260,7 @@ app.patch("/workspaces/:slug/cabinets/:id", async (req, res) => {
     data.label = label;
   }
   if (req.body?.openTo !== undefined) {
-    if (!isOpenTo(req.body.openTo)) return res.status(400).json({ error: "bad openTo" });
+    if (!isCabinetOpenTo(req.body.openTo)) return res.status(400).json({ error: "bad openTo" });
     data.openTo = req.body.openTo;
   }
   const saved = await prisma.cabinet.update({ where: { id: c.id }, data });
@@ -3372,7 +3372,7 @@ app.post("/workspaces/:slug/cabinets/:id/docs", async (req, res) => {
     });
     if (!f || f.cabinetId !== c.id) return res.status(404).json({ error: "no such folder" });
     folderId = f.id;
-    level = levelForFolder(cab, { openTo: f.openTo, grants: asGrants(f.grants) }, who);
+    level = levelForFolder(cab, { openTo: f.openTo, grants: asGrants(f.grants), ownerId: f.createdById }, who);
   } else {
     level = levelForCabinet(cab, who);
   }
@@ -3390,7 +3390,7 @@ app.post("/workspaces/:slug/cabinets/:id/docs", async (req, res) => {
     });
     const sees = level !== "none" || levelForCabinet(cab, who) !== "none"
       || inside.some((d) => levelForDoc(
-        cab, null, { openTo: d.openTo, grants: asGrants(d.grants) }, who,
+        cab, null, { openTo: d.openTo, grants: asGrants(d.grants), ownerId: d.addedById }, who,
       ) !== "none");
     return sees
       ? res.status(403).json({ error: folderId
@@ -3461,7 +3461,7 @@ app.patch("/workspaces/:slug/cabinets/:id/docs/:docId", async (req, res) => {
       }
       const fl = levelForFolder(
         { openTo: found.cabinet.openTo, grants: asGrants(found.cabinet.grants) },
-        { openTo: f.openTo, grants: asGrants(f.grants) },
+        { openTo: f.openTo, grants: asGrants(f.grants), ownerId: f.createdById },
         { userId: found.can.me.id, role: found.can.role },
       );
       if (!atLeast(fl, "file")) {
@@ -3514,8 +3514,8 @@ async function docFor(req: express.Request, res: express.Response) {
     : null;
   const level = levelForDoc(
     { openTo: c.openTo, grants: asGrants(c.grants) },
-    folder ? { openTo: folder.openTo, grants: asGrants(folder.grants) } : null,
-    { openTo: doc.openTo, grants: asGrants(doc.grants) }, who,
+    folder ? { openTo: folder.openTo, grants: asGrants(folder.grants), ownerId: folder.createdById } : null,
+    { openTo: doc.openTo, grants: asGrants(doc.grants), ownerId: doc.addedById }, who,
   );
   if (level === "none") { res.status(404).json({ error: "not found" }); return null; }
   return { w, can, cabinet: c, doc, folder, level };
@@ -3704,7 +3704,7 @@ async function folderFor(req: express.Request, res: express.Response, staffOnly:
 
   const who = { userId: can.me.id, role: can.role };
   const cab = { openTo: c.openTo, grants: asGrants(c.grants) };
-  const level = levelForFolder(cab, { openTo: folder.openTo, grants: asGrants(folder.grants) }, who);
+  const level = levelForFolder(cab, { openTo: folder.openTo, grants: asGrants(folder.grants), ownerId: folder.createdById }, who);
   const docsInside = await prisma.cabinetDoc.count({ where: { folderId: folder.id } });
   // A drawer they cannot open, holding nothing they can see, is not there.
   if (level === "none" && !docsInside) { res.status(404).json({ error: "not found" }); return null; }

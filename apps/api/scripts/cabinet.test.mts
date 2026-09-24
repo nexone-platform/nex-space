@@ -10,7 +10,7 @@
  */
 import {
   levelForCabinet, levelForFolder, levelForDoc, whyForDoc, whyForFolder,
-  atLeast, isLevel, isOpenTo,
+  atLeast, isLevel, isOpenTo, isCabinetOpenTo,
 } from "../src/cabinet.js";
 
 let pass = 0, fail = 0;
@@ -203,6 +203,75 @@ console.log("\nwho may open which drawer\n");
     levelForFolder(openCabinet, openFolder, guest) === "none"
     && whyForFolder(openCabinet, openFolder, guest) === "no");
 }
+
+// ---- only me -------------------------------------------------------------------------
+{
+  const mine = { openTo: "private", grants: [], ownerId: "u_member" };
+  const theirs = { openTo: "private", grants: [], ownerId: "u_other" };
+
+  ok("a private drawer is open to whoever made it",
+    levelForFolder(openCabinet, mine, member) === "file",
+    "read and file — a private drawer nobody can put anything in is a locked empty box");
+  ok("  · and shut to everybody else in the space",
+    levelForFolder(openCabinet, theirs, member) === "none");
+  ok("  · inside a cabinet that is open to all of them",
+    levelForCabinet(openCabinet, member) === "read");
+  ok("  · with its documents following it",
+    levelForDoc(openCabinet, theirs, plain, member) === "none"
+    && levelForDoc(openCabinet, mine, plain, member) === "file");
+
+  ok("a private document is the same, one document wide",
+    levelForDoc(openCabinet, null, mine, member) === "file"
+    && levelForDoc(openCabinet, null, theirs, member) === "none");
+
+  /**
+   * The exception that makes "only me" a half-truth, and the reason the panel
+   * says so where the word is chosen. Somebody handing out access has to be
+   * able to see what they are handing out; that was true before this setting
+   * existed and is not quietly changed by it.
+   */
+  ok("whoever runs the space still sees a private drawer",
+    levelForFolder(openCabinet, theirs, admin) === "file"
+    && levelForFolder(openCabinet, theirs, owner) === "file",
+    "said out loud in the panel rather than hidden behind the word");
+  ok("  · and is told it is the role, not the drawer",
+    whyForFolder(openCabinet, theirs, admin) === "runs-the-space");
+
+  ok("the person it belongs to is told it is theirs",
+    whyForFolder(openCabinet, mine, member) === "yours"
+    && whyForDoc(openCabinet, null, mine, member) === "yours");
+  ok("  · and everybody else is told nothing at all",
+    whyForFolder(openCabinet, theirs, member) === "no"
+    && whyForDoc(openCabinet, theirs, plain, member) === "no");
+
+  ok("a guest gets nothing from one, even if the ids somehow lined up",
+    levelForFolder(openCabinet, { openTo: "private", grants: [], ownerId: "u_guest" }, guest)
+      === "none");
+
+  /**
+   * A row with nobody recorded against it — written before this setting
+   * existed, or by somebody since removed from the space. It must not become
+   * readable by whoever asks; "nobody made it" is not "everybody owns it".
+   */
+  const orphan = { openTo: "private", grants: [], ownerId: null };
+  ok("a private thing with nobody recorded belongs to nobody",
+    levelForFolder(openCabinet, orphan, member) === "none"
+    && levelForFolder(openCabinet, orphan, other) === "none");
+
+  const named = { openTo: "private", grants: [{ userId: "u_other", level: "read" as const }], ownerId: "u_member" };
+  ok("a name on a private drawer still beats the setting",
+    levelForFolder(shutCabinet, named, other) === "read",
+    "the list is asked first, whatever the setting says");
+  ok("  · and the person it belongs to keeps it",
+    levelForFolder(shutCabinet, named, member) === "file");
+
+  ok("private is a word the system knows, and 'me' is not",
+    isOpenTo("private") && !isOpenTo("me") && !isOpenTo("owner"));
+  ok("  · but a cabinet will not take it", isCabinetOpenTo("members")
+    && isCabinetOpenTo("listed") && !isCabinetOpenTo("private"),
+    "a cabinet is made by whoever walked up to it first, which is nobody's decision");
+}
+
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

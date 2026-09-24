@@ -273,6 +273,11 @@ const EN: Record<string, string> = {
   "เปิดตู้ไม่สำเร็จ": "Could not open it",
   "ยังไม่มีเอกสารในตู้นี้": "Nothing filed here yet",
   "ยังไม่มีเอกสารที่คุณเปิดได้ในตู้นี้": "Nothing in here is open to you yet",
+  "เฉพาะฉัน": "only me",
+  "เฉพาะฉัน (ผู้ดูแล Space ยังเห็นได้)": "Only me (whoever runs the space still sees it)",
+  "ให้ลิ้นชักนี้เป็นของคุณคนเดียวไหม — ผู้ดูแล Space ยังเห็นได้":
+    "Make this drawer yours alone? Whoever runs the space still sees it.",
+  "ของคุณเอง": "this is yours",
   "เฉพาะที่ระบุชื่อ": "named only",
   "＋ สร้างใน Google Drive": "＋ New in Google Drive",
   "โฟลเดอร์ใหม่ใน Drive": "New folder in Drive",

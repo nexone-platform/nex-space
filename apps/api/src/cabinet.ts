@@ -39,16 +39,33 @@ export const atLeast = (has: Level, want: Level) =>
  * Who a cabinet, a folder or a document stands open to when no name is listed.
  *
  * `members` is everybody in the space who is not a guest. `listed` is nobody
- * but the names on it — which is what a cabinet of contracts wants, and why it
+ * but the names on it — which is what a drawer of contracts wants, and why it
  * is a separate word rather than the absence of one: an empty list read as
  * "everyone" is the failure that hands the payroll to the floor.
+ *
+ * `private` is the person who made it, and nobody else — except whoever runs
+ * the space, who sees everything and always did. That exception is not hidden
+ * behind this word: the panel says so where the word is chosen, because a
+ * setting called "only me" that quietly means "and two other people" is worse
+ * than no setting at all.
  */
-export type OpenTo = "members" | "listed";
+export type OpenTo = "members" | "listed" | "private";
 
-export const OPEN_TO: OpenTo[] = ["members", "listed"];
+export const OPEN_TO: OpenTo[] = ["members", "listed", "private"];
 
 export const isOpenTo = (v: unknown): v is OpenTo =>
   typeof v === "string" && (OPEN_TO as string[]).includes(v);
+
+/**
+ * The cabinet takes only two of them.
+ *
+ * A cabinet is furniture in a room, brought into being by whoever first walked
+ * up to it — which makes "the person who made it" an accident of who was
+ * passing rather than a decision. A drawer and a document are made on purpose,
+ * so they can be private; the cabinet they stand in cannot.
+ */
+export const isCabinetOpenTo = (v: unknown): v is "members" | "listed" =>
+  v === "members" || v === "listed";
 
 export const isLevel = (v: unknown): v is Level =>
   typeof v === "string" && (LEVELS as string[]).includes(v);
@@ -65,6 +82,12 @@ export interface CabinetLike {
   grants: Grant[];
 }
 
+/** who made a thing, for the settings that turn on that */
+export interface Owned {
+  /** null where nobody is recorded — an old row, or somebody since removed */
+  ownerId?: string | null;
+}
+
 /**
  * A drawer inside the cabinet, and a document in it.
  *
@@ -72,7 +95,7 @@ export interface CabinetLike {
  * and there was no reason to invent a second one. null openTo means "whatever
  * the thing I am filed in says" — the ordinary case for both.
  */
-export interface FolderLike {
+export interface FolderLike extends Owned {
   openTo: string | null;
   grants: Grant[];
 }
@@ -82,7 +105,19 @@ export type DocLike = FolderLike;
 const named = (grants: Grant[], userId: string): Level | null =>
   grants.find((g) => g.userId === userId)?.level ?? null;
 
-const fromOpenTo = (openTo: string): Level => (openTo === "members" ? "read" : "none");
+/**
+ * What a setting gives this person, when no name on the list has spoken.
+ *
+ * "private" needs to know two more things than the others — who made it, and
+ * who is asking — which is why this takes them rather than the setting alone.
+ */
+const fromOpenTo = (openTo: string, ownerId: string | null | undefined, userId: string): Level => {
+  if (openTo === "members") return "read";
+  // Theirs to read and to file into. A private drawer nobody can put anything
+  // in would be a locked empty box.
+  if (openTo === "private") return ownerId && ownerId === userId ? "file" : "none";
+  return "none";
+};
 
 /** what this person may do with the cabinet itself */
 export function levelForCabinet(
@@ -91,7 +126,8 @@ export function levelForCabinet(
 ): Level {
   if (who.role === "guest") return "none";
   if (runsTheSpace(who.role)) return "file";
-  return named(cabinet.grants, who.userId) ?? fromOpenTo(cabinet.openTo);
+  return named(cabinet.grants, who.userId)
+    ?? fromOpenTo(cabinet.openTo, null, who.userId);
 }
 
 /**
@@ -111,7 +147,7 @@ export function levelForFolder(
 
   const own = named(folder.grants, who.userId);
   if (own) return own;
-  if (folder.openTo !== null) return fromOpenTo(folder.openTo);
+  if (folder.openTo !== null) return fromOpenTo(folder.openTo, folder.ownerId, who.userId);
   return levelForCabinet(cabinet, who);
 }
 
@@ -140,7 +176,7 @@ export function levelForDoc(
 
   const own = named(doc.grants, who.userId);
   if (own) return own;
-  if (doc.openTo !== null) return fromOpenTo(doc.openTo);
+  if (doc.openTo !== null) return fromOpenTo(doc.openTo, doc.ownerId, who.userId);
   return folder ? levelForFolder(cabinet, folder, who) : levelForCabinet(cabinet, who);
 }
 
@@ -154,7 +190,20 @@ export function levelForDoc(
  */
 export type Because = "runs-the-space" | "named-on-document" | "document-open"
   | "named-on-folder" | "folder-open"
-  | "named-on-cabinet" | "cabinet-open" | "no";
+  | "named-on-cabinet" | "cabinet-open" | "yours" | "no";
+
+/** what a setting says, in words, once the list has said nothing */
+function whyFromOpenTo(
+  thing: FolderLike,
+  who: { userId: string },
+  openWord: Because,
+): Because {
+  if (thing.openTo === "members") return openWord;
+  if (thing.openTo === "private") {
+    return thing.ownerId && thing.ownerId === who.userId ? "yours" : "no";
+  }
+  return "no";
+}
 
 /** the cabinet half of the answer, shared by a folder and a loose document */
 function whyFromCabinet(cabinet: CabinetLike, who: { userId: string }): Because {
@@ -172,7 +221,7 @@ export function whyForFolder(
   if (runsTheSpace(who.role)) return "runs-the-space";
   const own = named(folder.grants, who.userId);
   if (own) return own === "none" ? "no" : "named-on-folder";
-  if (folder.openTo !== null) return folder.openTo === "members" ? "folder-open" : "no";
+  if (folder.openTo !== null) return whyFromOpenTo(folder, who, "folder-open");
   return whyFromCabinet(cabinet, who);
 }
 
@@ -186,6 +235,6 @@ export function whyForDoc(
   if (runsTheSpace(who.role)) return "runs-the-space";
   const own = named(doc.grants, who.userId);
   if (own) return own === "none" ? "no" : "named-on-document";
-  if (doc.openTo !== null) return doc.openTo === "members" ? "document-open" : "no";
+  if (doc.openTo !== null) return whyFromOpenTo(doc, who, "document-open");
   return folder ? whyForFolder(cabinet, folder, who) : whyFromCabinet(cabinet, who);
 }

@@ -64,6 +64,7 @@ const WHY: Record<string, string> = {
   "runs-the-space": "คุณดูแล Space นี้",
   "named-on-document": "คุณถูกระบุชื่อบนเอกสารนี้",
   "document-open": "เอกสารนี้เปิดให้ทุกคนในทีม",
+  "yours": "ของคุณเอง",
   "named-on-folder": "คุณถูกระบุชื่อบนโฟลเดอร์นี้",
   "folder-open": "โฟลเดอร์นี้เปิดให้ทุกคนในทีม",
   "named-on-cabinet": "คุณถูกระบุชื่อบนตู้นี้",
@@ -268,10 +269,10 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
       row.appendChild(link);
     }
 
-    if (f.openTo === "listed") {
+    if (f.openTo === "listed" || f.openTo === "private") {
       const shut = document.createElement("i");
       shut.className = "cab-tag";
-      shut.textContent = t("เฉพาะที่ระบุชื่อ");
+      shut.textContent = f.openTo === "private" ? t("เฉพาะฉัน") : t("เฉพาะที่ระบุชื่อ");
       row.appendChild(shut);
     }
 
@@ -338,10 +339,10 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
     left.append(a, meta);
     row.appendChild(left);
 
-    if (d.openTo === "listed") {
+    if (d.openTo === "listed" || d.openTo === "private") {
       const shut = document.createElement("i");
       shut.className = "cab-tag";
-      shut.textContent = t("เฉพาะที่ระบุชื่อ");
+      shut.textContent = d.openTo === "private" ? t("เฉพาะฉัน") : t("เฉพาะที่ระบุชื่อ");
       row.appendChild(shut);
     }
 
@@ -479,6 +480,10 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
         ["", t("ตามการตั้งค่าของตู้")],
         ["members", t("เปิดให้ทุกคนในทีม")],
         ["listed", t("เฉพาะคนที่ระบุชื่อ")],
+        // Named for what it does, not for what it sounds like. "เฉพาะฉัน" alone
+        // would be a promise this system does not keep: whoever runs the space
+        // sees everything, and always did.
+        ["private", t("เฉพาะฉัน (ผู้ดูแล Space ยังเห็นได้)")],
       ] as const) {
         const o = document.createElement("option");
         o.value = value; o.textContent = label;
@@ -798,6 +803,13 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
        * does not have to mean a folder in anybody's Drive. Said as a question
        * about where files will go, because that is the consequence.
        */
+      /**
+       * Asked at the moment of making it, because that is when somebody knows
+       * whether this drawer is theirs or the team's — and changing it later
+       * means finding a settings screen.
+       */
+      const onlyMine = confirm(t("ให้ลิ้นชักนี้เป็นของคุณคนเดียวไหม — ผู้ดูแล Space ยังเห็นได้"));
+
       let drive: { fileId: string; url: string } | null = null;
       const cfg = await pickerConfig();
       if (cfg.available && confirm(t("สร้างโฟลเดอร์ใน Google Drive ให้ด้วยไหม — ไฟล์ที่ใส่ลิ้นชักนี้จะขึ้นไปอยู่ในนั้น"))) {
@@ -814,7 +826,11 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
       }
 
       const said = await ask("POST", `/workspaces/${slug}/cabinets/${cab!.id}/folders`,
-        { name, ...(drive ? { driveFolderId: drive.fileId, driveUrl: drive.url } : {}) });
+        {
+          name,
+          ...(onlyMine ? { openTo: "private" } : {}),
+          ...(drive ? { driveFolderId: drive.fileId, driveUrl: drive.url } : {}),
+        });
       if (said.status !== 201) {
         say(said.error ? String(said.error) : t("สร้างโฟลเดอร์ไม่สำเร็จ"), true);
         return;
