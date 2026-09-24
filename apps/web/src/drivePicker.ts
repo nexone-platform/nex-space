@@ -22,7 +22,7 @@ declare global {
         oauth2?: {
           initTokenClient(opts: {
             client_id: string; scope: string; prompt?: string;
-            callback(r: { access_token?: string; error?: string }): void;
+            callback(r: { access_token?: string; expires_in?: number; error?: string }): void;
           }): { requestAccessToken(): void };
         };
       };
@@ -92,14 +92,21 @@ function script(src: string): Promise<void> {
 }
 
 /**
- * An access token for this person's Drive, for as long as the picker is open.
+ * An access token for this person's Drive.
  *
- * Kept in memory and never sent anywhere: the server stores no Drive token at
- * all, because it never reads a file. NexSpace keeps the name and the link; the
- * document stays in the Drive its owner put it in, under that Drive's own
- * sharing.
+ * Kept in memory for this tab and never sent anywhere: the server stores no
+ * Drive token at all, because it never reads or writes a file. NexSpace keeps
+ * the name and the link; the document stays in the Drive its owner put it in,
+ * under that Drive's own sharing.
+ *
+ * Held rather than asked for each time, with a minute shaved off the life
+ * Google gives it so a call never goes out with one that expires on the way.
+ * Without this, making a folder and then filing it would be two consent
+ * windows for one action.
  */
-function token(cfg: Config): Promise<string> {
+let held: { token: string; until: number } | null = null;
+
+function ask(cfg: Config): Promise<string> {
   return new Promise((done, fail) => {
     const oauth = window.google?.accounts?.oauth2;
     if (!oauth) { fail(new Error("Google sign-in did not load")); return; }
@@ -107,12 +114,28 @@ function token(cfg: Config): Promise<string> {
       client_id: cfg.clientId!,
       scope: cfg.scope,
       callback: (r) => {
-        if (r.access_token) done(r.access_token);
-        else fail(new Error(r.error || "no access token"));
+        if (r.access_token) {
+          held = { token: r.access_token, until: Date.now() + (Number(r.expires_in) || 3600) * 1000 - 60_000 };
+          done(r.access_token);
+        } else fail(new Error(r.error || "no access token"));
       },
     });
     client.requestAccessToken();
   });
+}
+
+/**
+ * The token, for anything else that needs to reach this person's Drive.
+ *
+ * Loads Google's sign-in script if it is not there yet, so a caller that never
+ * opened the picker still works.
+ */
+export async function driveToken(): Promise<string> {
+  if (held && held.until > Date.now()) return held.token;
+  const cfg = await pickerConfig();
+  if (!cfg.available || !cfg.clientId) throw new Error("Google Drive is not configured");
+  await script("https://accounts.google.com/gsi/client");
+  return ask(cfg);
 }
 
 /**
@@ -129,7 +152,7 @@ export async function pickFromDrive(): Promise<Picked | null> {
     script("https://accounts.google.com/gsi/client"),
     script("https://apis.google.com/js/api.js"),
   ]);
-  const access = await token(cfg);
+  const access = await driveToken();
   await new Promise<void>((done) => window.gapi!.load("picker", () => done()));
 
   const picker = (window.google as unknown as { picker: any }).picker;

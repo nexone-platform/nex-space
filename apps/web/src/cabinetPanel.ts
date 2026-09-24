@@ -12,10 +12,13 @@
 import { API, authHeaders } from "./api";
 import { t } from "./i18n";
 import { pickerConfig, pickFromDrive } from "./drivePicker";
+import { createInDrive, uploadToDrive, shareByLink, type DriveKind } from "./driveMake";
 
 interface Doc {
   id: string;
   title: string;
+  /** the provider's own id, for a file this app can still reach in Drive */
+  fileId: string | null;
   /** file | folder — a Drive folder is an entry too, it just opens a folder */
   kind: string;
   /** the drawer it is filed in, or null for one lying loose in the cabinet */
@@ -196,6 +199,8 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
     const newFolder = $("cab-newfolder");
     // Making a drawer is filing into the cabinet itself, not into a drawer.
     if (newFolder) newFolder.hidden = cab.level !== "file";
+    const make = $("cab-make-row");
+    if (make) make.hidden = !mayFile || !$("cab-make") || !$("cab-make")!.childNodes.length;
     drawFolderChoice();
   };
 
@@ -592,6 +597,21 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
   };
 
   /**
+   * Drive's own "New" menu, as far as this scope reaches.
+   *
+   * Uploading a whole folder is deliberately not here: the browser can hand
+   * over a directory, but every file in it would be a separate upload and a
+   * separate row, and a cabinet entry per holiday photo is not what anybody
+   * means by it. A folder is made, and files go in it.
+   */
+  const MAKE: { kind: DriveKind; label: string }[] = [
+    { kind: "folder", label: "โฟลเดอร์ใหม่ใน Drive" },
+    { kind: "document", label: "Google เอกสาร" },
+    { kind: "spreadsheet", label: "Google ชีต" },
+    { kind: "presentation", label: "Google สไลด์" },
+  ];
+
+  /**
    * Keep a drawer's count honest without a round trip.
    *
    * The number beside a folder comes from the server, so filing into one left
@@ -608,6 +628,121 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
   const chosenFolder = () => {
     const sel = $<HTMLSelectElement>("cab-add-folder");
     return sel && !sel.hidden && sel.value ? sel.value : null;
+  };
+
+  /**
+   * File something that was just made in Drive, and offer to let the team read
+   * it.
+   *
+   * A file made here belongs to the person who made it and starts private,
+   * which is the right default — but a document in a shared cabinet that only
+   * its author can open is half a thing. So the offer is a button they press,
+   * never something done on their behalf, and Drive can take it back.
+   */
+  const fileWhatWasMade = async (made: {
+    fileId: string; title: string; url: string; mime: string; kind: "file" | "folder";
+  }) => {
+    const said = await ask("POST", `/workspaces/${slug}/cabinets/${cab!.id}/docs`, {
+      title: made.title, url: made.url, provider: "google",
+      fileId: made.fileId, mime: made.mime, kind: made.kind,
+      folderId: chosenFolder(),
+    });
+    if (said.status !== 201) {
+      say(said.error ? String(said.error) : t("เพิ่มเอกสารไม่สำเร็จ"), true);
+      return;
+    }
+    docs.unshift(said.doc);
+    countShift(said.doc.folderId, 1);
+    draw();
+
+    const msg = $("cab-msg");
+    if (!msg) return;
+    msg.textContent = t("สร้างแล้ว — ตอนนี้เปิดได้เฉพาะคุณ");
+    msg.classList.remove("err");
+    const share = document.createElement("button");
+    share.className = "cab-mini";
+    share.style.marginInlineStart = "8px";
+    share.textContent = t("ให้คนที่มีลิงก์เปิดได้");
+    share.onclick = async () => {
+      share.disabled = true;
+      try {
+        await shareByLink(made.fileId);
+        say(t("แชร์แล้ว — คนที่มีลิงก์เปิดอ่านได้"));
+      } catch (e) {
+        say(t("แชร์ไม่สำเร็จ — เปิดใน Drive แล้วแชร์เองได้"), true);
+        console.warn("[drive]", e);
+      }
+    };
+    msg.appendChild(share);
+  };
+
+  const wireMake = async () => {
+    const menu = $<HTMLSelectElement>("cab-make");
+    const upload = $<HTMLInputElement>("cab-upload");
+    const uploadButton = $<HTMLButtonElement>("cab-upload-go");
+    if (!menu || !upload || !uploadButton) return;
+    const cfg = await pickerConfig();
+    if (!cfg.available) return;
+
+    if (!menu.options.length) {
+      const head = document.createElement("option");
+      head.value = "";
+      head.textContent = t("＋ สร้างใน Google Drive");
+      menu.appendChild(head);
+      for (const m of MAKE) {
+        const o = document.createElement("option");
+        o.value = m.kind;
+        o.textContent = t(m.label);
+        menu.appendChild(o);
+      }
+    }
+    menu.onchange = async () => {
+      const kind = menu.value as DriveKind;
+      menu.value = "";
+      if (!kind) return;
+      const name = prompt(t("ตั้งชื่อ"), "");
+      if (name === null) return;
+      if (!name.trim()) { say(t("ต้องมีชื่อ"), true); return; }
+      say(t("กำลังสร้างใน Google Drive…"));
+      try {
+        await fileWhatWasMade(await createInDrive(kind, name.trim(), driveParent()));
+      } catch (e) {
+        say(t("สร้างใน Google Drive ไม่สำเร็จ"), true);
+        console.warn("[drive]", e);
+      }
+    };
+
+    uploadButton.onclick = () => upload.click();
+    upload.onchange = async () => {
+      const file = upload.files?.[0];
+      upload.value = "";
+      if (!file) return;
+      say(t("กำลังอัปโหลดขึ้น Google Drive…"));
+      try {
+        await fileWhatWasMade(await uploadToDrive(file, driveParent()));
+      } catch (e) {
+        say(t("อัปโหลดไม่สำเร็จ"), true);
+        console.warn("[drive]", e);
+      }
+    };
+  };
+
+  /**
+   * Where in Drive a new thing goes.
+   *
+   * If the drawer chosen in the form is one whose entries are a Drive folder we
+   * already have access to, the new file goes inside that folder — which is
+   * what somebody picking it expects. Otherwise it lands at the top of their
+   * Drive, because a parent this app has never touched is not addressable under
+   * drive.file, and quietly putting it somewhere else would be worse than
+   * putting it somewhere obvious.
+   */
+  const driveParent = (): string | null => {
+    const into = chosenFolder();
+    if (!into) return null;
+    const holder = docs.find((d) =>
+      d.folderId === into && d.kind === "folder" && d.provider === "google" && !!d.fileId);
+    return holder?.fileId ?? null;
   };
 
   const wireNewFolder = () => {
@@ -683,6 +818,7 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
   wireAdder();
   wireNewFolder();
   void wirePicker();
+  void wireMake();
 
   return {
     open(map, x, y) {

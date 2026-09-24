@@ -1752,7 +1752,10 @@
       .cab-in { margin-left: calc(26px * var(--ui)); }
       .cab-open { border: none; background: none; cursor: pointer; color: var(--text-3);
         font-size: calc(13px * var(--ui)); padding: 0 2px; line-height: 1; }
-      #cab-newfolder { margin-top: 10px; }
+      #cab-make-row { flex-wrap: wrap; }
+      .cab-make { padding: 5px 9px; border-radius: 9px; border: 1px solid var(--border-2);
+        background: var(--surface); color: var(--text-2);
+        font: 600 calc(12px * var(--ui)) var(--sans); }
       .cab-doc-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
       .cab-doc-name { color: var(--text); font-weight: 600; font-size: calc(13.5px * var(--ui));
         text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2861,7 +2864,12 @@
           <select id="cab-add-folder" hidden></select>
           <button type="submit">เพิ่มเข้าตู้</button>
         </form>
-        <button type="button" class="cab-mini" id="cab-newfolder" hidden>＋ สร้างโฟลเดอร์</button>
+        <div class="cab-ways" id="cab-make-row" hidden>
+          <button type="button" class="cab-mini" id="cab-newfolder" hidden>＋ สร้างโฟลเดอร์</button>
+          <select id="cab-make" class="cab-make"></select>
+          <button type="button" class="cab-mini" id="cab-upload-go">อัปโหลดไฟล์ขึ้น Drive</button>
+          <input type="file" id="cab-upload" hidden />
+        </div>
         <div id="cab-grants">
           <div class="cab-grants-box">
             <div class="cab-head">
