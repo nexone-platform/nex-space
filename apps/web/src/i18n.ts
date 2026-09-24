@@ -337,6 +337,8 @@ const EN: Record<string, string> = {
   "ใส่ลิงก์ของเอกสาร": "A document needs a link",
   "หรือวางลิงก์เอง": "or paste a link",
   "เพิ่มเอกสารไม่สำเร็จ": "Could not file it",
+  "เพิ่ม {n} รายการแล้ว": "Filed {n} item(s)",
+  "เพิ่ม {n} จาก {all} รายการ — ที่เหลือไม่สำเร็จ": "Filed {n} of {all} — the rest did not go in",
   "เพิ่มแล้ว": "Filed",
   "ลิงก์": "Link",
   "สิทธิ์เข้าถึง": "Access",

@@ -139,10 +139,19 @@ export async function driveToken(): Promise<string> {
 }
 
 /**
- * Open Google's picker and resolve with what was chosen, or null if the person
- * closed it. Rejects only when something is actually broken.
+ * Open Google's picker and resolve with everything that was chosen — an empty
+ * list if it was closed. Rejects only when something is actually broken.
+ *
+ * Two views, which is as close as the Picker gets to Drive's own "New" menu:
+ * one to choose what is already there, and one to drag files in. There is no
+ * third for making a folder — the Picker API has no such thing, the dialog is
+ * Google's own iframe, and no setting adds a button to it. Making a folder
+ * lives beside the button that opens this, not inside it.
+ *
+ * `parent` is a folder this app already has access to; uploads land in it, and
+ * new files made elsewhere in the panel go to the same place.
  */
-export async function pickFromDrive(): Promise<Picked | null> {
+export async function pickFromDrive(parent?: string | null): Promise<Picked[]> {
   const cfg = await pickerConfig();
   if (!cfg.available || !cfg.key || !cfg.clientId) {
     throw new Error("the Drive picker is not configured");
@@ -156,32 +165,40 @@ export async function pickFromDrive(): Promise<Picked | null> {
   await new Promise<void>((done) => window.gapi!.load("picker", () => done()));
 
   const picker = (window.google as unknown as { picker: any }).picker;
-  return new Promise<Picked | null>((done) => {
+  return new Promise<Picked[]>((done) => {
     // Folders are selectable as well as browsable: a cabinet entry can be a
     // whole Drive folder, which is often what somebody means by "put the
     // contracts in there".
-    const view = new picker.DocsView(picker.ViewId.DOCS)
+    const browse = new picker.DocsView(picker.ViewId.DOCS)
       .setIncludeFolders(true)
       .setSelectFolderEnabled(true);
+
+    // And the upload tab of the same dialog, so "I have it on my computer" does
+    // not mean closing this and finding another button.
+    const upload = new picker.DocsUploadView().setIncludeFolders(true);
+    if (parent) upload.setParent(parent);
+
     const built = new picker.PickerBuilder()
       .setDeveloperKey(cfg.key!)
       .setOAuthToken(access)
-      .addView(view)
+      .addView(browse)
+      .addView(upload)
+      // More than one at a time, now that files can be dragged in: without it,
+      // dropping five and getting one is a silent loss of four.
+      .enableFeature(picker.Feature.MULTISELECT_ENABLED)
       .setCallback((data: { action: string; docs?: Record<string, string>[] }) => {
-        if (data.action === picker.Action.CANCEL) { done(null); return; }
+        if (data.action === picker.Action.CANCEL) { done([]); return; }
         if (data.action !== picker.Action.PICKED) return;
-        const d = data.docs?.[0];
-        if (!d) { done(null); return; }
-        const isFolder = d.mimeType === "application/vnd.google-apps.folder";
-        done({
-          kind: isFolder ? "folder" : "file",
+        done((data.docs ?? []).map((d) => ({
+          kind: d.mimeType === "application/vnd.google-apps.folder"
+            ? "folder" as const : "file" as const,
           fileId: d.id,
           title: d.name || d.id,
           // The picker gives a viewer link; a Drive file id always has one, and
           // this is the only address that respects Drive's own sharing.
           url: d.url || `https://drive.google.com/open?id=${encodeURIComponent(d.id)}`,
           mime: d.mimeType || null,
-        });
+        })));
       })
       .build();
     built.setVisible(true);

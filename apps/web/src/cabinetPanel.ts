@@ -566,25 +566,34 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
       button.disabled = true;
       say(t("กำลังเปิด Google Drive…"));
       try {
-        const picked = await pickFromDrive();
-        if (!picked) { say(""); return; }
-        const said = await ask("POST", `/workspaces/${slug}/cabinets/${cab!.id}/docs`, {
-          title: picked.title, url: picked.url, provider: "google",
-          fileId: picked.fileId, mime: picked.mime, kind: picked.kind,
-          folderId: chosenFolder(),
-        });
-        if (said.status !== 201) {
-          say(said.error ? String(said.error) : t("เพิ่มเอกสารไม่สำเร็จ"), true);
-          return;
+        const picked = await pickFromDrive(driveParent());
+        if (!picked.length) { say(""); return; }
+        let filed = 0;
+        let refused = "";
+        for (const one of picked) {
+          const said = await ask("POST", `/workspaces/${slug}/cabinets/${cab!.id}/docs`, {
+            title: one.title, url: one.url, provider: "google",
+            fileId: one.fileId, mime: one.mime, kind: one.kind,
+            folderId: chosenFolder(),
+          });
+          if (said.status !== 201) { refused = String(said.error ?? ""); continue; }
+          docs.unshift(said.doc);
+          countShift(said.doc.folderId, 1);
+          filed++;
         }
-        // Whatever was half-typed in the paste fields is gone: the document is
+        // Whatever was half-typed in the paste fields is gone: the documents are
         // in, and leaving the other way in loaded invites pressing its button.
         $<HTMLInputElement>("cab-add-title")!.value = "";
         $<HTMLInputElement>("cab-add-url")!.value = "";
-        docs.unshift(said.doc);
-        countShift(said.doc.folderId, 1);
         draw();
-        say(t("เพิ่มแล้ว"));
+        // Said as a count, because several can come back at once now and a bare
+        // "filed" after choosing five would not say which.
+        if (!filed) { say(refused || t("เพิ่มเอกสารไม่สำเร็จ"), true); return; }
+        say(filed === picked.length
+          ? t("เพิ่ม {n} รายการแล้ว").replace("{n}", String(filed))
+          : t("เพิ่ม {n} จาก {all} รายการ — ที่เหลือไม่สำเร็จ")
+            .replace("{n}", String(filed)).replace("{all}", String(picked.length)),
+          filed !== picked.length);
       } catch (e) {
         // Google blocked, offline, or the person closed the consent window.
         // One sentence beside the button; the paste field still works.
