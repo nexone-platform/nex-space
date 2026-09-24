@@ -645,6 +645,15 @@ model CabinetFolder {
   id          String   @id @default(cuid())
   cabinetId   String
   name        String
+  /// The Drive folder this drawer keeps its files in, when it has one.
+  ///
+  /// Per drawer rather than per person: the point is that everybody filing into
+  /// this drawer puts the file in the same place in Drive. Reaching it still
+  /// depends on each person having been granted that folder under drive.file,
+  /// which is a real limit and is said out loud in the panel rather than failing
+  /// quietly.
+  driveFolderId String?
+  driveUrl      String?
   /// null = follows the cabinet. A value here is an exception written on purpose.
   openTo      String?
   createdById String?

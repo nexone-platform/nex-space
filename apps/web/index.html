@@ -2869,6 +2869,12 @@
           <select id="cab-make" class="cab-make"></select>
           <button type="button" class="cab-mini" id="cab-upload-go">อัปโหลดไฟล์ขึ้น Drive</button>
           <input type="file" id="cab-upload" hidden />
+          <button type="button" class="cab-mini" id="cab-upfolder-go">อัปโหลดทั้งโฟลเดอร์</button>
+          <!-- webkitdirectory is what makes the file dialog choose a folder. It is
+               prefixed and always has been; every browser that matters supports it
+               under that name, and nothing breaks where it is unknown — the button
+               simply opens an ordinary file dialog. -->
+          <input type="file" id="cab-upfolder" webkitdirectory directory multiple hidden />
         </div>
         <div id="cab-grants">
           <div class="cab-grants-box">

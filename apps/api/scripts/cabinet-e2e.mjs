@@ -410,6 +410,46 @@ let INSIDE = "";
 }
 
 
+// ---- a drawer that keeps its files in a Drive folder ------------------------------------
+{
+  const made = await post(`${C}/folders`, {
+    name: "การเงิน", driveFolderId: "drv_1",
+    driveUrl: "https://drive.google.com/drive/folders/drv_1",
+  }, admin.token);
+  ok("a drawer can be made with a Drive folder behind it", made.status === 201,
+    String(made.status));
+  ok("  · and says where that is", made.folder?.drive?.id === "drv_1"
+    && String(made.folder?.drive?.url).includes("drv_1"), JSON.stringify(made.folder?.drive));
+  const FOLD = made.folder.id;
+
+  const seen = await get(AT, staff.token);
+  ok("  · which everybody filing into it can see, not only whoever made it",
+    seen.folders?.find((f) => f.id === FOLD)?.drive?.id === "drv_1",
+    JSON.stringify(seen.folders?.find((f) => f.id === FOLD)?.drive));
+
+  const bad = await post(`${C}/folders`, {
+    name: "x", driveFolderId: "drv_2", driveUrl: "javascript:alert(1)",
+  }, owner.token);
+  ok("  · and a link that is not a link is refused", bad.status === 400, String(bad.status));
+
+  const plain = await post(`${C}/folders`, { name: "ไม่ผูก" }, owner.token);
+  ok("a drawer without one says so rather than pretending", plain.folder?.drive === null,
+    JSON.stringify(plain.folder?.drive));
+
+  const moved = await patch(`${C}/folders/${FOLD}`, {
+    driveFolderId: "drv_9", driveUrl: "https://drive.google.com/drive/folders/drv_9",
+  }, owner.token);
+  ok("the space's own can point a drawer at a different Drive folder",
+    moved.folder?.drive?.id === "drv_9", JSON.stringify(moved.folder?.drive));
+  const byMember = await patch(`${C}/folders/${FOLD}`, { driveFolderId: "drv_x" }, staff.token);
+  ok("  · and nobody else can", byMember.status === 403, String(byMember.status));
+
+  const unlinked = await patch(`${C}/folders/${FOLD}`, { driveFolderId: null }, owner.token);
+  ok("  · or unlink it, taking the address with it",
+    unlinked.folder?.drive === null, JSON.stringify(unlinked.folder?.drive));
+}
+
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 stop();
 process.exit(fail ? 1 : 0);

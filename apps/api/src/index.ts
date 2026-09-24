@@ -3087,12 +3087,16 @@ const docView = (
 });
 
 const folderView = (
-  f: { id: string; name: string; openTo: string | null },
+  f: {
+    id: string; name: string; openTo: string | null;
+    driveFolderId?: string | null; driveUrl?: string | null;
+  },
   level: Level,
   why: Because,
   docs: number,
 ) => ({
   id: f.id, name: f.name, openTo: f.openTo, level, why, docs,
+  drive: f.driveFolderId ? { id: f.driveFolderId, url: f.driveUrl ?? null } : null,
   mayManage: level === "file",
 });
 
@@ -3123,6 +3127,19 @@ async function cabinetAt(workspaceId: string, mapSlug: string, x: number, y: num
 
 const asGrants = (rows: { userId: string; level: string }[]) =>
   rows.map((g) => ({ userId: g.userId, level: g.level as Level }));
+
+/**
+ * http(s) or nothing.
+ *
+ * Written once because it is checked in four places now, and a javascript: URL
+ * in a list every member of the space renders is the whole of the attack.
+ */
+const safeLink = (url: string): string | null => {
+  try {
+    const u = new URL(url.trim());
+    return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : null;
+  } catch { return null; }
+};
 
 /** the cabinets on one map, and what this person may do with each */
 app.get("/workspaces/:slug/cabinets", async (req, res) => {
@@ -3535,8 +3552,23 @@ app.post("/workspaces/:slug/cabinets/:id/folders", async (req, res) => {
     ? null : (isOpenTo(req.body.openTo) ? req.body.openTo : undefined);
   if (openTo === undefined) return res.status(400).json({ error: "bad openTo" });
 
+  /**
+   * The Drive folder this drawer keeps its files in, if the browser made one.
+   *
+   * Taken as an id rather than made here, because making it needs the person's
+   * own Drive grant and the server has none — by design. The browser creates
+   * it, the drawer remembers where it is.
+   */
+  const driveFolderId = req.body?.driveFolderId
+    ? String(req.body.driveFolderId).slice(0, 200) : null;
+  const driveUrl = driveFolderId && req.body?.driveUrl
+    ? safeLink(String(req.body.driveUrl)) : null;
+  if (driveFolderId && req.body?.driveUrl && !driveUrl) {
+    return res.status(400).json({ error: "that is not a link" });
+  }
+
   const folder = await prisma.cabinetFolder.create({
-    data: { cabinetId: c.id, name, openTo, createdById: can.me.id },
+    data: { cabinetId: c.id, name, openTo, createdById: can.me.id, driveFolderId, driveUrl },
   });
   console.log(`[cabinet] ${can.me.email} made the folder "${name}" in "${c.label}"`);
   res.status(201).json({ folder: folderView(folder, "file", "runs-the-space", 0) });
@@ -3547,11 +3579,25 @@ app.patch("/workspaces/:slug/cabinets/:id/folders/:folderId", async (req, res) =
   const found = await folderFor(req, res, true);
   if (!found) return;
 
-  const data: { name?: string; openTo?: string | null } = {};
+  const data: {
+    name?: string; openTo?: string | null;
+    driveFolderId?: string | null; driveUrl?: string | null;
+  } = {};
   if (req.body?.name !== undefined) {
     const name = String(req.body.name).trim().slice(0, 60);
     if (!name) return res.status(400).json({ error: "a folder needs a name" });
     data.name = name;
+  }
+  if (req.body?.driveFolderId !== undefined) {
+    if (req.body.driveFolderId === null) {
+      data.driveFolderId = null;
+      data.driveUrl = null;
+    } else {
+      data.driveFolderId = String(req.body.driveFolderId).slice(0, 200);
+      const link = req.body?.driveUrl ? safeLink(String(req.body.driveUrl)) : null;
+      if (req.body?.driveUrl && !link) return res.status(400).json({ error: "that is not a link" });
+      data.driveUrl = link;
+    }
   }
   if (req.body?.openTo !== undefined) {
     if (req.body.openTo !== null && !isOpenTo(req.body.openTo)) {

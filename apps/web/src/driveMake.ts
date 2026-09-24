@@ -131,6 +131,60 @@ export async function shareByLink(fileId: string): Promise<void> {
   if (!r.ok) throw new Error(await drivesSaid(r));
 }
 
+/**
+ * Whether this person's grant reaches a folder somebody else made.
+ *
+ * drive.file is per person and per file: a folder created by one member is not
+ * addressable by another until they have picked it themselves. That is the
+ * scope working as intended, not a fault — but it has to be *found out* before
+ * an upload rather than after, so the panel can say "connect this folder once"
+ * instead of failing with a 404 from Google.
+ */
+export async function canReach(fileId: string): Promise<boolean> {
+  const token = await driveToken();
+  const r = await fetch(`${FILES}/${encodeURIComponent(fileId)}?fields=id`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  return r.ok;
+}
+
+/**
+ * Put a folder from this computer into Drive, keeping it one folder.
+ *
+ * This is the reason folder upload was worth having after all: with somewhere
+ * for the files to go, it is one Drive folder and one row in the cabinet —
+ * rather than a row per holiday photo, which is what stopped it being built the
+ * first time.
+ *
+ * Reports as it goes, because forty files is long enough that silence reads as
+ * a hang. Files that fail are counted rather than thrown: nineteen of twenty
+ * uploaded is a result worth keeping and worth saying.
+ */
+export async function uploadFolder(
+  files: File[],
+  name: string,
+  say: (done: number, all: number) => void,
+  parentId?: string | null,
+): Promise<{ folder: Made; uploaded: number; failed: number }> {
+  // Nested where everything else from this drawer goes, rather than at the top
+  // of the Drive — a folder that landed somewhere else from every other thing
+  // filed beside it is the sort of inconsistency nobody reports and everybody
+  // trips over.
+  const folder = await createInDrive("folder", name, parentId);
+  let uploaded = 0, failed = 0;
+  for (const f of files) {
+    say(uploaded + failed, files.length);
+    try {
+      await uploadToDrive(f, folder.fileId);
+      uploaded++;
+    } catch {
+      failed++;
+    }
+  }
+  say(files.length, files.length);
+  return { folder, uploaded, failed };
+}
+
 /** whatever Drive actually said, rather than "request failed" */
 async function drivesSaid(r: Response): Promise<string> {
   const body = await r.json().catch(() => null);

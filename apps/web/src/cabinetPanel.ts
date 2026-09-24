@@ -12,7 +12,9 @@
 import { API, authHeaders } from "./api";
 import { t } from "./i18n";
 import { pickerConfig, pickFromDrive } from "./drivePicker";
-import { createInDrive, uploadToDrive, shareByLink, type DriveKind } from "./driveMake";
+import {
+  createInDrive, uploadToDrive, uploadFolder, shareByLink, canReach, type DriveKind,
+} from "./driveMake";
 
 interface Doc {
   id: string;
@@ -46,6 +48,8 @@ interface Cab {
 interface Folder {
   id: string;
   name: string;
+  /** the Drive folder this drawer keeps its files in, when it has one */
+  drive: { id: string; url: string | null } | null;
   openTo: string | null;
   level: "none" | "read" | "file";
   why: string;
@@ -253,6 +257,16 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
     left.className = "cab-doc-t";
     left.append(name, meta);
     row.append(toggle, left);
+
+    if (f.drive) {
+      const link = document.createElement("a");
+      link.className = "cab-tag";
+      link.href = f.drive.url || `https://drive.google.com/drive/folders/${encodeURIComponent(f.drive.id)}`;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = t("เปิดใน Drive");
+      row.appendChild(link);
+    }
 
     if (f.openTo === "listed") {
       const shut = document.createElement("i");
@@ -714,7 +728,9 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
       if (!name.trim()) { say(t("ต้องมีชื่อ"), true); return; }
       say(t("กำลังสร้างใน Google Drive…"));
       try {
-        await fileWhatWasMade(await createInDrive(kind, name.trim(), driveParent()));
+        const parent = driveParent();
+        if (!await parentIsReachable(parent)) return;
+        await fileWhatWasMade(await createInDrive(kind, name.trim(), parent));
       } catch (e) {
         say(t("สร้างใน Google Drive ไม่สำเร็จ"), true);
         console.warn("[drive]", e);
@@ -728,7 +744,9 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
       if (!file) return;
       say(t("กำลังอัปโหลดขึ้น Google Drive…"));
       try {
-        await fileWhatWasMade(await uploadToDrive(file, driveParent()));
+        const parent = driveParent();
+        if (!await parentIsReachable(parent)) return;
+        await fileWhatWasMade(await uploadToDrive(file, parent));
       } catch (e) {
         say(t("อัปโหลดไม่สำเร็จ"), true);
         console.warn("[drive]", e);
@@ -737,21 +755,32 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
   };
 
   /**
-   * Where in Drive a new thing goes.
+   * Where in Drive a new file goes: the Drive folder of the drawer chosen in
+   * the form, or the top of their Drive when the drawer has none.
    *
-   * If the drawer chosen in the form is one whose entries are a Drive folder we
-   * already have access to, the new file goes inside that folder — which is
-   * what somebody picking it expects. Otherwise it lands at the top of their
-   * Drive, because a parent this app has never touched is not addressable under
-   * drive.file, and quietly putting it somewhere else would be worse than
-   * putting it somewhere obvious.
+   * Never guessed from the contents of a drawer. The drawer either names a
+   * Drive folder or it does not, and putting a file somewhere inferred is worse
+   * than putting it somewhere obvious.
    */
   const driveParent = (): string | null => {
     const into = chosenFolder();
     if (!into) return null;
-    const holder = docs.find((d) =>
-      d.folderId === into && d.kind === "folder" && d.provider === "google" && !!d.fileId);
-    return holder?.fileId ?? null;
+    return folders.find((f) => f.id === into)?.drive?.id ?? null;
+  };
+
+  /**
+   * Check the parent is reachable before writing anything to it.
+   *
+   * drive.file is granted per person and per file, so a drawer whose Drive
+   * folder was made by a colleague is not addressable by you until you have
+   * picked it once yourself. Said here, in a sentence, rather than left to come
+   * back as a 404 from Google halfway through an upload.
+   */
+  const parentIsReachable = async (parent: string | null): Promise<boolean> => {
+    if (!parent) return true;
+    if (await canReach(parent)) return true;
+    say(t("โฟลเดอร์ Drive ของลิ้นชักนี้คนอื่นเป็นคนสร้าง — กด \"เลือกจาก Google Drive\" แล้วเลือกโฟลเดอร์นั้นครั้งเดียวก่อน"), true);
+    return false;
   };
 
   const wireNewFolder = () => {
@@ -761,15 +790,77 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
       const name = prompt(t("ชื่อโฟลเดอร์"), "");
       if (name === null) return;
       if (!name.trim()) { say(t("โฟลเดอร์ต้องมีชื่อ"), true); return; }
+
+      /**
+       * A drawer here, and a folder in Drive behind it, made together.
+       *
+       * Asked rather than assumed: a drawer is a way of arranging a cabinet and
+       * does not have to mean a folder in anybody's Drive. Said as a question
+       * about where files will go, because that is the consequence.
+       */
+      let drive: { fileId: string; url: string } | null = null;
+      const cfg = await pickerConfig();
+      if (cfg.available && confirm(t("สร้างโฟลเดอร์ใน Google Drive ให้ด้วยไหม — ไฟล์ที่ใส่ลิ้นชักนี้จะขึ้นไปอยู่ในนั้น"))) {
+        say(t("กำลังสร้างใน Google Drive…"));
+        try {
+          const made = await createInDrive("folder", name.trim());
+          drive = { fileId: made.fileId, url: made.url };
+        } catch (e) {
+          // The drawer is still worth having without it, so this is a warning
+          // and not a stop.
+          say(t("สร้างใน Google Drive ไม่สำเร็จ — ลิ้นชักถูกสร้างแบบไม่ผูกกับ Drive"), true);
+          console.warn("[drive]", e);
+        }
+      }
+
       const said = await ask("POST", `/workspaces/${slug}/cabinets/${cab!.id}/folders`,
-        { name });
+        { name, ...(drive ? { driveFolderId: drive.fileId, driveUrl: drive.url } : {}) });
       if (said.status !== 201) {
         say(said.error ? String(said.error) : t("สร้างโฟลเดอร์ไม่สำเร็จ"), true);
         return;
       }
       opened.add(said.folder.id);
-      say(t("สร้างโฟลเดอร์แล้ว"));
+      if (drive) say(t("สร้างลิ้นชักและโฟลเดอร์ใน Drive แล้ว"));
+      else say(t("สร้างโฟลเดอร์แล้ว"));
       void load();
+    };
+  };
+
+  /**
+   * A folder from this computer, uploaded whole.
+   *
+   * One Drive folder and one row in the cabinet, not a row per file — which is
+   * what makes this worth having at all.
+   */
+  const wireFolderUpload = () => {
+    const input = $<HTMLInputElement>("cab-upfolder");
+    const button = $<HTMLButtonElement>("cab-upfolder-go");
+    if (!input || !button) return;
+    button.onclick = () => input.click();
+    input.onchange = async () => {
+      const files = input.files ? Array.from(input.files) : [];
+      input.value = "";
+      if (!files.length) return;
+      // webkitRelativePath is "<folder>/<file>", which is the only place the
+      // chosen folder's name survives.
+      const name = (files[0] as File & { webkitRelativePath?: string })
+        .webkitRelativePath?.split("/")[0] || t("โฟลเดอร์ใหม่");
+      try {
+        const parent = driveParent();
+        if (!await parentIsReachable(parent)) return;
+        const done = await uploadFolder(files, name, (n, all) => {
+          say(t("กำลังอัปโหลด {n}/{all} ไฟล์…")
+            .replace("{n}", String(n)).replace("{all}", String(all)));
+        }, parent);
+        await fileWhatWasMade(done.folder);
+        if (done.failed) {
+          say(t("อัปโหลด {n} ไฟล์ — ไม่สำเร็จ {bad} ไฟล์")
+            .replace("{n}", String(done.uploaded)).replace("{bad}", String(done.failed)), true);
+        }
+      } catch (e) {
+        say(t("อัปโหลดไม่สำเร็จ"), true);
+        console.warn("[drive]", e);
+      }
     };
   };
 
@@ -826,6 +917,7 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
   modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
   wireAdder();
   wireNewFolder();
+  wireFolderUpload();
   void wirePicker();
   void wireMake();
 

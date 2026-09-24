@@ -290,6 +290,18 @@ const EN: Record<string, string> = {
   "ให้คนที่มีลิงก์เปิดได้": "Let anyone with the link read it",
   "แชร์แล้ว — คนที่มีลิงก์เปิดอ่านได้": "Shared — anyone with the link can read it",
   "แชร์ไม่สำเร็จ — เปิดใน Drive แล้วแชร์เองได้": "Could not share it — you can share it in Drive",
+  "เปิดใน Drive": "Open in Drive",
+  "อัปโหลดทั้งโฟลเดอร์": "Upload a whole folder",
+  "โฟลเดอร์ใหม่": "New folder",
+  "สร้างโฟลเดอร์ใน Google Drive ให้ด้วยไหม — ไฟล์ที่ใส่ลิ้นชักนี้จะขึ้นไปอยู่ในนั้น":
+    "Make a Google Drive folder for it too? Files put in this drawer will go there.",
+  "สร้างลิ้นชักและโฟลเดอร์ใน Drive แล้ว": "Drawer made, with a folder in Drive behind it",
+  "สร้างใน Google Drive ไม่สำเร็จ — ลิ้นชักถูกสร้างแบบไม่ผูกกับ Drive":
+    "Could not make it in Google Drive — the drawer was made without one",
+  "โฟลเดอร์ Drive ของลิ้นชักนี้คนอื่นเป็นคนสร้าง — กด \"เลือกจาก Google Drive\" แล้วเลือกโฟลเดอร์นั้นครั้งเดียวก่อน":
+    "Somebody else made this drawer's Drive folder — press \"Choose from Google Drive\" and pick it once first",
+  "กำลังอัปโหลด {n}/{all} ไฟล์…": "Uploading {n}/{all} files…",
+  "อัปโหลด {n} ไฟล์ — ไม่สำเร็จ {bad} ไฟล์": "Uploaded {n} file(s) — {bad} did not go",
   "โฟลเดอร์": "Folder",
   "ชื่อโฟลเดอร์": "Folder name",
   "＋ สร้างโฟลเดอร์": "＋ New folder",
