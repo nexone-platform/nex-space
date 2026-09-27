@@ -3202,7 +3202,18 @@ export class OfficeScene extends Phaser.Scene {
        * word on it, the only way to learn it opens is to walk into it — which
        * is how the first version of this shipped, and nobody found it.
        */
-      if (it.type === "cabinet") {
+      /**
+       * Only the one standing in the room wears a plate.
+       *
+       * It needed one: a filing cabinet among the furniture is furniture, and
+       * the first version shipped with nothing saying it opened. The pedestals
+       * at the desks are a different case — there are six to ten of them in a
+       * row, and six plates reading the same three words is not a label, it is
+       * a fence across the pod. They are beside somebody's desk, which already
+       * has that person's name on it, and walking up still raises the "press E"
+       * hint like every other thing in the room.
+       */
+      if (it.type === "cabinet" && !it.desk) {
         this.makeNameTag(px, py + 18, t("ตู้เก็บเอกสาร"), true).setDepth(89999);
       }
     }
