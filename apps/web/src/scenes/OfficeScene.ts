@@ -8,7 +8,7 @@ import { buildWalkCanvas, buildSitCanvas, SIT_COLS, SIT_SEATED_COL, decodeAvatar
 import { openAvatarEditor } from "../avatar/avatarEditor";
 import { WORKSPACE, IS_DEFAULT_WORKSPACE, workspaceLabel, inviteLink, wsKey,
          GUEST_CODE, ARRIVE_AT, gotoMap } from "../workspace";
-import { API as AUTH_API } from "../api";
+import { API as AUTH_API, authHeaders } from "../api";
 import { t, onLangChange, locale } from "../i18n";
 import { ACCEPT, type Attach, attachNode, humanSize, upload } from "../net/attach";
 import { type Booking, clock, dayName, freshBookings, mountCalendarPanel } from "../calendarPanel";
@@ -235,6 +235,8 @@ export class OfficeScene extends Phaser.Scene {
   // Taking the type from the function means it cannot drift again.
   private calPanel?: ReturnType<typeof mountCalendarPanel>;
   private cabPanel?: ReturnType<typeof setupCabinetPanel>;
+  /** the pedestal beside each desk, so its sprite can be changed when we learn more */
+  private deskCabinetSprites = new Map<string, Phaser.GameObjects.Image>();
   /** every area label on this map, so a booking can be written over its door */
   private areaLabels = new Map<string, Phaser.GameObjects.Text>();
   /**
@@ -390,6 +392,10 @@ export class OfficeScene extends Phaser.Scene {
         }
       } else {
         const spr = this.add.image(px, py, k).setScale(s).setDepth(k.startsWith("rug") ? -900 : py);
+        if (k === "desk-cabinet") {
+          const at = INTERACTIVES.find((i) => i.type === "cabinet" && i.x === tx && i.y === ty);
+          if (at?.desk) this.deskCabinetSprites.set(at.desk, spr);
+        }
         // Somewhere to sit. Not interactive: a chair takes no clicks, so
         // clicking one walks you to it, which is what you wanted anyway.
         if (k.includes("chair") || k === "stool" || k.includes("sofa") || k.includes("bean-bag")) {
@@ -3147,6 +3153,41 @@ export class OfficeScene extends Phaser.Scene {
     b("zb-fully", icons.fully, () => this.setZoom(ZOOM_MIN));
   }
 
+  /**
+   * Which of the three pedestal sprites each desk wears.
+   *
+   * Read from the listing the server already filters: a cabinet somebody may
+   * not open is simply not in it, and that absence is exactly what "locked"
+   * means. A desk that has never been opened has no row either, and shows the
+   * plain one when it is yours — because a locked drawer on your own desk,
+   * before you have ever touched it, would be a lie about your own furniture.
+   */
+  private async dressDeskCabinets() {
+    const spots = INTERACTIVES.filter((i) => i.type === "cabinet" && i.desk);
+    if (!spots.length) return;
+    let seen: { desk: string | null; docs?: number }[] = [];
+    try {
+      const r = await fetch(
+        `${AUTH_API}/workspaces/${encodeURIComponent(WORKSPACE)}/cabinets?map=${encodeURIComponent(MAP_KEY)}`,
+        { headers: authHeaders() },
+      );
+      seen = (await r.json()).cabinets ?? [];
+    } catch {
+      // No answer is not "everything is locked": leave the plain sprite, which
+      // is what is already drawn.
+      return;
+    }
+    const byDesk = new Map(seen.filter((c) => c.desk).map((c) => [c.desk as string, c]));
+    for (const it of spots) {
+      const mine = byDesk.get(it.desk!);
+      const key = mine
+        ? ((mine.docs ?? 0) > 0 ? "desk-full" : "desk-cabinet")
+        : (it.desk === this.myDesk ? "desk-cabinet" : "desk-locked");
+      const spr = this.deskCabinetSprites.get(it.desk!);
+      if (spr && this.textures.exists(key)) spr.setTexture(key);
+    }
+  }
+
   private setupInteractives() {
     // floating bobbing icon over each interactive tile
     for (const it of INTERACTIVES) {
@@ -3165,6 +3206,7 @@ export class OfficeScene extends Phaser.Scene {
         this.makeNameTag(px, py + 18, t("ตู้เก็บเอกสาร"), true).setDepth(89999);
       }
     }
+    void this.dressDeskCabinets();
     document.getElementById("modal-close")?.addEventListener("click", () => this.closeModal());
     this.input.keyboard!.on("keydown-ESC", () => this.closeModal());
   }
@@ -3195,7 +3237,10 @@ export class OfficeScene extends Phaser.Scene {
     // walks up to it.
     if (it.type === "cabinet") {
       this.cabPanel ??= setupCabinetPanel(WORKSPACE);
-      this.cabPanel.open(MAP_KEY, Math.round(it.x), Math.round(it.y));
+      // A cabinet at a desk is opened by the desk, because the desk is the thing
+      // that has an owner. One in a room is opened by where it stands.
+      if (it.desk) this.cabPanel.openDesk(MAP_KEY, it.desk, Math.round(it.x), Math.round(it.y));
+      else this.cabPanel.open(MAP_KEY, Math.round(it.x), Math.round(it.y));
       return;
     }
     if (it.url) this.openModal(it.label, it.url); // whiteboard / embed

@@ -21,6 +21,8 @@ export interface Desk { id: string; x: number; y: number; sx: number; sy: number
 
 export interface Interactive {
   type: "whiteboard" | "screen" | "portal" | "embed" | "cabinet";
+  /** for a cabinet at a desk: which desk it belongs to */
+  desk?: string;
   x: number; y: number; label: string; icon: string;
   url?: string;
   target?: { x: number; y: number };

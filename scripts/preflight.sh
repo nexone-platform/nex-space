@@ -133,6 +133,14 @@ fi
 
 # The editor offers whatever this list says exists. A prop it offers that is not
 # on disk 404s in the palette and again in every browser the saved map reaches.
+say "Desk cabinets"
+if out=$(npm run --silent check:desks -w @nexspace/web 2>&1); then
+  ok "desk cabinets — $(echo "$out" | grep -oE "[0-9]+ passed, [0-9]+ failed" | tail -1)"
+else
+  bad "a desk cabinet has nowhere to stand"
+  echo "$out" | grep -E "^! FAIL" | head -6 | sed "s/^/        /" >&2
+fi
+
 say "Asset catalogue"
 if out=$(node scripts/asset-catalogue.mjs --check 2>&1); then
   ok "$out"

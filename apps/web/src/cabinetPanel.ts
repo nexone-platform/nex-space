@@ -39,6 +39,9 @@ interface Doc {
 interface Cab {
   id: string;
   label: string;
+  /** the desk it stands at, or null for one in the room */
+  desk: string | null;
+  why?: string;
   openTo: string;
   at: { map: string; x: number; y: number };
   level: "none" | "read" | "file";
@@ -77,12 +80,14 @@ const PROVIDER: Record<string, string> = {
 
 export interface CabinetPanel {
   open(map: string, x: number, y: number): void;
+  /** the one standing at a desk, opened by the desk because that is what has an owner */
+  openDesk(map: string, deskId: string, x: number, y: number): void;
   close(): void;
 }
 
 export function setupCabinetPanel(slug: string): CabinetPanel {
   const modal = document.getElementById("cab-modal");
-  if (!modal) return { open() {}, close() {} };
+  if (!modal) return { open() {}, openDesk() {}, close() {} };
 
   const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
     document.getElementById(id) as T | null;
@@ -93,7 +98,9 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
   const opened = new Set<string>();
   let docs: Doc[] = [];
   let members: Member[] = [];
-  let where = { map: "", x: 0, y: 0 };
+  let where = { map: "", x: 0, y: 0, desk: "" };
+  /** whose desk it is, when it stands at one */
+  let sitter: { name: string; isMe: boolean } | null = null;
 
   const say = (text: string, bad = false) => {
     const el = $("cab-msg");
@@ -117,18 +124,22 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
 
   const load = async () => {
     say(t("กำลังเปิด…"));
-    const got = await ask("GET", `/workspaces/${slug}/cabinets/at/${encodeURIComponent(where.map)}/${where.x}/${where.y}`);
+    const at = where.desk
+      ? `/workspaces/${slug}/cabinets/desk/${encodeURIComponent(where.map)}/${encodeURIComponent(where.desk)}?x=${where.x}&y=${where.y}`
+      : `/workspaces/${slug}/cabinets/at/${encodeURIComponent(where.map)}/${where.x}/${where.y}`;
+    const got = await ask("GET", at);
     if (got.status === 404) {
       // The refusal a shut cabinet gives. Said the same way here as the server
       // says it, because "you may not" and "there is nothing here" are the same
       // sentence to somebody who was never meant to know which.
-      cab = null; docs = []; folders = [];
+      cab = null; docs = []; folders = []; sitter = null;
       draw();
-      say(t("ตู้นี้ไม่ได้เปิดให้คุณ"), true);
+      say(t(where.desk ? "ตู้ส่วนตัวของโต๊ะนี้ ไม่ได้เปิดให้คุณ" : "ตู้นี้ไม่ได้เปิดให้คุณ"), true);
       return;
     }
     if (got.status !== 200) { say(t("เปิดตู้ไม่สำเร็จ"), true); return; }
     cab = got.cabinet; docs = got.docs ?? []; folders = got.folders ?? [];
+    sitter = got.owner ?? null;
     say("");
     draw();
     if (cab?.mayManage) void loadMembers();
@@ -148,7 +159,22 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
 
   const draw = () => {
     const title = $("cab-title");
-    if (title) title.textContent = cab ? t(cab.label) : t("ตู้เก็บเอกสาร");
+    if (title) {
+      title.textContent = cab
+        ? (cab.desk && sitter
+          ? (sitter.isMe ? t("ตู้ส่วนตัวของคุณ")
+            : t("ตู้ส่วนตัวของ {name}").replace("{name}", sitter.name))
+          : t(cab.label))
+        : t("ตู้เก็บเอกสาร");
+    }
+    const sub = $("cab-sub");
+    if (sub) {
+      // A personal cabinet follows the desk, and somebody about to file a
+      // contract in one should know that before they do, not after they move.
+      sub.textContent = cab?.desk
+        ? t("ตู้นี้ติดอยู่กับโต๊ะ — ถ้าเปลี่ยนโต๊ะ ตู้จะเป็นของคนที่มานั่งแทน")
+        : t("เอกสารอยู่ที่เดิมของมัน — NexSpace เก็บแค่ชื่อกับทางเข้าถึง ไม่ได้คัดลอกไฟล์มา");
+    }
 
     const tools = $("cab-tools");
     if (tools) {
@@ -939,8 +965,15 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
 
   return {
     open(map, x, y) {
-      where = { map, x, y };
-      cab = null; docs = [];
+      where = { map, x, y, desk: "" };
+      cab = null; docs = []; folders = []; sitter = null;
+      draw();
+      modal.style.display = "grid";
+      void load();
+    },
+    openDesk(map, deskId, x, y) {
+      where = { map, x, y, desk: deskId };
+      cab = null; docs = []; folders = []; sitter = null;
       draw();
       modal.style.display = "grid";
       void load();

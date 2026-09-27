@@ -604,6 +604,13 @@ model Cabinet {
   mapSlug     String
   x           Int
   y           Int
+  /// The desk this one stands at, for a personal cabinet. null is a cabinet in
+  /// the room, which belongs to nobody.
+  ///
+  /// The owner is not stored here on purpose: it is whoever currently claims the
+  /// desk, read at the moment somebody opens it. Copying it would mean a
+  /// cabinet that still belongs to whoever sat here last.
+  deskId      String?
   label       String    @default("ตู้เก็บเอกสาร")
   /// members | listed — see src/cabinet.ts. Never open to guests, whatever it says.
   openTo      String    @default("members")

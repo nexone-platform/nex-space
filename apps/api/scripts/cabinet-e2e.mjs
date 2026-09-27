@@ -505,6 +505,65 @@ let INSIDE = "";
 }
 
 
+// ---- the cabinet at a desk ---------------------------------------------------------------
+{
+  const D = (token) => get(`${W}/cabinets/desk/main/office-1?x=13&y=5`, token);
+
+  await call("PUT", "/me/desk", { body: { workspace: ws.slug, desk: "office-1" }, token: staff.token });
+
+  const first = await D(staff.token);
+  ok("the person at the desk opens their cabinet", first.status === 200, String(first.status));
+  ok("  · which is private from the moment it exists",
+    first.cabinet?.openTo === "private", String(first.cabinet?.openTo));
+  ok("  · and knows which desk it stands at", first.cabinet?.desk === "office-1",
+    String(first.cabinet?.desk));
+  ok("  · and says it is theirs", first.cabinet?.why === "yours" && first.owner?.isMe === true,
+    `${first.cabinet?.why} / ${JSON.stringify(first.owner)}`);
+
+  const filed = await post(`${W}/cabinets/${first.cabinet.id}/docs`,
+    { title: "ของส่วนตัว", url: "https://example.test/mine" }, staff.token);
+  ok("  · and files into it", filed.status === 201, String(filed.status));
+
+  const neighbour = await D(hr.token);
+  ok("the person at the next desk is told there is nothing there",
+    neighbour.status === 404, String(neighbour.status));
+
+  const boss = await D(admin.token);
+  ok("whoever runs the space opens it", boss.status === 200, String(boss.status));
+  ok("  · sees what is in it", boss.docs?.some((d) => d.id === filed.doc.id));
+  ok("  · and is told whose desk it is", boss.owner?.name === "staff" && boss.owner?.isMe === false,
+    JSON.stringify(boss.owner));
+
+  /**
+   * The one that matters most: a desk changes hands. The cabinet has to change
+   * hands with it, or it is a locker that keeps opening for whoever left.
+   */
+  await call("PUT", "/me/desk", { body: { workspace: ws.slug, desk: "" }, token: staff.token });
+  await call("PUT", "/me/desk", { body: { workspace: ws.slug, desk: "office-1" }, token: hr.token });
+  ok("when the desk changes hands the cabinet goes with it",
+    (await D(hr.token)).status === 200);
+  ok("  · and the person who left cannot open it any more",
+    (await D(staff.token)).status === 404);
+  ok("  · it is the same cabinet, not a second one",
+    (await D(hr.token)).cabinet?.id === first.cabinet.id);
+  ok("  · with what was filed in it still there",
+    (await D(hr.token)).docs?.some((d) => d.id === filed.doc.id),
+    "the drawer is inherited, which is what a desk cabinet means");
+
+  await call("PUT", "/me/desk", { body: { workspace: ws.slug, desk: "" }, token: hr.token });
+  const nobody = await D(staff.token);
+  ok("a desk nobody has claimed opens for nobody", nobody.status === 404, String(nobody.status));
+  ok("  · except whoever runs the space", (await D(owner.token)).status === 200);
+
+  const opened = await patch(`${W}/cabinets/${first.cabinet.id}`, { openTo: "members" }, owner.token);
+  ok("a desk cabinet can be opened to the space", opened.status === 200, String(opened.status));
+  ok("  · and everybody sees it then", (await D(hr.token)).status === 200);
+  const roomOne = await patch(C, { openTo: "private" }, owner.token);
+  ok("  · while a cabinet in a room still refuses to be private", roomOne.status === 400,
+    "furniture belongs to nobody; a desk belongs to whoever claimed it");
+}
+
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 stop();
 process.exit(fail ? 1 : 0);

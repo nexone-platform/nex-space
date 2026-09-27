@@ -18,6 +18,8 @@ export type Flat = [key: string, x: number, y: number];
 export interface Interactive {
   type: "whiteboard" | "screen" | "portal" | "embed" | "cabinet";
   x: number; y: number; label: string; icon: string;
+  /** for a cabinet standing at a desk: which desk, and so whose it is */
+  desk?: string;
   url?: string;
   target?: { x: number; y: number };
   /** a portal naming another map in the same space; absent means this one */
@@ -26,6 +28,25 @@ export interface Interactive {
 
 /** a desk players can claim: the desk tile plus the seat to sit on */
 export interface Desk { id: string; x: number; y: number; sx: number; sy: number }
+
+/**
+ * The little cabinet beside one desk, and the drawer it opens.
+ *
+ * One tile to the left, which in all three layouts is the gap between desks
+ * rather than a desk, a chair or a wall — checked against each of them, not
+ * assumed.
+ *
+ * Not solid, deliberately. A pedestal that blocked its tile would narrow the
+ * walkway between desks, and in the pastel office that walkway is the only way
+ * into the pod from its door. Furniture that cannot be walked through is worth
+ * less than desks that can be reached.
+ */
+export const deskCabinetProp = (d: Desk): Prop => ["desk-cabinet", d.x - 1, d.y, false];
+
+export const deskCabinetSpot = (d: Desk): Interactive => ({
+  type: "cabinet", x: d.x - 1, y: d.y, desk: d.id,
+  label: "เปิดตู้ส่วนตัว", icon: "",
+});
 
 export interface MapTheme {
   id: string;
@@ -60,6 +81,18 @@ const rect = (add: (x: number, y: number) => void, x0: number, y0: number, x1: n
 
 // ---------------------------------------------------------------- classic ---
 const CLASSIC_BUILD = { x0: 4, y0: 3, x1: 27, y1: 20 };
+
+// The ids are kept exactly as they were even though every desk moved into the
+// pod: they are what people have claimed, and renaming them would silently
+// drop those claims. Order here is the pod read left-to-right, top row first.
+const CLASSIC_DESKS: Desk[] = [
+  { id: "office-1", x: 14, y: 5, sx: 14, sy: 6 },
+  { id: "office-2", x: 16, y: 5, sx: 16, sy: 6 },
+  { id: "hall-1", x: 18, y: 5, sx: 18, sy: 6 },
+  { id: "hall-2", x: 14, y: 8, sx: 14, sy: 9 },
+  { id: "hall-3", x: 16, y: 8, sx: 16, sy: 9 },
+  { id: "hall-4", x: 18, y: 8, sx: 18, sy: 9 },
+];
 
 export const classicTheme: MapTheme = {
   id: "classic",
@@ -122,6 +155,7 @@ export const classicTheme: MapTheme = {
     // the art is 64x96, and at full size a three-tile cabinet beside a
     // one-tile person reads as a wardrobe.
     ["office/cabinet", 11, 12, true, 0.5],
+    ...CLASSIC_DESKS.map(deskCabinetProp),
     ["rug", 15, 13, false],
     ["plant-large", 11, 17, true], ["plant-large", 20, 17, true],
     ["plant", 5, 11, false], ["plant", 26, 11, false],
@@ -178,19 +212,13 @@ export const classicTheme: MapTheme = {
   // The ids are kept exactly as they were even though every desk moved into the
   // pod: they are what people have claimed, and renaming them would silently
   // drop those claims. Order here is the pod read left-to-right, top row first.
-  desks: [
-    { id: "office-1", x: 14, y: 5, sx: 14, sy: 6 },
-    { id: "office-2", x: 16, y: 5, sx: 16, sy: 6 },
-    { id: "hall-1", x: 18, y: 5, sx: 18, sy: 6 },
-    { id: "hall-2", x: 14, y: 8, sx: 14, sy: 9 },
-    { id: "hall-3", x: 16, y: 8, sx: 16, sy: 9 },
-    { id: "hall-4", x: 18, y: 8, sx: 18, sy: 9 },
-  ],
+  desks: CLASSIC_DESKS,
 
   interactives: [
     { type: "whiteboard", x: 7, y: 1, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
     { type: "screen", x: 16, y: 0, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
     { type: "cabinet", x: 11, y: 12, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
+    ...CLASSIC_DESKS.map(deskCabinetSpot),
     { type: "portal", x: 2, y: 7, label: "เทเลพอร์ตไปโซนขวา", icon: "✨", target: { x: 17, y: 11 } },
     { type: "portal", x: 17, y: 11, label: "เทเลพอร์ตกลับ", icon: "✨", target: { x: 2, y: 7 } },
   ],
@@ -223,6 +251,9 @@ const DEPT_STATIONS: { id: string; x: number; y: number; desk: string; chair: st
   { id: "sales-2", x: 7, y: 16, desk: "desk", chair: "chair-13-north" },
   { id: "sales-3", x: 9, y: 16, desk: "desk-monitor", chair: "chair-14-north" },
 ];
+
+const DEPT_DESKS: Desk[] = DEPT_STATIONS.map((s) => ({ id: s.id, x: s.x, y: s.y, sx: s.x, sy: s.y + 1 }));
+
 
 export const departmentsTheme: MapTheme = {
   id: "departments",
@@ -271,6 +302,7 @@ export const departmentsTheme: MapTheme = {
     // engineering
     ["whiteboard", 11, 3, true], ["bookshelf", 11.5, 9.5, true], ["plant", 3, 10, false],
     ["office/cabinet", 13, 9.5, true, 0.5],
+    ...DEPT_DESKS.map(deskCabinetProp),
     // design
     ["plant-large", 14, 3, true], ["plant", 21, 10, false],
     ["side-table", 18, 8, false], ["floor-lamp", 20, 8, false],
@@ -325,12 +357,13 @@ export const departmentsTheme: MapTheme = {
 
   // built from DEPT_STATIONS so the claim target and the seat cannot drift from
   // where the sprites are
-  desks: DEPT_STATIONS.map((s) => ({ id: s.id, x: s.x, y: s.y, sx: s.x, sy: s.y + 1 })),
+  desks: DEPT_DESKS,
 
   interactives: [
     { type: "whiteboard", x: 11, y: 3, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
     { type: "screen", x: 25.5, y: 3, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
     { type: "cabinet", x: 13, y: 9.5, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
+    ...DEPT_DESKS.map(deskCabinetSpot),
   ],
 };
 
@@ -378,6 +411,14 @@ const OFFICE_STATIONS: { id: string; x: number; y: number }[] = [
   { id: "open-6", x: 4, y: 7 }, { id: "open-7", x: 7, y: 7 }, { id: "open-8", x: 10, y: 7 },
   { id: "open-9", x: 13, y: 7 }, { id: "open-10", x: 16, y: 7 },
 ];
+
+// derived from the same helpers station() uses, so the claim target and the
+// seat can never drift from where the sprites actually are
+const OFFICE_DESKS: Desk[] = OFFICE_STATIONS.map((s) => ({
+  id: s.id,
+  x: deskCentre(s.x), y: s.y + DESK_W / 2, // where the nameplate sits
+  sx: deskCentre(s.x), sy: seatRow(s.y),   // the chair in front of it
+}));
 
 export const officeTheme: MapTheme = {
   id: "office",
@@ -444,6 +485,7 @@ export const officeTheme: MapTheme = {
     ["office/credenza", 12.5, 12.6, true],
     ["office/copier", 17.5, 12.6, true], ["office/mailboxes", 18.5, 15.5, true],
     ["office/cabinet", 15, 12.6, true, 0.5],
+    ...OFFICE_DESKS.map(deskCabinetProp),
   ],
 
   outdoor: [
@@ -474,16 +516,13 @@ export const officeTheme: MapTheme = {
 
   // derived from the same helpers station() uses, so the claim target and the
   // seat can never drift from where the sprites actually are
-  desks: OFFICE_STATIONS.map((s) => ({
-    id: s.id,
-    x: deskCentre(s.x), y: s.y + DESK_W / 2, // where the nameplate sits
-    sx: deskCentre(s.x), sy: seatRow(s.y),   // the chair in front of it
-  })),
+  desks: OFFICE_DESKS,
 
   interactives: [
     { type: "screen", x: 23, y: 3, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
     { type: "whiteboard", x: 18, y: 2, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
     { type: "cabinet", x: 15, y: 12.6, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
+    ...OFFICE_DESKS.map(deskCabinetSpot),
   ],
 };
 

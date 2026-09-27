@@ -16,7 +16,7 @@ export interface PropGroup {
   keys: string[];
 }
 
-/** 114 props across 4 groups */
+/** 117 props across 4 groups */
 export const CATALOGUE: PropGroup[] = [
   {
     "dir": "furniture",
@@ -48,6 +48,9 @@ export const CATALOGUE: PropGroup[] = [
       "conference-table",
       "counter",
       "desk",
+      "desk-cabinet",
+      "desk-full",
+      "desk-locked",
       "desk-monitor",
       "dining-set",
       "floor-lamp",

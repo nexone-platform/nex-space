@@ -57,15 +57,15 @@ export const isOpenTo = (v: unknown): v is OpenTo =>
   typeof v === "string" && (OPEN_TO as string[]).includes(v);
 
 /**
- * The cabinet takes only two of them.
+ * What a cabinet will take, which depends on whether it stands at a desk.
  *
- * A cabinet is furniture in a room, brought into being by whoever first walked
+ * A cabinet in a room is furniture, brought into being by whoever first walked
  * up to it — which makes "the person who made it" an accident of who was
- * passing rather than a decision. A drawer and a document are made on purpose,
- * so they can be private; the cabinet they stand in cannot.
+ * passing rather than a decision, so it cannot be private. A cabinet at a desk
+ * belongs to whoever claimed that desk, which is a decision, so it can be.
  */
-export const isCabinetOpenTo = (v: unknown): v is "members" | "listed" =>
-  v === "members" || v === "listed";
+export const isCabinetOpenTo = (v: unknown, atADesk = false): v is OpenTo =>
+  v === "members" || v === "listed" || (atADesk && v === "private");
 
 export const isLevel = (v: unknown): v is Level =>
   typeof v === "string" && (LEVELS as string[]).includes(v);
@@ -80,6 +80,15 @@ export interface Grant { userId: string; level: Level }
 export interface CabinetLike {
   openTo: string;
   grants: Grant[];
+  /**
+   * Whose cabinet this is, for one that stands at somebody's desk.
+   *
+   * A cabinet in a room belongs to nobody — it is furniture, brought into being
+   * by whoever first walked up to it. A cabinet at a desk belongs to whoever
+   * claimed the desk, which is a decision somebody made, so it can be private
+   * and this is who it is private to.
+   */
+  ownerId?: string | null;
 }
 
 /** who made a thing, for the settings that turn on that */
@@ -127,7 +136,7 @@ export function levelForCabinet(
   if (who.role === "guest") return "none";
   if (runsTheSpace(who.role)) return "file";
   return named(cabinet.grants, who.userId)
-    ?? fromOpenTo(cabinet.openTo, null, who.userId);
+    ?? fromOpenTo(cabinet.openTo, cabinet.ownerId, who.userId);
 }
 
 /**
@@ -209,6 +218,9 @@ function whyFromOpenTo(
 function whyFromCabinet(cabinet: CabinetLike, who: { userId: string }): Because {
   const own = named(cabinet.grants, who.userId);
   if (own) return own === "none" ? "no" : "named-on-cabinet";
+  if (cabinet.openTo === "private") {
+    return cabinet.ownerId && cabinet.ownerId === who.userId ? "yours" : "no";
+  }
   return cabinet.openTo === "members" ? "cabinet-open" : "no";
 }
 

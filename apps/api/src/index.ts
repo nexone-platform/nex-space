@@ -3059,13 +3059,20 @@ app.get("/me/drive-picker", requireAuth, (_req: AuthedRequest, res) => {
 
 /** what the browser is given for one cabinet */
 const cabinetView = (
-  c: { id: string; label: string; openTo: string; mapSlug: string; x: number; y: number },
+  c: {
+    id: string; label: string; openTo: string; mapSlug: string; x: number; y: number;
+    deskId?: string | null;
+  },
   level: Level,
   docs?: number,
+  why?: Because,
 ) => ({
   id: c.id, label: c.label, openTo: c.openTo,
   at: { map: c.mapSlug, x: c.x, y: c.y },
-  level, mayManage: level === "file", ...(docs === undefined ? {} : { docs }),
+  desk: c.deskId ?? null,
+  level, mayManage: level === "file",
+  ...(why === undefined ? {} : { why }),
+  ...(docs === undefined ? {} : { docs }),
 });
 
 const docView = (
@@ -3125,8 +3132,82 @@ async function cabinetAt(workspaceId: string, mapSlug: string, x: number, y: num
   return made ? { ...made, grants: [] as { userId: string; level: string }[] } : null;
 }
 
+/**
+ * Whoever currently claims a desk in this space, or nobody.
+ *
+ * Read at the moment somebody opens the cabinet rather than copied onto it,
+ * because a desk changes hands. A stored owner would mean a personal cabinet
+ * that still belongs to whoever sat there last — which is the same bug as a
+ * locker that keeps opening for the person who left.
+ *
+ * The claim lives in User.desk as a map of workspace to desk id, so this is a
+ * scan of the space's members. A space is tens of people, not thousands, and
+ * this runs once per cabinet opened.
+ */
+/**
+ * The access record for one cabinet: what it says, who is named on it, and —
+ * for one standing at a desk — whose desk that currently is.
+ *
+ * Every route that decides anything about a cabinet goes through this. Three of
+ * them used to build the record inline without the owner, which made a private
+ * desk cabinet answer 404 to the person it belonged to the moment they tried to
+ * put something in it. The rule was right; one path was not telling it the
+ * truth.
+ */
+async function cabAccess(
+  w: { id: string; slug: string },
+  c: { openTo: string; deskId?: string | null; grants: { userId: string; level: string }[] },
+) {
+  return {
+    openTo: c.openTo,
+    grants: asGrants(c.grants),
+    ownerId: c.deskId ? await whoSitsAt(w.id, w.slug, c.deskId) : null,
+  };
+}
+
+async function whoSitsWhere(workspaceId: string, slug: string): Promise<Map<string, string>> {
+  const members = await prisma.membership.findMany({
+    where: { workspaceId, role: { not: "guest" } },
+    select: { user: { select: { id: true, desk: true } } },
+  });
+  const at = new Map<string, string>();
+  for (const m of members) {
+    const desk = parseDesks(m.user.desk)[slug];
+    if (desk) at.set(desk, m.user.id);
+  }
+  return at;
+}
+
+async function whoSitsAt(workspaceId: string, slug: string, deskId: string): Promise<string | null> {
+  return (await whoSitsWhere(workspaceId, slug)).get(deskId) ?? null;
+}
+
 const asGrants = (rows: { userId: string; level: string }[]) =>
   rows.map((g) => ({ userId: g.userId, level: g.level as Level }));
+
+/**
+ * The cabinet standing at one desk, made on first use like the room ones.
+ *
+ * Private from the moment it exists. A personal cabinet that started open to
+ * the space would be one where the first document somebody filed was already
+ * readable by everybody — a default nobody would have chosen, discovered after
+ * the fact.
+ */
+async function cabinetAtDesk(workspaceId: string, mapSlug: string, deskId: string,
+  x: number, y: number, madeBy: string) {
+  const found = await prisma.cabinet.findFirst({
+    where: { workspaceId, mapSlug, deskId },
+    include: { grants: true },
+  });
+  if (found) return found;
+  const made = await prisma.cabinet.create({
+    data: {
+      workspaceId, mapSlug, deskId, x, y, createdBy: madeBy,
+      openTo: "private", label: "ตู้ส่วนตัว",
+    },
+  }).catch(async () => prisma.cabinet.findFirst({ where: { workspaceId, mapSlug, deskId } }));
+  return made ? { ...made, grants: [] as { userId: string; level: string }[] } : null;
+}
 
 /**
  * http(s) or nothing.
@@ -3154,9 +3235,16 @@ app.get("/workspaces/:slug/cabinets", async (req, res) => {
     orderBy: { createdAt: "asc" },
   });
   const who = { userId: can.me.id, role: can.role };
+  // Read once for the whole listing: a desk cabinet that did not know whose it
+  // was would be invisible to the person it belongs to.
+  const sitters = await whoSitsWhere(w.id, w.slug);
   const out = [];
   for (const c of rows) {
-    const level = levelForCabinet({ openTo: c.openTo, grants: asGrants(c.grants) }, who);
+    const cabOf = {
+      openTo: c.openTo, grants: asGrants(c.grants),
+      ownerId: c.deskId ? sitters.get(c.deskId) ?? null : null,
+    };
+    const level = levelForCabinet(cabOf, who);
     // A cabinet they cannot open may still hold one document that is theirs, and
     // hiding the cabinet would hide that document with it.
     const docs = await prisma.cabinetDoc.findMany({
@@ -3168,7 +3256,7 @@ app.get("/workspaces/:slug/cabinets", async (req, res) => {
     const drawer = new Map(folders.map((f) => [f.id,
       { openTo: f.openTo, grants: asGrants(f.grants), ownerId: f.createdById }]));
     const mine = docs.filter((d) => levelForDoc(
-      { openTo: c.openTo, grants: asGrants(c.grants) },
+      cabOf,
       d.folderId ? drawer.get(d.folderId) ?? null : null,
       { openTo: d.openTo, grants: asGrants(d.grants), ownerId: d.addedById }, who,
     ) !== "none");
@@ -3196,17 +3284,36 @@ app.get("/workspaces/:slug/cabinets/at/:map/:x/:y", async (req, res) => {
   if (!c) return res.status(500).json({ error: "could not open it" });
 
   const who = { userId: can.me.id, role: can.role };
-  const cab = { openTo: c.openTo, grants: asGrants(c.grants) };
+  const cab = await cabAccess(w, c);
   const level = levelForCabinet(cab, who);
 
+  const out = await insideOf(c.id, cab, who);
+  if (level === "none" && !out.docs.length && !out.folders.length) {
+    return res.status(404).json({ error: "not found" });
+  }
+  res.json({ cabinet: cabinetView(c, level, out.docs.length), ...out });
+});
+
+/**
+ * What is inside a cabinet, as this person may see it.
+ *
+ * Shared by the two ways in — the one on the wall of a room and the one at a
+ * desk — because a second copy of a listing that filters by access is a second
+ * rule, and the day they disagree nothing says so.
+ */
+async function insideOf(
+  cabinetId: string,
+  cab: { openTo: string; grants: { userId: string; level: Level }[]; ownerId?: string | null },
+  who: { userId: string; role: string },
+) {
   const folderRows = await prisma.cabinetFolder.findMany({
-    where: { cabinetId: c.id }, include: { grants: true }, orderBy: { name: "asc" },
+    where: { cabinetId }, include: { grants: true }, orderBy: { name: "asc" },
   });
   const drawer = new Map(folderRows.map((f) => [f.id,
     { openTo: f.openTo, grants: asGrants(f.grants), ownerId: f.createdById }]));
 
   const rows = await prisma.cabinetDoc.findMany({
-    where: { cabinetId: c.id },
+    where: { cabinetId },
     include: { grants: true, addedBy: { select: { name: true, email: true } } },
     orderBy: { addedAt: "desc" },
   });
@@ -3235,12 +3342,47 @@ app.get("/workspaces/:slug/cabinets/at/:map/:x/:y", async (req, res) => {
     if (lv === "none" && !n) continue;
     folders.push(folderView(f, lv, whyForFolder(cab, one, who), n));
   }
+  return { folders, docs };
+}
 
-  if (level === "none" && !docs.length && !folders.length) {
+/**
+ * Open the cabinet at a desk.
+ *
+ * By desk id rather than by tile, because the desk is the thing that has an
+ * owner. Where it stands is written down once, when it is made, so the listing
+ * can still place it on the map.
+ */
+app.get("/workspaces/:slug/cabinets/desk/:map/:deskId", async (req, res) => {
+  const w = await prisma.workspace.findUnique({ where: { slug: req.params.slug } });
+  if (!w) return res.status(404).json({ error: "not found" });
+  const can = await booker(req, w);
+  if (!can) return res.status(403).json({ error: "forbidden" });
+
+  const deskId = String(req.params.deskId).slice(0, 32);
+  const x = Number(req.query.x), y = Number(req.query.y);
+  if (!deskId || !Number.isInteger(x) || !Number.isInteger(y)) {
+    return res.status(400).json({ error: "bad desk" });
+  }
+  const c = await cabinetAtDesk(w.id, String(req.params.map), deskId, x, y, can.me.id);
+  if (!c) return res.status(500).json({ error: "could not open it" });
+
+  const ownerId = await whoSitsAt(w.id, w.slug, deskId);
+  const who = { userId: can.me.id, role: can.role };
+  const cab = { openTo: c.openTo, grants: asGrants(c.grants), ownerId };
+  const level = levelForCabinet(cab, who);
+
+  const out = await insideOf(c.id, cab, who);
+  if (level === "none" && !out.docs.length && !out.folders.length) {
     return res.status(404).json({ error: "not found" });
   }
-
-  res.json({ cabinet: cabinetView(c, level, docs.length), folders, docs });
+  const sitter = ownerId
+    ? await prisma.user.findUnique({ where: { id: ownerId }, select: { name: true, email: true } })
+    : null;
+  res.json({
+    cabinet: cabinetView(c, level, out.docs.length, whyForDoc(cab, null, { openTo: null, grants: [] }, who)),
+    owner: sitter ? { name: sitter.name || sitter.email, isMe: ownerId === can.me.id } : null,
+    folders: out.folders, docs: out.docs,
+  });
 });
 
 /** rename it, or change who it stands open to — the space's own only */
@@ -3260,7 +3402,9 @@ app.patch("/workspaces/:slug/cabinets/:id", async (req, res) => {
     data.label = label;
   }
   if (req.body?.openTo !== undefined) {
-    if (!isCabinetOpenTo(req.body.openTo)) return res.status(400).json({ error: "bad openTo" });
+    if (!isCabinetOpenTo(req.body.openTo, !!c.deskId)) {
+      return res.status(400).json({ error: "bad openTo" });
+    }
     data.openTo = req.body.openTo;
   }
   const saved = await prisma.cabinet.update({ where: { id: c.id }, data });
@@ -3353,7 +3497,7 @@ app.post("/workspaces/:slug/cabinets/:id/docs", async (req, res) => {
   if (!c || c.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
 
   const who = { userId: can.me.id, role: can.role };
-  const cab = { openTo: c.openTo, grants: asGrants(c.grants) };
+  const cab = await cabAccess(w, c);
 
   /**
    * Which drawer this is going into, resolved before anything is checked.
@@ -3460,7 +3604,7 @@ app.patch("/workspaces/:slug/cabinets/:id/docs/:docId", async (req, res) => {
         return res.status(404).json({ error: "no such folder" });
       }
       const fl = levelForFolder(
-        { openTo: found.cabinet.openTo, grants: asGrants(found.cabinet.grants) },
+        await cabAccess(found.w, found.cabinet),
         { openTo: f.openTo, grants: asGrants(f.grants), ownerId: f.createdById },
         { userId: found.can.me.id, role: found.can.role },
       );
@@ -3513,7 +3657,7 @@ async function docFor(req: express.Request, res: express.Response) {
     })
     : null;
   const level = levelForDoc(
-    { openTo: c.openTo, grants: asGrants(c.grants) },
+    await cabAccess(w, c),
     folder ? { openTo: folder.openTo, grants: asGrants(folder.grants), ownerId: folder.createdById } : null,
     { openTo: doc.openTo, grants: asGrants(doc.grants), ownerId: doc.addedById }, who,
   );
@@ -3540,7 +3684,7 @@ app.post("/workspaces/:slug/cabinets/:id/folders", async (req, res) => {
   if (!c || c.workspaceId !== w.id) return res.status(404).json({ error: "not found" });
 
   const who = { userId: can.me.id, role: can.role };
-  const level = levelForCabinet({ openTo: c.openTo, grants: asGrants(c.grants) }, who);
+  const level = levelForCabinet(await cabAccess(w, c), who);
   if (level === "none") return res.status(404).json({ error: "not found" });
   if (!atLeast(level, "file")) {
     return res.status(403).json({ error: "you may read this cabinet, not file in it" });
@@ -3703,7 +3847,7 @@ async function folderFor(req: express.Request, res: express.Response, staffOnly:
   }
 
   const who = { userId: can.me.id, role: can.role };
-  const cab = { openTo: c.openTo, grants: asGrants(c.grants) };
+  const cab = await cabAccess(w, c);
   const level = levelForFolder(cab, { openTo: folder.openTo, grants: asGrants(folder.grants), ownerId: folder.createdById }, who);
   const docsInside = await prisma.cabinetDoc.count({ where: { folderId: folder.id } });
   // A drawer they cannot open, holding nothing they can see, is not there.

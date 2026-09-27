@@ -264,6 +264,13 @@ const EN: Record<string, string> = {
   "ขยายทั้งหน้าจอ ไม่ใช่แค่ตัวหนังสือ — กรอบ ปุ่ม และแถบรายชื่อโตตามไปด้วย แผนที่ในห้องเป็นพิกเซลอาร์ต จึงคงขนาดเดิม":
     "Grows the whole interface, not only the words — boxes, buttons and the people list follow. The map is pixel art and keeps its own size",
   "ขนาดเดิม": "as drawn",
+  "ตู้ส่วนตัว": "Personal cabinet",
+  "เปิดตู้ส่วนตัว": "Open the personal cabinet",
+  "ตู้ส่วนตัวของคุณ": "Your personal cabinet",
+  "ตู้ส่วนตัวของ {name}": "{name}’s personal cabinet",
+  "ตู้ส่วนตัวของโต๊ะนี้ ไม่ได้เปิดให้คุณ": "This desk’s personal cabinet is not open to you",
+  "ตู้นี้ติดอยู่กับโต๊ะ — ถ้าเปลี่ยนโต๊ะ ตู้จะเป็นของคนที่มานั่งแทน":
+    "This cabinet belongs to the desk — change desk and it becomes whoever sits here next’s",
   "ตู้เก็บเอกสาร": "Filing cabinet",
   "เปิดตู้เก็บเอกสาร": "Open the filing cabinet",
   "เอกสารอยู่ที่เดิมของมัน — NexSpace เก็บแค่ชื่อกับทางเข้าถึง ไม่ได้คัดลอกไฟล์มา":

@@ -273,5 +273,49 @@ console.log("\nwho may open which drawer\n");
 }
 
 
+// ---- a cabinet that stands at somebody's desk -------------------------------------------
+{
+  const mine = { openTo: "private", grants: [], ownerId: "u_member" };
+  const theirs = { openTo: "private", grants: [], ownerId: "u_other" };
+  const unclaimed = { openTo: "private", grants: [], ownerId: null };
+
+  ok("a desk cabinet is open to whoever claimed the desk",
+    levelForCabinet(mine, member) === "file");
+  ok("  · and shut to the person at the next desk",
+    levelForCabinet(theirs, member) === "none");
+  ok("  · a desk nobody has claimed belongs to nobody",
+    levelForCabinet(unclaimed, member) === "none"
+    && levelForCabinet(unclaimed, other) === "none");
+  ok("  · whoever runs the space opens it either way",
+    levelForCabinet(theirs, admin) === "file"
+    && levelForCabinet(unclaimed, owner) === "file");
+  ok("  · and a guest never does", levelForCabinet(mine, guest) === "none");
+
+  ok("its owner is told it is theirs",
+    whyForDoc(mine, null, plain, member) === "yours");
+  ok("  · and the person at the next desk is told nothing",
+    whyForDoc(theirs, null, plain, member) === "no");
+  ok("  · while an admin is told it is the role",
+    whyForDoc(theirs, null, plain, admin) === "runs-the-space");
+
+  ok("a document in it follows it, both ways",
+    levelForDoc(mine, null, plain, member) === "file"
+    && levelForDoc(theirs, null, plain, member) === "none");
+
+  const shared = { openTo: "members", grants: [], ownerId: "u_other" };
+  ok("a desk cabinet opened to the space stops being private",
+    levelForCabinet(shared, member) === "read");
+
+  ok("only a cabinet at a desk may be private",
+    isCabinetOpenTo("private", true) && !isCabinetOpenTo("private", false),
+    "furniture in a room belongs to nobody; a desk belongs to whoever claimed it");
+  ok("  · and both kinds take the other two words",
+    isCabinetOpenTo("members") && isCabinetOpenTo("listed")
+    && isCabinetOpenTo("members", true) && isCabinetOpenTo("listed", true));
+  ok("  · and neither takes anything else",
+    !isCabinetOpenTo("everyone", true) && !isCabinetOpenTo("", true));
+}
+
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
