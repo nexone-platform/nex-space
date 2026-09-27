@@ -294,26 +294,28 @@ const EN: Record<string, string> = {
   "อัปโหลดไฟล์ขึ้น Drive": "Upload a file to Drive",
   "ตั้งชื่อ": "Name it",
   "ต้องมีชื่อ": "It needs a name",
-  "กำลังสร้างใน Google Drive…": "Making it in Google Drive…",
-  "สร้างใน Google Drive ไม่สำเร็จ": "Could not make it in Google Drive",
-  "กำลังอัปโหลดขึ้น Google Drive…": "Uploading to Google Drive…",
   "อัปโหลดไม่สำเร็จ": "Upload failed",
   "สร้างแล้ว — ตอนนี้เปิดได้เฉพาะคุณ": "Made — only you can open it for now",
   "ให้คนที่มีลิงก์เปิดได้": "Let anyone with the link read it",
   "แชร์แล้ว — คนที่มีลิงก์เปิดอ่านได้": "Shared — anyone with the link can read it",
-  "แชร์ไม่สำเร็จ — เปิดใน Drive แล้วแชร์เองได้": "Could not share it — you can share it in Drive",
   "เปิดใน Drive": "Open in Drive",
   "อัปโหลดทั้งโฟลเดอร์": "Upload a whole folder",
   "โฟลเดอร์ใหม่": "New folder",
-  "สร้างโฟลเดอร์ใน Google Drive ให้ด้วยไหม — ไฟล์ที่ใส่ลิ้นชักนี้จะขึ้นไปอยู่ในนั้น":
-    "Make a Google Drive folder for it too? Files put in this drawer will go there.",
-  "สร้างลิ้นชักและโฟลเดอร์ใน Drive แล้ว": "Drawer made, with a folder in Drive behind it",
-  "สร้างใน Google Drive ไม่สำเร็จ — ลิ้นชักถูกสร้างแบบไม่ผูกกับ Drive":
-    "Could not make it in Google Drive — the drawer was made without one",
   "โฟลเดอร์ Drive ของลิ้นชักนี้คนอื่นเป็นคนสร้าง — กด \"เลือกจาก Google Drive\" แล้วเลือกโฟลเดอร์นั้นครั้งเดียวก่อน":
     "Somebody else made this drawer's Drive folder — press \"Choose from Google Drive\" and pick it once first",
   "กำลังอัปโหลด {n}/{all} ไฟล์…": "Uploading {n}/{all} files…",
   "อัปโหลด {n} ไฟล์ — ไม่สำเร็จ {bad} ไฟล์": "Uploaded {n} file(s) — {bad} did not go",
+  "กำลังสร้างใน {cloud}…": "Making it in {cloud}…",
+  "สร้างใน {cloud} ไม่สำเร็จ": "Could not make it in {cloud}",
+  "กำลังอัปโหลดขึ้น {cloud}…": "Uploading to {cloud}…",
+  "แชร์ไม่สำเร็จ — เปิดในคลาวด์แล้วแชร์เองได้": "Could not share it — you can share it in the cloud itself",
+  "{cloud} สร้างเอกสารเปล่าไม่ได้ — สร้างโฟลเดอร์หรืออัปโหลดไฟล์แทน":
+    "{cloud} cannot make a blank document — make a folder or upload a file instead",
+  "สร้างโฟลเดอร์ใน {cloud} ให้ด้วยไหม — ไฟล์ที่ใส่ลิ้นชักนี้จะขึ้นไปอยู่ในนั้น":
+    "Make a {cloud} folder for it too? Files put in this drawer will go there.",
+  "สร้างลิ้นชักและโฟลเดอร์ใน {cloud} แล้ว": "Drawer made, with a {cloud} folder behind it",
+  "สร้างใน {cloud} ไม่สำเร็จ — ลิ้นชักถูกสร้างแบบไม่ผูกกับคลาวด์":
+    "Could not make it in {cloud} — the drawer was made without a cloud folder",
   "โฟลเดอร์": "Folder",
   "ชื่อโฟลเดอร์": "Folder name",
   "＋ สร้างโฟลเดอร์": "＋ New folder",

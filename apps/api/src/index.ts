@@ -3031,6 +3031,55 @@ app.post(
  * also the better shape for a shared cabinet: consent one file at a time,
  * rather than a blanket reading of somebody's whole Drive.
  */
+/**
+ * What the browser needs to reach this person's OneDrive.
+ *
+ * The client id and the tenant, and nothing else — no secret leaves the server.
+ * The browser signs in with PKCE, which is what a public client uses instead of
+ * one: the code it receives is worthless without the verifier it kept, and the
+ * verifier never travels.
+ *
+ * Files.ReadWrite is the least-privileged delegated scope that can make a
+ * folder or upload a file in the signed-in person's own OneDrive — checked
+ * against Graph's own permission table, not assumed — and it is the same for a
+ * work account and a personal one. Files.ReadWrite.All would reach other
+ * people's; there is no reason to ask for it.
+ */
+app.get("/me/onedrive", requireAuth, (req: AuthedRequest, res) => {
+  res.json({
+    available: !!process.env.MS_CLIENT_ID,
+    clientId: process.env.MS_CLIENT_ID || null,
+    tenant: (process.env.MS_TENANT || "common").trim(),
+    scope: "https://graph.microsoft.com/Files.ReadWrite",
+    redirectUri: `${appOriginOf(req)}/auth/microsoft/popup`,
+  });
+});
+
+/**
+ * Where Microsoft sends the browser back to after signing in.
+ *
+ * A page rather than a route that does anything: the code arrives in the URL
+ * fragment, which never reaches a server at all, so the only thing that can
+ * read it is script on this page. It hands it to the window that opened it and
+ * closes.
+ *
+ * The target origin is this origin and never "*", so the code cannot be read by
+ * a page that happens to have a handle on this window.
+ */
+app.get("/auth/microsoft/popup", (req, res) => {
+  const origin = appOriginOf(req);
+  res.type("html").send(`<!doctype html>
+<meta charset="utf-8"><title>OneDrive</title>
+<body style="font:14px system-ui;padding:24px">กำลังกลับไปที่ NexSpace…
+<script>
+  var q = new URLSearchParams(location.hash.slice(1) || location.search.slice(1));
+  var said = { nexspaceOneDrive: true, code: q.get("code"), state: q.get("state"),
+               error: q.get("error_description") || q.get("error") };
+  if (window.opener) { window.opener.postMessage(said, ${JSON.stringify(origin)}); window.close(); }
+  else { document.body.textContent = "ปิดหน้าต่างนี้ได้เลย"; }
+</script>`);
+});
+
 app.get("/me/drive-picker", requireAuth, (_req: AuthedRequest, res) => {
   res.json({
     available: !!(PICKER_KEY && GOOGLE_ID),
@@ -3096,14 +3145,16 @@ const docView = (
 const folderView = (
   f: {
     id: string; name: string; openTo: string | null;
-    driveFolderId?: string | null; driveUrl?: string | null;
+    driveFolderId?: string | null; driveUrl?: string | null; driveProvider?: string | null;
   },
   level: Level,
   why: Because,
   docs: number,
 ) => ({
   id: f.id, name: f.name, openTo: f.openTo, level, why, docs,
-  drive: f.driveFolderId ? { id: f.driveFolderId, url: f.driveUrl ?? null } : null,
+  drive: f.driveFolderId
+    ? { id: f.driveFolderId, url: f.driveUrl ?? null, provider: f.driveProvider ?? "google" }
+    : null,
   mayManage: level === "file",
 });
 
@@ -3707,12 +3758,14 @@ app.post("/workspaces/:slug/cabinets/:id/folders", async (req, res) => {
     ? String(req.body.driveFolderId).slice(0, 200) : null;
   const driveUrl = driveFolderId && req.body?.driveUrl
     ? safeLink(String(req.body.driveUrl)) : null;
+  const driveProvider = driveFolderId
+    ? (req.body?.driveProvider === "microsoft" ? "microsoft" : "google") : null;
   if (driveFolderId && req.body?.driveUrl && !driveUrl) {
     return res.status(400).json({ error: "that is not a link" });
   }
 
   const folder = await prisma.cabinetFolder.create({
-    data: { cabinetId: c.id, name, openTo, createdById: can.me.id, driveFolderId, driveUrl },
+    data: { cabinetId: c.id, name, openTo, createdById: can.me.id, driveFolderId, driveUrl, driveProvider },
   });
   console.log(`[cabinet] ${can.me.email} made the folder "${name}" in "${c.label}"`);
   res.status(201).json({ folder: folderView(folder, "file", "runs-the-space", 0) });
@@ -3725,7 +3778,7 @@ app.patch("/workspaces/:slug/cabinets/:id/folders/:folderId", async (req, res) =
 
   const data: {
     name?: string; openTo?: string | null;
-    driveFolderId?: string | null; driveUrl?: string | null;
+    driveFolderId?: string | null; driveUrl?: string | null; driveProvider?: string | null;
   } = {};
   if (req.body?.name !== undefined) {
     const name = String(req.body.name).trim().slice(0, 60);
@@ -3736,8 +3789,10 @@ app.patch("/workspaces/:slug/cabinets/:id/folders/:folderId", async (req, res) =
     if (req.body.driveFolderId === null) {
       data.driveFolderId = null;
       data.driveUrl = null;
+      data.driveProvider = null;
     } else {
       data.driveFolderId = String(req.body.driveFolderId).slice(0, 200);
+      data.driveProvider = req.body?.driveProvider === "microsoft" ? "microsoft" : "google";
       const link = req.body?.driveUrl ? safeLink(String(req.body.driveUrl)) : null;
       if (req.body?.driveUrl && !link) return res.status(400).json({ error: "that is not a link" });
       data.driveUrl = link;

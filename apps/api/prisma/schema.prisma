@@ -661,6 +661,10 @@ model CabinetFolder {
   /// quietly.
   driveFolderId String?
   driveUrl      String?
+  /// google | microsoft — which cloud that folder is in, so an upload goes to
+  /// the right one. Without it a drawer linked to OneDrive would be handed to
+  /// Google, which would answer "no such folder" and look like a bug in the id.
+  driveProvider String?
   /// null = follows the cabinet. A value here is an exception written on purpose.
   openTo      String?
   createdById String?

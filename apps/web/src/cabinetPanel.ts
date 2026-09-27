@@ -15,6 +15,10 @@ import { pickerConfig, pickFromDrive } from "./drivePicker";
 import {
   createInDrive, uploadToDrive, uploadFolder, shareByLink, canReach, type DriveKind,
 } from "./driveMake";
+import {
+  oneDriveConfig, createFolderInOneDrive, uploadToOneDrive, uploadFolderToOneDrive,
+  shareOneDriveByLink, canReachInOneDrive,
+} from "./oneDrive";
 
 interface Doc {
   id: string;
@@ -51,8 +55,8 @@ interface Cab {
 interface Folder {
   id: string;
   name: string;
-  /** the Drive folder this drawer keeps its files in, when it has one */
-  drive: { id: string; url: string | null } | null;
+  /** the cloud folder this drawer keeps its files in, when it has one */
+  drive: { id: string; url: string | null; provider: string | null } | null;
   openTo: string | null;
   level: "none" | "read" | "file";
   why: string;
@@ -232,6 +236,10 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
     if (newFolder) newFolder.hidden = cab.level !== "file";
     const make = $("cab-make-row");
     if (make) make.hidden = !mayFile || !$("cab-make") || !$("cab-make")!.childNodes.length;
+    const pickRow = $("cab-add-ways");
+    // The Google picker is Google's; with only OneDrive configured the paste
+    // field is the way in, and a button that cannot work is worse than none.
+    if (pickRow && !pickRow.hidden && $("cab-pick")?.hidden) pickRow.hidden = true;
     drawFolderChoice();
   };
 
@@ -651,6 +659,56 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
   };
 
   /**
+   * The two clouds, behind one shape.
+   *
+   * Everything below asks "the chosen cloud" to make a folder, take a file or
+   * share something, rather than asking Google or Microsoft by name. The two
+   * APIs disagree about nearly everything underneath — which is why they are
+   * two modules — but the cabinet only ever wants those four things.
+   *
+   * Only one of them can make a blank document. Graph has no way to create an
+   * empty Word or Excel file that Office will open, so that part of the menu is
+   * Google's alone rather than a button here that produces something broken.
+   */
+  const CLOUD = {
+    google: {
+      name: "Google Drive",
+      folder: (name: string, parent: string | null) => createInDrive("folder", name, parent),
+      blank: (kind: DriveKind, name: string, parent: string | null) => createInDrive(kind, name, parent),
+      file: uploadToDrive,
+      files: uploadFolder,
+      share: async (id: string) => { await shareByLink(id); },
+      reach: canReach,
+    },
+    microsoft: {
+      name: "OneDrive",
+      folder: createFolderInOneDrive,
+      blank: null,
+      file: uploadToOneDrive,
+      files: uploadFolderToOneDrive,
+      share: async (id: string) => { await shareOneDriveByLink(id); },
+      reach: canReachInOneDrive,
+    },
+  } as const;
+
+  type CloudName = keyof typeof CLOUD;
+
+  /**
+   * Which cloud the next thing goes to.
+   *
+   * A drawer that already keeps its files somewhere decides for itself — asking
+   * again, and letting somebody answer differently, is how one drawer ends up
+   * with half its files in each. Otherwise it is whatever the chooser says.
+   */
+  const cloud = (): CloudName => {
+    const into = chosenFolder();
+    const linked = into ? folders.find((f) => f.id === into)?.drive?.provider : null;
+    if (linked === "google" || linked === "microsoft") return linked;
+    const sel = $<HTMLSelectElement>("cab-cloud");
+    return sel?.value === "microsoft" ? "microsoft" : "google";
+  };
+
+  /**
    * Drive's own "New" menu, as far as this scope reaches.
    *
    * Uploading a whole folder is deliberately not here: the browser can hand
@@ -697,7 +755,7 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
     fileId: string; title: string; url: string; mime: string; kind: "file" | "folder";
   }) => {
     const said = await ask("POST", `/workspaces/${slug}/cabinets/${cab!.id}/docs`, {
-      title: made.title, url: made.url, provider: "google",
+      title: made.title, url: made.url, provider: cloud(),
       fileId: made.fileId, mime: made.mime, kind: made.kind,
       folderId: chosenFolder(),
     });
@@ -720,14 +778,43 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
     share.onclick = async () => {
       share.disabled = true;
       try {
-        await shareByLink(made.fileId);
+        await CLOUD[cloud()].share(made.fileId);
         say(t("แชร์แล้ว — คนที่มีลิงก์เปิดอ่านได้"));
       } catch (e) {
-        say(t("แชร์ไม่สำเร็จ — เปิดใน Drive แล้วแชร์เองได้"), true);
-        console.warn("[drive]", e);
+        say(t("แชร์ไม่สำเร็จ — เปิดในคลาวด์แล้วแชร์เองได้"), true);
+        console.warn("[cloud]", e);
       }
     };
     msg.appendChild(share);
+  };
+
+  /** the clouds this deployment can actually reach */
+  const cloudsOnOffer = async (): Promise<CloudName[]> => {
+    const [g, m] = await Promise.all([pickerConfig(), oneDriveConfig()]);
+    const out: CloudName[] = [];
+    if (g.available) out.push("google");
+    if (m.available) out.push("microsoft");
+    return out;
+  };
+
+  /**
+   * Which cloud to use, asked once rather than on every button.
+   *
+   * Hidden when there is only one — a chooser with a single option is a
+   * question that was never worth asking.
+   */
+  const wireCloud = async () => {
+    const sel = $<HTMLSelectElement>("cab-cloud");
+    if (!sel) return;
+    const clouds = await cloudsOnOffer();
+    sel.innerHTML = "";
+    for (const c of clouds) {
+      const o = document.createElement("option");
+      o.value = c;
+      o.textContent = CLOUD[c].name;
+      sel.appendChild(o);
+    }
+    sel.hidden = clouds.length < 2;
   };
 
   const wireMake = async () => {
@@ -735,8 +822,8 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
     const upload = $<HTMLInputElement>("cab-upload");
     const uploadButton = $<HTMLButtonElement>("cab-upload-go");
     if (!menu || !upload || !uploadButton) return;
-    const cfg = await pickerConfig();
-    if (!cfg.available) return;
+    const clouds = await cloudsOnOffer();
+    if (!clouds.length) return;
 
     if (!menu.options.length) {
       const head = document.createElement("option");
@@ -754,17 +841,25 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
       const kind = menu.value as DriveKind;
       menu.value = "";
       if (!kind) return;
+      const which = CLOUD[cloud()];
+      if (kind !== "folder" && !which.blank) {
+        say(t("{cloud} สร้างเอกสารเปล่าไม่ได้ — สร้างโฟลเดอร์หรืออัปโหลดไฟล์แทน")
+          .replace("{cloud}", which.name), true);
+        return;
+      }
       const name = prompt(t("ตั้งชื่อ"), "");
       if (name === null) return;
       if (!name.trim()) { say(t("ต้องมีชื่อ"), true); return; }
-      say(t("กำลังสร้างใน Google Drive…"));
+      say(t("กำลังสร้างใน {cloud}…").replace("{cloud}", which.name));
       try {
         const parent = driveParent();
         if (!await parentIsReachable(parent)) return;
-        await fileWhatWasMade(await createInDrive(kind, name.trim(), parent));
+        await fileWhatWasMade(kind === "folder"
+          ? await which.folder(name.trim(), parent)
+          : await which.blank!(kind, name.trim(), parent));
       } catch (e) {
-        say(t("สร้างใน Google Drive ไม่สำเร็จ"), true);
-        console.warn("[drive]", e);
+        say(t("สร้างใน {cloud} ไม่สำเร็จ").replace("{cloud}", which.name), true);
+        console.warn("[cloud]", e);
       }
     };
 
@@ -773,14 +868,15 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
       const file = upload.files?.[0];
       upload.value = "";
       if (!file) return;
-      say(t("กำลังอัปโหลดขึ้น Google Drive…"));
+      const which = CLOUD[cloud()];
+      say(t("กำลังอัปโหลดขึ้น {cloud}…").replace("{cloud}", which.name));
       try {
         const parent = driveParent();
         if (!await parentIsReachable(parent)) return;
-        await fileWhatWasMade(await uploadToDrive(file, parent));
+        await fileWhatWasMade(await which.file(file, parent));
       } catch (e) {
         say(t("อัปโหลดไม่สำเร็จ"), true);
-        console.warn("[drive]", e);
+        console.warn("[cloud]", e);
       }
     };
   };
@@ -809,7 +905,7 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
    */
   const parentIsReachable = async (parent: string | null): Promise<boolean> => {
     if (!parent) return true;
-    if (await canReach(parent)) return true;
+    if (await CLOUD[cloud()].reach(parent)) return true;
     say(t("โฟลเดอร์ Drive ของลิ้นชักนี้คนอื่นเป็นคนสร้าง — กด \"เลือกจาก Google Drive\" แล้วเลือกโฟลเดอร์นั้นครั้งเดียวก่อน"), true);
     return false;
   };
@@ -836,18 +932,21 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
        */
       const onlyMine = confirm(t("ให้ลิ้นชักนี้เป็นของคุณคนเดียวไหม — ผู้ดูแล Space ยังเห็นได้"));
 
-      let drive: { fileId: string; url: string } | null = null;
-      const cfg = await pickerConfig();
-      if (cfg.available && confirm(t("สร้างโฟลเดอร์ใน Google Drive ให้ด้วยไหม — ไฟล์ที่ใส่ลิ้นชักนี้จะขึ้นไปอยู่ในนั้น"))) {
-        say(t("กำลังสร้างใน Google Drive…"));
+      let drive: { fileId: string; url: string; provider: CloudName } | null = null;
+      const which = CLOUD[cloud()];
+      const clouds = await cloudsOnOffer();
+      if (clouds.length && confirm(t("สร้างโฟลเดอร์ใน {cloud} ให้ด้วยไหม — ไฟล์ที่ใส่ลิ้นชักนี้จะขึ้นไปอยู่ในนั้น")
+        .replace("{cloud}", which.name))) {
+        say(t("กำลังสร้างใน {cloud}…").replace("{cloud}", which.name));
         try {
-          const made = await createInDrive("folder", name.trim());
-          drive = { fileId: made.fileId, url: made.url };
+          const made = await which.folder(name.trim(), null);
+          drive = { fileId: made.fileId, url: made.url, provider: cloud() };
         } catch (e) {
           // The drawer is still worth having without it, so this is a warning
           // and not a stop.
-          say(t("สร้างใน Google Drive ไม่สำเร็จ — ลิ้นชักถูกสร้างแบบไม่ผูกกับ Drive"), true);
-          console.warn("[drive]", e);
+          say(t("สร้างใน {cloud} ไม่สำเร็จ — ลิ้นชักถูกสร้างแบบไม่ผูกกับคลาวด์")
+            .replace("{cloud}", which.name), true);
+          console.warn("[cloud]", e);
         }
       }
 
@@ -855,14 +954,16 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
         {
           name,
           ...(onlyMine ? { openTo: "private" } : {}),
-          ...(drive ? { driveFolderId: drive.fileId, driveUrl: drive.url } : {}),
+          ...(drive
+            ? { driveFolderId: drive.fileId, driveUrl: drive.url, driveProvider: drive.provider }
+            : {}),
         });
       if (said.status !== 201) {
         say(said.error ? String(said.error) : t("สร้างโฟลเดอร์ไม่สำเร็จ"), true);
         return;
       }
       opened.add(said.folder.id);
-      if (drive) say(t("สร้างลิ้นชักและโฟลเดอร์ใน Drive แล้ว"));
+      if (drive) say(t("สร้างลิ้นชักและโฟลเดอร์ใน {cloud} แล้ว").replace("{cloud}", which.name));
       else say(t("สร้างโฟลเดอร์แล้ว"));
       void load();
     };
@@ -887,10 +988,11 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
       // chosen folder's name survives.
       const name = (files[0] as File & { webkitRelativePath?: string })
         .webkitRelativePath?.split("/")[0] || t("โฟลเดอร์ใหม่");
+      const which = CLOUD[cloud()];
       try {
         const parent = driveParent();
         if (!await parentIsReachable(parent)) return;
-        const done = await uploadFolder(files, name, (n, all) => {
+        const done = await which.files(files, name, (n, all) => {
           say(t("กำลังอัปโหลด {n}/{all} ไฟล์…")
             .replace("{n}", String(n)).replace("{all}", String(all)));
         }, parent);
@@ -961,6 +1063,7 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
   wireNewFolder();
   wireFolderUpload();
   void wirePicker();
+  void wireCloud();
   void wireMake();
 
   return {
