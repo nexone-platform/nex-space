@@ -19,6 +19,12 @@ import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
 import { Client } from "colyseus.js";
+// The rooms themselves, from the file the server reads. Imported rather than
+// written down here, because they were written down here once and the map moved
+// underneath them: a layout change put a wall through the tile this suite stood
+// its first speaker on, and two cases began failing for a reason that had
+// nothing to do with what they test. Node strips the types on the way in.
+import { AREAS } from "../../game-server/src/areas.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const API_DIR = resolve(HERE, "..");
@@ -30,6 +36,22 @@ const GAME = "ws://localhost:2567";
 const TILE = 32;
 /** a player standing in the middle of a tile, in the pixels the client sends */
 const at = (tx, ty) => ({ x: tx * TILE + TILE / 2, y: ty * TILE + TILE / 2, dir: "down", moving: false });
+
+const ROOM = Object.fromEntries(AREAS.classic.map((a) => [a.id, a]));
+const MEET = ROOM.meeting, LOUNGE = ROOM.lounge, POD = ROOM.pod;
+/** the two opposite corners of a room, and the tile in the middle of it */
+const nw = (a) => [a.x0, a.y0];
+const se = (a) => [a.x1, a.y1];
+const mid = (a) => [Math.floor((a.x0 + a.x1) / 2), Math.floor((a.y0 + a.y1) / 2)];
+const apart = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
+/**
+ * The meeting room's doorway, the one tile of its wall that is not a wall.
+ *
+ * This one number cannot be derived — a door is a hole somebody cut, not a
+ * property of a rectangle — so the case below checks it is still just outside
+ * the room rather than trusting it.
+ */
+const DOOR = [23, MEET.y1 + 1];
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra = "") => {
@@ -120,29 +142,39 @@ const speak = async (place, from, text) => {
     .map(([who]) => who.name);
 };
 
-// The classic map: the meeting room is tiles 20-26 x 4-9, its door is at 23,10.
-// The lounge (5-11) and the team pod (13-18) share the same rows, one wall apart.
+// The classic map. Every tile below comes out of AREAS, except the doorway.
 
 {
-  // corner to corner is 7.8 tiles, well past the 5-tile radius
-  const got = await speak([[a, [20, 4]], [b, [26, 9]]], a, `ประชุม-${stamp}`);
+  // The whole point of the first case is that the two of them are too far apart
+  // to hear each other by distance alone. A room shrunk to within the radius
+  // would still pass it, and would be proving nothing.
+  ok("the meeting room is bigger across than the proximity radius",
+    apart(nw(MEET), se(MEET)) > 5,
+    `${apart(nw(MEET), se(MEET)).toFixed(1)} tiles corner to corner, radius is 5`);
+  ok("  · and its doorway is outside it", DOOR[1] > MEET.y1 || DOOR[0] < MEET.x0 || DOOR[0] > MEET.x1,
+    `door at ${DOOR}, room is ${MEET.x0}-${MEET.x1} x ${MEET.y0}-${MEET.y1}`);
+}
+{
+  const got = await speak([[a, nw(MEET)], [b, se(MEET)]], a, `ประชุม-${stamp}`);
   ok("across a private area, far past the proximity radius", got.includes("b"),
     got.length ? `heard by ${got}` : "nobody heard it — is the room on the classic map?");
 }
 {
   // one tile apart, one of them through the doorway
-  const got = await speak([[a, [23, 9]], [b, [23, 10]]], a, `ในห้อง-${stamp}`);
+  const got = await speak([[a, [DOOR[0], MEET.y1]], [b, DOOR]], a, `ในห้อง-${stamp}`);
   ok("someone one tile outside the door hears nothing", !got.includes("b"), `heard by ${got}`);
 }
 {
   // and the same in reverse: the person outside is not overheard either
-  const got = await speak([[a, [23, 9]], [b, [23, 10]]], b, `นอกห้อง-${stamp}`);
+  const got = await speak([[a, [DOOR[0], MEET.y1]], [b, DOOR]], b, `นอกห้อง-${stamp}`);
   ok("  · and is not overheard from inside", !got.includes("a"), `heard by ${got}`);
 }
 {
-  // the lounge and the team pod are two tiles apart across one wall
-  const got = await speak([[a, [11, 6]], [b, [13, 6]]], a, `คนละโซน-${stamp}`);
-  ok("two people in different areas do not hear each other", !got.includes("b"), `heard by ${got}`);
+  // the lounge and the team pod stand either side of one wall
+  const row = mid(LOUNGE)[1];
+  const got = await speak([[a, [LOUNGE.x1, row]], [b, [POD.x0, row]]], a, `คนละโซน-${stamp}`);
+  ok("two people in different areas do not hear each other", !got.includes("b"),
+    got.length ? `heard by ${got}` : `${apart([LOUNGE.x1, row], [POD.x0, row])} tiles apart`);
 }
 {
   // out on the open floor the radius is still the rule
@@ -158,14 +190,16 @@ const speak = async (place, from, text) => {
   // Three in the room and one at the door. The speaker stands beside the door
   // so the person outside it is ONE tile away and the far corner is six: under
   // the old rule the results would be exactly inverted, which is the point.
-  const got = await speak([[a, [24, 9]], [b, [20, 4]], [c, [22, 6]], [d, [23, 10]]], a, `ทั้งห้อง-${stamp}`);
+  const got = await speak(
+    [[a, [DOOR[0] + 1, MEET.y1]], [b, nw(MEET)], [c, mid(MEET)], [d, DOOR]], a, `ทั้งห้อง-${stamp}`);
   ok("the far corner of the area hears it", got.includes("b") && got.includes("c"), `heard by ${got}`);
   ok("  · and the one tile outside the door does not", !got.includes("d"), `heard by ${got}`);
 }
 {
   // The open floor is not itself an area: two people out on it hear each other,
   // and the one two tiles away through the meeting-room wall does not.
-  const got = await speak([[a, [22, 11]], [b, [21, 12]], [c, [22, 9]]], a, `โถงกลาง-${stamp}`);
+  const got = await speak(
+    [[a, [22, MEET.y1 + 2]], [b, [21, MEET.y1 + 3]], [c, [22, MEET.y1]]], a, `โถงกลาง-${stamp}`);
   ok("two on the open floor hear each other", got.includes("b"), `heard by ${got}`);
   ok("  · and the one two tiles away inside the room does not", !got.includes("c"), `heard by ${got}`);
 }
