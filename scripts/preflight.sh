@@ -141,6 +141,17 @@ else
   echo "$out" | grep -E "^! FAIL" | head -6 | sed "s/^/        /" >&2
 fi
 
+# A microphone that reaches every room in the building is the one that must
+# never be left open by accident. The rule, the queue and the five-minute
+# cut-off are all checked against a clock this suite moves by hand.
+say "Broadcast"
+if out=$(npm run --silent check:onair -w @nexspace/game-server 2>&1); then
+  ok "the floor — $(echo "$out" | grep -oE "[0-9]+ passed, [0-9]+ failed" | tail -1)"
+else
+  bad "the broadcast floor does not behave"
+  echo "$out" | grep -E "^! FAIL" | head -6 | sed "s/^/        /" >&2
+fi
+
 say "Asset catalogue"
 if out=$(node scripts/asset-catalogue.mjs --check 2>&1); then
   ok "$out"
@@ -211,7 +222,7 @@ api_up=0; game_up=0
 listening http://localhost:3001/health && api_up=1
 listening http://localhost:2567/ && game_up=1
 if [ "$api_up" = 1 ] && [ "$game_up" = 1 ]; then
-  for suite in roles desk guests totp ice chat dm profile presence areas map stats emote roles2 files calendar invite invited rec summary cabinets; do
+  for suite in roles desk guests totp ice chat dm profile presence areas map stats emote roles2 files calendar invite invited rec summary cabinets onair; do
     if out=$(npm run --silent "test:$suite" -w @nexspace/api 2>&1); then
       ok "$suite — $(echo "$out" | grep -oE '[0-9]+ passed, [0-9]+ failed' | tail -1)"
     else

@@ -30,9 +30,20 @@ export interface MediaManager {
   toggleCam(): Promise<void> | void;
   toggleScreen(): Promise<void> | void;
 
-  /** reconcile who we should be connected to / hear. `nearby` = proximity peers;
-   *  `forced` = peers to stay connected to regardless of distance (screen-share). */
-  syncPeers(nearby: Set<string>, forced?: Set<string>): void;
+  /**
+   * Reconcile who we should be connected to, and who we should hear.
+   *
+   *   nearby      proximity peers — the conversation you are standing in
+   *   forced      stay connected regardless of distance (screen-share)
+   *   hearAnyway  audible regardless of distance OR of which room they are in:
+   *               somebody broadcasting to the whole map
+   *
+   * The third is separate from the second because they mean different things to
+   * an SFU. A presenter is connected to everybody and must NOT be audible to
+   * everybody; a broadcaster must be audible to everybody and is still not
+   * worth a camera tile in every window.
+   */
+  syncPeers(nearby: Set<string>, forced?: Set<string>, hearAnyway?: Set<string>): void;
   /** 0..1 playback volume for a peer (spatial audio by distance) */
   setPeerVolume(peerId: string, vol: number): void;
   /** a peer's incoming stream (e.g. their screen-share) for the in-scene screen */

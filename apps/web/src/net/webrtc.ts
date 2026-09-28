@@ -355,8 +355,13 @@ export class WebRTCManager implements MediaManager {
   // ---- proximity-driven connections --------------------------------------
   /** reconcile active peer connections. `nearby` = proximity (voice/cam);
    *  `forced` = keep connected regardless of distance (room-wide screen share). */
-  syncPeers(nearby: Set<string>, forced?: Set<string>) {
-    const want = forced ? new Set([...nearby, ...forced]) : nearby;
+  syncPeers(nearby: Set<string>, forced?: Set<string>, hearAnyway?: Set<string>) {
+    // A broadcaster is somebody to be connected to, exactly like a presenter.
+    // On a mesh that is the expensive part — see the cap in the scene, which is
+    // why this is allowed to be this simple.
+    const want = forced?.size || hearAnyway?.size
+      ? new Set([...nearby, ...(forced ?? []), ...(hearAnyway ?? [])])
+      : nearby;
     for (const id of want) if (!this.peers.has(id)) this.connect(id);
     for (const id of [...this.peers.keys()]) if (!want.has(id)) this.disconnect(id);
   }

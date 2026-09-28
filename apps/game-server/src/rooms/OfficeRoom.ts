@@ -1,6 +1,7 @@
 import { Room, Client } from "colyseus";
 import { OfficeState, Player, Sticker } from "../schema";
 import { AREAS, canHear, type PrivateArea } from "../areas";
+import { Floors, refuseOnAir } from "../onair";
 
 const TILE = 32;
 const SPAWN = { x: 15 * TILE + TILE / 2, y: 18 * TILE + TILE / 2 };
@@ -74,6 +75,12 @@ export class OfficeRoom extends Room<OfficeState> {
   /** who placed each sticker, so only they can pick it up again */
   private stickerBy = new Map<string, string>();
   private stickerSeq = 0;
+  /**
+   * Who is broadcasting on each map of this space. See onair.ts — the rule and
+   * the clock live there so they can be tested; this room only wires them to a
+   * socket. Built in onCreate, because it needs the room's clock.
+   */
+  private floors!: Floors;
 
   /**
    * Gate the room on workspace membership. The API is the source of truth:
@@ -112,6 +119,24 @@ export class OfficeRoom extends Room<OfficeState> {
     this.setState(new OfficeState());
     console.log(`[office] room created for workspace "${this.workspace}"`);
     void this.loadAreas();
+    /**
+     * Taking or losing the floor, turned into the two things a browser needs.
+     *
+     * The flag on the player is the truth — somebody who walks in, reloads, or
+     * arrives through a portal halfway through a broadcast reads it and knows.
+     * The message is the cue: a chime before a voice arrives from nowhere, the
+     * moment it will end, and why it ended. A boolean says none of that.
+     */
+    this.floors = new Floors(this.clock, (e) => {
+      const p = this.state.players.get(e.by);
+      if (p) { p.onAir = e.on; p.onAirUntil = e.on ? e.until ?? 0 : 0; }
+      this.broadcast("onair", {
+        from: e.by, name: p?.name ?? "", on: e.on, map: e.map,
+        ...(e.until ? { until: e.until } : {}),
+        ...(e.why ? { why: e.why } : {}),
+      });
+      if (e.on) console.log(`[office:${this.workspace}] ${p?.name ?? e.by} is on air on "${e.map || "main"}"`);
+    });
     // The room outlives everybody in it, so the sweep is on a clock rather than
     // on somebody arriving to trigger it.
     this.clock.setInterval(() => this.sweepStickers(), 10 * 60 * 1000);
@@ -149,7 +174,14 @@ export class OfficeRoom extends Room<OfficeState> {
     this.onMessage("map", (client, slug: string) => {
       const p = this.state.players.get(client.sessionId);
       const clean = String(slug ?? "").slice(0, 32);
-      if (p && /^[a-z0-9-]*$/.test(clean)) { p.map = clean; this.bankTime(client.sessionId, p); }
+      if (p && /^[a-z0-9-]*$/.test(clean)) {
+        // A broadcast belongs to the map it started on. Walking through a portal
+        // while holding the floor would otherwise leave it held on a floor the
+        // speaker is no longer standing on, with nobody able to take it back.
+        if (p.map !== clean) this.floors.dropAnyOf(client.sessionId, "gone");
+        p.map = clean;
+        this.bankTime(client.sessionId, p);
+      }
     });
 
     /**
@@ -323,6 +355,39 @@ export class OfficeRoom extends Room<OfficeState> {
     this.onMessage("hand", (client, on: boolean) => {
       const p = this.state.players.get(client.sessionId);
       if (p) p.handUp = !!on;
+    });
+
+    /**
+     * Take or give up the floor: speaking to the whole map.
+     *
+     * Asked for here and granted here. A browser cannot decide this for itself
+     * for the same reason it does not decide who is close enough to hear it —
+     * the rule would then live in the one place anybody willing to edit it can
+     * reach.
+     *
+     * Turning it off is not gated on anything. Whoever holds it can drop it,
+     * and a client that asks to stop when it is not holding anything is simply
+     * ignored: there is no way for "stop" to be the wrong answer.
+     */
+    this.onMessage("onair", (client, msg: { on?: boolean }) => {
+      const me = this.state.players.get(client.sessionId);
+      if (!me) return;
+      const where = me.map;
+      if (!msg?.on) {
+        if (this.floors.heldBy(where) === client.sessionId) this.floors.drop(where, "stopped");
+        return;
+      }
+      const held = this.floors.heldBy(where);
+      const role = (client.auth as { role?: string } | undefined)?.role;
+      const no = refuseOnAir(role, held, client.sessionId);
+      if (no !== "no") {
+        client.send("onairDenied", {
+          reason: no,
+          who: no === "someone-else" ? this.state.players.get(held!)?.name ?? "" : "",
+        });
+        return;
+      }
+      this.floors.take(where, client.sessionId);
     });
 
     // claim / release a desk. "" releases. Refuse if another online player owns it.
@@ -896,6 +961,10 @@ export class OfficeRoom extends Room<OfficeState> {
     if (p && visit) this.bankTime(client.sessionId, p, true);
     this.visits.delete(client.sessionId);
     if (visit?.id) void this.closeVisit(client, visit.id, visit.spent);
+
+    // A closed tab is the most likely way for a broadcast to end, and the one
+    // that leaves nothing behind to end it.
+    this.floors.dropAnyOf(client.sessionId, "gone");
 
     this.state.players.delete(client.sessionId);
     // their throttle entries are dead weight the moment they are gone

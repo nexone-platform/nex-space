@@ -15,6 +15,26 @@ export class Player extends Schema {
   // Raising a hand is a request to speak, so it has to outlive the moment it is
   // sent — a chat message would scroll away.
   @type("boolean") handUp = false;
+  /**
+   * Holding the floor: speaking to everybody on this map at once.
+   *
+   * In state rather than in a message because a broadcast has a duration.
+   * Somebody who walks in, reloads, or arrives through a portal halfway through
+   * one has to know it is happening — a message only reaches the browsers that
+   * were already listening, and they would join to a voice with no name on it.
+   *
+   * The server is the only thing that sets this. See onair.ts.
+   */
+  @type("boolean") onAir = false;
+  /**
+   * When the room will take the floor back, as a wall-clock millisecond.
+   *
+   * Beside the flag rather than only in the message that raised it, so the
+   * countdown survives a reload. The speaker's own countdown is the thing
+   * standing between an announcement and a microphone left open to the whole
+   * building; it cannot be the one piece of this that a refresh loses.
+   */
+  @type("number") onAirUntil = 0;
   // The account behind this player, empty for a guest. Clients need it to start
   // a private thread with someone: a session id is gone the moment they reload,
   // and a thread has to survive that.

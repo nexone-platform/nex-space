@@ -71,10 +71,24 @@ interface Remote {
   ring?: Phaser.GameObjects.Arc;
   deskId?: string;
   status?: string;
+  /** speaking to the whole map: heard wherever you are standing */
+  onAir?: boolean;
+  /** the marker over their head while they are */
+  airMark?: Phaser.GameObjects.Text;
 }
 
 // ===== Office size: SMALL (S) — 1-10 people — compact 20x15 =====
 const TILE = 32;
+
+/**
+ * How many other people may be on the map before a broadcast needs an SFU.
+ *
+ * On a mesh the speaker holds one peer connection per listener, all uplink, out
+ * of one browser — twelve is where a laptop on office wifi starts dropping
+ * audio, and dropped audio in a broadcast is the half of the room that did not
+ * hear the announcement and does not know it.
+ */
+const MESH_BROADCAST_MAX = 12;
 
 // the layout is chosen per page load; see mapThemes.ts
 // Resolved before this module was imported — see mapSource.loadMap(), which
@@ -197,6 +211,27 @@ export class OfficeScene extends Phaser.Scene {
   private lastActiveAt = 0;                     // last real user input (for AFK)
   private statusCheckAt = 0;                    // throttle for recomputing my status
   private micEverOn = false;                    // muted only counts once you've actually unmuted
+  /**
+   * The broadcast happening right now, if there is one: whose it is, and when
+   * the server will take the floor back. "" means nobody, and my own session id
+   * means me — which is the case the red bar in front of my face is for.
+   */
+  private onAirBy = "";
+  private onAirName = "";
+  private onAirUntil = 0;
+  /** this listener silenced this one broadcast — cleared when it ends */
+  private airMuted = false;
+  /**
+   * My microphone as it was before I took the floor.
+   *
+   * Restored when the broadcast ends, however it ends. Announcing turns the
+   * microphone on; leaving it on afterwards would walk somebody into the next
+   * meeting room live, having pressed nothing.
+   */
+  private micBeforeAir: boolean | null = null;
+  private airTick?: number;
+  /** an SFU carries a broadcast for free; a mesh makes the speaker pay for it */
+  private usingSfu = false;
   private myMicOn = false;                      // last mic state sent to the room
   private deskPlates = new Map<string, Phaser.GameObjects.Container>(); // deskId -> owner nameplate
   private sitting = false;
@@ -782,6 +817,7 @@ export class OfficeScene extends Phaser.Scene {
         ).then((r) => r.json());
         const lk = new LiveKitManager(tilesEl);
         await lk.connect(tk.url, tk.token);
+        this.usingSfu = true;
         console.log("[nexspace] media backend: LiveKit SFU");
         return lk;
       }
@@ -857,12 +893,21 @@ export class OfficeScene extends Phaser.Scene {
               this.refreshDeskPlates(); // their desk plate mirrors their status
               this.refreshRoster();
             }
+            // The flag, not the message, is what the earshot loop reads. The
+            // message may have arrived before this player did.
+            if (!!player.onAir !== !!r.onAir) { r.onAir = !!player.onAir; this.readAirFromState(); }
           });
         }
+        this.readAirFromState();
         this.refreshRoster();
         this.refreshDeskPlates();
       });
-      $(room.state).players.onRemove((_p: any, sessionId: string) => { this.removeRemote(sessionId); this.refreshRoster(); this.refreshDeskPlates(); });
+      $(room.state).players.onRemove((_p: any, sessionId: string) => {
+        this.removeRemote(sessionId);
+        this.readAirFromState();
+        this.refreshRoster();
+        this.refreshDeskPlates();
+      });
 
       // apply my saved desk: claim it and spawn seated there
       if (this.myDesk) {
@@ -904,6 +949,37 @@ export class OfficeScene extends Phaser.Scene {
           ? t("{name} เชิญคุณออกจากพื้นที่นี้").replace("{name}", msg.by)
           : t("คุณถูกเชิญออกจากพื้นที่นี้"));
         location.href = location.pathname;
+      });
+
+      /**
+       * Somebody took the floor, or gave it back.
+       *
+       * The flag on their player is what decides who is audible; this is the
+       * cue around it — the chime that stops a voice arriving out of nowhere,
+       * the deadline for the countdown, and the reason it ended.
+       */
+      room.onMessage("onair", (msg: { from: string; name: string; on: boolean; why?: string }) => {
+        if (msg.on) {
+          if (msg.from !== this.mySessionId) this.chime();
+        } else if (msg.from === this.mySessionId) {
+          this.restoreMicAfterAir();
+          if (msg.why === "timeout") this.toast(t("ประกาศครบ 5 นาทีแล้ว — ไมค์ประกาศถูกปิดให้อัตโนมัติ"), "warn");
+        }
+        this.readAirFromState();
+        this.refreshRoster();
+      });
+
+      /**
+       * The room would not give me the floor.
+       *
+       * Two different sentences, because they are answered differently: one is
+       * asking somebody else for the role, the other is waiting thirty seconds.
+       */
+      room.onMessage("onairDenied", (msg: { reason: string; who?: string }) => {
+        this.micBeforeAir = null;
+        this.toast(msg.reason === "someone-else"
+          ? t("{name} กำลังประกาศอยู่ — รอให้จบก่อน").replace("{name}", msg.who || t("อีกคน"))
+          : t("เฉพาะเจ้าของและผู้ดูแล Space เท่านั้นที่ประกาศได้"), "warn");
       });
 
       // a gesture, played on whoever made it
@@ -1235,6 +1311,12 @@ export class OfficeScene extends Phaser.Scene {
     this.refreshSoundButton();
 
     document.getElementById("btn-dnd")?.addEventListener("click", () => this.setDnd(!this.dnd));
+    document.getElementById("btn-air")?.addEventListener("click", () => void this.toggleOnAir());
+    document.getElementById("air-stop")?.addEventListener("click", () => this.room?.send("onair", { on: false }));
+    document.getElementById("air-mute")?.addEventListener("click", () => {
+      this.airMuted = !this.airMuted;
+      this.paintAirBar();
+    });
     document.getElementById("nudge-x")?.addEventListener("click", () => this.closeNudge());
     // Escape closes it too. A panel that waits indefinitely needs a way out that
     // is not a small ✕ in a corner, and Escape is the key that dismisses
@@ -1312,6 +1394,9 @@ export class OfficeScene extends Phaser.Scene {
             if (!d?.workspace) return;
             // what this account may do here, used only to decide what to offer
             this.myRole = String(d.workspace.role || "guest");
+            // The toolbar was drawn before this arrived, when every account
+            // still looked like a guest.
+            this.paintAirBar();
             // The calendar panel decided what to offer before this arrived, and
             // at that moment every account still looked like a guest.
             this.calPanel?.roleChanged();
@@ -2617,6 +2702,122 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   /**
+   * Take the floor, or give it back.
+   *
+   * The microphone is turned on as part of taking it: an announcement that
+   * nobody can hear because a second switch was still off is the only way this
+   * feature fails silently, and it would fail that way every time.
+   *
+   * On a peer-to-peer mesh this is refused past a certain size. The broadcaster
+   * holds one connection per listener out of a single browser, which is the one
+   * shape of call a mesh is worst at — and the failure is not an error, it is
+   * half the office hearing nothing and nobody knowing which half. Better to
+   * refuse and say what would fix it.
+   */
+  private async toggleOnAir() {
+    if (this.onAirBy === this.mySessionId) { this.room?.send("onair", { on: false }); return; }
+    if (this.onAirBy) {
+      this.toast(t("{name} กำลังประกาศอยู่ — รอให้จบก่อน").replace("{name}", this.onAirName || t("อีกคน")), "warn");
+      return;
+    }
+    if (!this.usingSfu && this.remotes.size > MESH_BROADCAST_MAX) {
+      this.toast(t("คนในแมพมากเกินกว่าจะประกาศแบบ P2P ได้ — ต้องเปิด LiveKit ก่อน"), "warn");
+      return;
+    }
+    // Remembered before anything is switched, and put back by whichever ending
+    // arrives — including the five-minute one, which nobody is there to press.
+    this.micBeforeAir = !!this.webrtc?.micOn;
+    if (!this.webrtc?.micOn) await this.webrtc?.toggleMic();
+    if (!this.webrtc?.micOn) {
+      this.micBeforeAir = null;
+      this.toast(t("เปิดไมค์ไม่สำเร็จ — ยังประกาศไม่ได้"), "warn");
+      return;
+    }
+    this.room?.send("onair", { on: true });
+  }
+
+  /**
+   * Who is on air, according to the room rather than according to what this
+   * window happened to be listening for.
+   *
+   * The message that announces a broadcast reaches the people who were already
+   * here. State reaches everybody — somebody who walks in halfway through, or
+   * reloads, or comes back through a portal. Written the wrong way round first,
+   * and the result was a listener who could hear a voice with no name on it and
+   * no way to turn it off, because the bar was waiting for a message that had
+   * been sent before they arrived.
+   */
+  private readAirFromState() {
+    let by = "", name = "", until = 0;
+    const players = this.room?.state?.players as unknown as Map<string, {
+      onAir?: boolean; onAirUntil?: number; name?: string;
+    }> | undefined;
+    if (players) {
+      for (const [sid, p] of players) {
+        if (p.onAir) { by = sid; name = p.name ?? ""; until = p.onAirUntil ?? 0; break; }
+      }
+    }
+    // Silencing one announcement is not silencing the next one.
+    if (by !== this.onAirBy) this.airMuted = false;
+    this.onAirBy = by;
+    this.onAirName = name;
+    this.onAirUntil = until;
+    this.paintAirBar();
+  }
+
+  /** the microphone as it was before the announcement, whoever ended it */
+  private restoreMicAfterAir() {
+    const before = this.micBeforeAir;
+    this.micBeforeAir = null;
+    if (before === false && this.webrtc?.micOn) void this.webrtc.toggleMic();
+  }
+
+  /**
+   * The bar that says a broadcast is happening — two of them, really.
+   *
+   * The one in front of the speaker is the important one. Everything else here
+   * is a courtesy; that one is the thing standing between an announcement and a
+   * microphone left open to the whole building, so it is red, it counts down,
+   * and there is no way to dismiss it without stopping.
+   */
+  private paintAirBar() {
+    const bar = document.getElementById("air-bar");
+    const btn = document.getElementById("btn-air");
+    if (btn) btn.hidden = !(this.myRole === "owner" || this.myRole === "admin");
+    btn?.classList.toggle("on", this.onAirBy === this.mySessionId);
+    if (!bar) return;
+
+    const mine = this.onAirBy === this.mySessionId;
+    bar.hidden = !this.onAirBy;
+    document.body.classList.toggle("on-air", !!this.onAirBy);
+    bar.classList.toggle("mine", mine);
+    const text = document.getElementById("air-text");
+    if (text) {
+      text.textContent = mine
+        ? t("กำลังประกาศ — ทุกคนในแมพนี้ได้ยินคุณ")
+        : t("{name} กำลังประกาศ").replace("{name}", this.onAirName || t("อีกคน"));
+    }
+    const stop = document.getElementById("air-stop");
+    if (stop) stop.hidden = !mine;
+    const mute = document.getElementById("air-mute") as HTMLButtonElement | null;
+    if (mute) {
+      mute.hidden = mine;
+      mute.textContent = this.airMuted ? t("เปิดเสียงประกาศ") : t("ปิดเสียงประกาศนี้");
+    }
+
+    window.clearInterval(this.airTick);
+    const clock = document.getElementById("air-time");
+    if (!clock) return;
+    if (!this.onAirBy || !this.onAirUntil) { clock.textContent = ""; return; }
+    const paint = () => {
+      const left = Math.max(0, Math.round((this.onAirUntil - Date.now()) / 1000));
+      clock.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+    };
+    paint();
+    this.airTick = window.setInterval(paint, 1000);
+  }
+
+  /**
    * Stop hearing the room without leaving it.
    *
    * Three things at once, because they are one intention: the people around
@@ -2937,14 +3138,35 @@ export class OfficeScene extends Phaser.Scene {
   private blip() {
     // A notification while on do-not-disturb still belongs in the list — it is
     // the sound that was unwelcome, not the fact.
-    if (this.dnd || localStorage.getItem("nexspace-sound") === "off") return;
+    if (this.dnd) return;
+    this.notes([[0, 880], [0.12, 1174]]);
+  }
+
+  /**
+   * Two notes falling, before an announcement.
+   *
+   * Deliberately different from the notification blip, which rises: these are
+   * the two tones a public address system makes, and the point of them is that
+   * a voice speaking to the whole building does not simply appear in somebody's
+   * ear with no warning.
+   *
+   * Not silenced by do-not-disturb, because the voice that follows it is not
+   * either. A cue for a sound you are about to hear anyway is not an
+   * interruption — it is the opposite.
+   */
+  private chime() {
+    this.notes([[0, 784], [0.16, 587]]);
+  }
+
+  private notes(seq: [number, number][]) {
+    if (localStorage.getItem("nexspace-sound") === "off") return;
     try {
       const Ctor = window.AudioContext ?? (window as any).webkitAudioContext;
       if (!Ctor) return;
       const ac: AudioContext = ((this as any)._ac ??= new Ctor());
       if (ac.state === "suspended") void ac.resume();
       const now = ac.currentTime;
-      for (const [at, hz] of [[0, 880], [0.12, 1174]] as [number, number][]) {
+      for (const [at, hz] of seq) {
         const osc = ac.createOscillator();
         const gain = ac.createGain();
         osc.frequency.value = hz;
@@ -4070,7 +4292,14 @@ export class OfficeScene extends Phaser.Scene {
     const label = this.makeNameTag(player.x, player.y - 34, name);
     const status: string = player.status || "online";
     this.setTagStatus(label, status);
-    this.remotes.set(sessionId, { sprite, label, name, status, tx: player.x, ty: player.y, dir: player.dir, moving: player.moving, avatar: av });
+    this.remotes.set(sessionId, {
+      sprite, label, name, status, tx: player.x, ty: player.y,
+      dir: player.dir, moving: player.moving, avatar: av,
+      // Read from state on arrival, not only from the message. Somebody who
+      // walks in through a portal halfway through a broadcast would otherwise
+      // hear nothing until the speaker happened to stop and start again.
+      onAir: !!player.onAir,
+    });
 
     // Point at somebody and their card comes up, which is the gesture people
     // already try. A short delay first, or sweeping the mouse across a busy
@@ -4100,6 +4329,7 @@ export class OfficeScene extends Phaser.Scene {
     r.sprite.destroy();
     r.label.destroy();
     r.ring?.destroy();
+    r.airMark?.destroy();
     this.bubbles.get(sessionId)?.destroy();
     this.bubbles.delete(sessionId);
     this.remotes.delete(sessionId);
@@ -4478,6 +4708,10 @@ export class OfficeScene extends Phaser.Scene {
     const mine = this.myArea;
     let anyNear = false;
     const nearbyIds = new Set<string>();
+    // Whoever is speaking to the whole map — audible through distance and walls
+    // both. Collected here and handed to the media layer below.
+    const hearAnyway = new Set<string>();
+    const duck = this.onAirBy && this.onAirBy !== this.mySessionId && !this.airMuted ? 0.25 : 1;
     // The same people the audio rule picked, kept in order, for the panel and
     // the ring. Deriving them a second time is how the two would come to
     // disagree about who is in the conversation.
@@ -4495,6 +4729,17 @@ export class OfficeScene extends Phaser.Scene {
         r.sprite.anims.stop(); r.sprite.setFrame(this.idleFrameFor(r.avatar, r.dir));
       }
       r.label.setPosition(r.sprite.x, r.sprite.y - 34);
+      // The bar at the top of the screen says who is announcing; this says
+      // which of the people in the room that is. A voice with a name but no
+      // body in it is a strange thing to be in a room with.
+      if (r.onAir && !r.airMark) {
+        r.airMark = this.add.text(0, 0, "📢", { fontSize: "12px", resolution: 3 })
+          .setOrigin(0.5).setDepth(100001);
+      } else if (!r.onAir && r.airMark) {
+        r.airMark.destroy();
+        r.airMark = undefined;
+      }
+      r.airMark?.setPosition(r.sprite.x, r.sprite.y - 48);
 
       const dx = r.sprite.x - this.player.x, dy = r.sprite.y - this.player.y;
       const d2 = dx * dx + dy * dy;
@@ -4502,9 +4747,23 @@ export class OfficeScene extends Phaser.Scene {
       // Inside an area, distance stops counting in both directions. Outside, it
       // is the radius — and anyone standing in an area is out of earshot of it.
       const near = canHear(mine, theirs, d2 <= near2);
+      /**
+       * Heard from anywhere, through any wall — one way.
+       *
+       * Laid over canHear rather than folded into it, on purpose. The rule for
+       * who can hear whom is untouched, so a meeting room is still sealed:
+       * everybody subscribes to the broadcaster, and the broadcaster subscribes
+       * to nobody. Widening canHear itself would have opened it in both
+       * directions and made a private room listenable.
+       */
+      const onAir = !!r.onAir && !this.airMuted;
+      if (onAir) hearAnyway.add(id);
       if (near) {
         anyNear = true;
-        talking.push(id);
+        // A broadcaster is not in your conversation, however loudly you can
+        // hear them. Counting them would put a ring round the pair of you and
+        // tell you both you were talking.
+        if (!r.onAir) talking.push(id);
         heads.push({ x: r.sprite.x, y: r.sprite.y });
       }
       // Whoever cannot hear you is drawn faded, so "who is in this conversation"
@@ -4535,7 +4794,7 @@ export class OfficeScene extends Phaser.Scene {
       // Applied to anyone we hold a connection to, not only those inside the
       // radius — a peer kept open by the hysteresis above would otherwise still be
       // playing at whatever volume they had when they crossed the line.
-      if (near || this.webrtc?.hasPeer(id)) {
+      if (near || onAir || this.webrtc?.hasPeer(id)) {
         const dist = Math.sqrt(d2);
         // The connection stays up while silenced, so turning it off is instant
         // and the other person is never told they were muted — which is a
@@ -4543,10 +4802,19 @@ export class OfficeScene extends Phaser.Scene {
         // Sharing an area is a conversation, not a soundscape: the far end of the
         // meeting room is as loud as the near end, which is the whole point of
         // standing in one.
-        const vol = this.dnd ? 0
+        //
+        // A broadcast is full volume from anywhere and is not silenced by
+        // do-not-disturb: that switch means "do not start a conversation with
+        // me", and an announcement to the whole office that quietly did not
+        // arrive is worse than one you can turn off — which the bar it puts on
+        // screen lets you do, for that broadcast alone.
+        const vol = onAir ? 1
+          : this.dnd ? 0
           : (near && mine) ? 1
           : dist <= FULL ? 1 : 1 - (dist - FULL) / (this.NEAR - FULL);
-        this.webrtc?.setPeerVolume(id, Math.max(0, Math.min(1, vol)));
+        // and everything else steps back under it, so the announcement can be
+        // made out over the conversation you were already having
+        this.webrtc?.setPeerVolume(id, Math.max(0, Math.min(1, vol * (onAir ? 1 : duck))));
       }
     }
     // My own ring stays: it is the one that says "you are audible", which is
@@ -4561,7 +4829,7 @@ export class OfficeScene extends Phaser.Scene {
     const forced = new Set<string>();
     if (this.webrtc?.screenOn) for (const id of this.remotes.keys()) forced.add(id);
     for (const pid of this.screenPresenter.values()) if (this.remotes.has(pid)) forced.add(pid);
-    this.webrtc?.syncPeers(nearbyIds, forced);
+    this.webrtc?.syncPeers(nearbyIds, forced, hearAnyway);
 
     // --- keep chat bubbles above their owner ---
     for (const [key, t] of this.bubbles) {

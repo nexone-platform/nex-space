@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts"
+    "start": "tsx src/index.ts",
+    "check:onair": "tsx scripts/onair-check.mts"
   },
   "dependencies": {
     "@colyseus/schema": "^3.0.0",

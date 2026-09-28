@@ -316,6 +316,22 @@ const EN: Record<string, string> = {
   "สร้างลิ้นชักและโฟลเดอร์ใน {cloud} แล้ว": "Drawer made, with a {cloud} folder behind it",
   "สร้างใน {cloud} ไม่สำเร็จ — ลิ้นชักถูกสร้างแบบไม่ผูกกับคลาวด์":
     "Could not make it in {cloud} — the drawer was made without a cloud folder",
+  // ---- speaking to the whole map ----
+  "ประกาศเสียงทั่วทั้งแมพ": "Announce to everyone on this map",
+  "กำลังประกาศ — ทุกคนในแมพนี้ได้ยินคุณ": "On air — everyone on this map can hear you",
+  "{name} กำลังประกาศ": "{name} is making an announcement",
+  "{name} กำลังประกาศอยู่ — รอให้จบก่อน": "{name} is announcing — wait for them to finish",
+  "อีกคน": "Somebody",
+  "หยุดประกาศ": "Stop announcing",
+  "ปิดเสียงประกาศนี้": "Mute this announcement",
+  "เปิดเสียงประกาศ": "Unmute",
+  "เฉพาะเจ้าของและผู้ดูแล Space เท่านั้นที่ประกาศได้":
+    "Only the space owner and its admins can announce",
+  "เปิดไมค์ไม่สำเร็จ — ยังประกาศไม่ได้": "Could not turn the microphone on — nothing to announce with",
+  "ประกาศครบ 5 นาทีแล้ว — ไมค์ประกาศถูกปิดให้อัตโนมัติ":
+    "Five minutes is the limit — the announcement microphone was turned off for you",
+  "คนในแมพมากเกินกว่าจะประกาศแบบ P2P ได้ — ต้องเปิด LiveKit ก่อน":
+    "Too many people here to announce peer-to-peer — this needs LiveKit turned on",
   "โฟลเดอร์": "Folder",
   "ชื่อโฟลเดอร์": "Folder name",
   "＋ สร้างโฟลเดอร์": "＋ New folder",

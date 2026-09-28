@@ -162,13 +162,20 @@ export class LiveKitManager implements MediaManager {
    * The volume still follows distance — see setPeerVolume. This is the coarse
    * cut, the fade is inside it.
    */
-  syncPeers(nearby: Set<string>, _forced?: Set<string>) {
-    this.subscribed = new Set(nearby);
+  syncPeers(nearby: Set<string>, _forced?: Set<string>, hearAnyway?: Set<string>) {
+    // Two questions, and they stopped having the same answer once one person
+    // could speak to the whole map. Whether to pull down their voice is the
+    // first; whether to pull down their picture is still proximity, because a
+    // broadcast is an announcement and not a face in everybody's sidebar.
+    const audible = hearAnyway?.size ? new Set([...nearby, ...hearAnyway]) : nearby;
+    this.subscribed = audible;
     this.room.remoteParticipants.forEach((p) => {
       const near = nearby.has(p.identity);
-      p.getTrackPublication(Track.Source.Microphone)?.setSubscribed(near);
+      const hear = audible.has(p.identity);
+      p.getTrackPublication(Track.Source.Microphone)?.setSubscribed(hear);
       p.getTrackPublication(Track.Source.Camera)?.setSubscribed(near);
-      if (!near) { p.setVolume(0); this.removeCamTile(p.identity); }
+      if (!near) this.removeCamTile(p.identity);
+      if (!hear) p.setVolume(0);
     });
   }
   setPeerVolume(id: string, vol: number) {
