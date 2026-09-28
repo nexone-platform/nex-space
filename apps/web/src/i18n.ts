@@ -291,7 +291,7 @@ const EN: Record<string, string> = {
   "Google เอกสาร": "Google Docs",
   "Google ชีต": "Google Sheets",
   "Google สไลด์": "Google Slides",
-  "อัปโหลดไฟล์ขึ้น Drive": "Upload a file to Drive",
+  "อัปโหลดไฟล์": "Upload a file",
   "ตั้งชื่อ": "Name it",
   "ต้องมีชื่อ": "It needs a name",
   "อัปโหลดไม่สำเร็จ": "Upload failed",

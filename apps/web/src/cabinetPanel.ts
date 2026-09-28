@@ -234,8 +234,11 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
     const newFolder = $("cab-newfolder");
     // Making a drawer is filing into the cabinet itself, not into a drawer.
     if (newFolder) newFolder.hidden = cab.level !== "file";
+    // Whether a cloud exists decides only the cloud row. Asked of what was
+    // actually found rather than of whether a menu happens to have been filled
+    // in yet — that ordering is what left an empty box on screen.
     const make = $("cab-make-row");
-    if (make) make.hidden = !mayFile || !$("cab-make") || !$("cab-make")!.childNodes.length;
+    if (make) make.hidden = !mayFile || !clouds.length;
     const pickRow = $("cab-add-ways");
     // The Google picker is Google's; with only OneDrive configured the paste
     // field is the way in, and a button that cannot work is worse than none.
@@ -430,10 +433,21 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
     const b = document.createElement("b");
     b.textContent = t("ใครเปิดตู้นี้ได้");
     const sel = document.createElement("select");
-    for (const [value, label] of [
+    /**
+     * The third word only where the server will take it.
+     *
+     * A cabinet at a desk may be private; one standing in a room may not, and
+     * asking for it there is a 400. Leaving it out of *both* was worse than
+     * either: a private desk cabinet found its own setting missing from the
+     * list, so the box showed blank — and changing anything else would have
+     * quietly stopped it being private.
+     */
+    const choices: [string, string][] = [
       ["members", t("ทุกคนในทีม")],
       ["listed", t("เฉพาะคนที่ระบุชื่อ")],
-    ] as const) {
+    ];
+    if (cab!.desk) choices.push(["private", t("เฉพาะฉัน (ผู้ดูแล Space ยังเห็นได้)")]);
+    for (const [value, label] of choices) {
       const o = document.createElement("option");
       o.value = value; o.textContent = label;
       sel.appendChild(o);
@@ -788,7 +802,9 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
     msg.appendChild(share);
   };
 
-  /** the clouds this deployment can actually reach */
+  /** the clouds this deployment can actually reach, once they are known */
+  let clouds: CloudName[] = [];
+
   const cloudsOnOffer = async (): Promise<CloudName[]> => {
     const [g, m] = await Promise.all([pickerConfig(), oneDriveConfig()]);
     const out: CloudName[] = [];
@@ -804,9 +820,12 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
    * question that was never worth asking.
    */
   const wireCloud = async () => {
+    clouds = await cloudsOnOffer();
+    // The panel may already be drawn by the time the answer arrives, and a row
+    // that only appears on the next redraw appears never.
+    draw();
     const sel = $<HTMLSelectElement>("cab-cloud");
     if (!sel) return;
-    const clouds = await cloudsOnOffer();
     sel.innerHTML = "";
     for (const c of clouds) {
       const o = document.createElement("option");
@@ -822,8 +841,7 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
     const upload = $<HTMLInputElement>("cab-upload");
     const uploadButton = $<HTMLButtonElement>("cab-upload-go");
     if (!menu || !upload || !uploadButton) return;
-    const clouds = await cloudsOnOffer();
-    if (!clouds.length) return;
+    if (!(await cloudsOnOffer()).length) return;
 
     if (!menu.options.length) {
       const head = document.createElement("option");
@@ -934,7 +952,6 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
 
       let drive: { fileId: string; url: string; provider: CloudName } | null = null;
       const which = CLOUD[cloud()];
-      const clouds = await cloudsOnOffer();
       if (clouds.length && confirm(t("สร้างโฟลเดอร์ใน {cloud} ให้ด้วยไหม — ไฟล์ที่ใส่ลิ้นชักนี้จะขึ้นไปอยู่ในนั้น")
         .replace("{cloud}", which.name))) {
         say(t("กำลังสร้างใน {cloud}…").replace("{cloud}", which.name));

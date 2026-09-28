@@ -1767,6 +1767,12 @@
         border-radius: 9px; padding: 5px 11px; cursor: pointer; font: 600 calc(12px * var(--ui)) var(--sans); }
       .cab-mini.danger { color: #a83c36; }
       .cab-none { color: var(--muted); font-size: calc(13px * var(--ui)); padding: 14px 2px; margin: 0; }
+      /* The hidden attribute is only display:none from the browser default
+         stylesheet, and any author display rule beats it. Every row in here
+         sets one, so "hidden" rows were still on screen — which is how an empty
+         dropdown appeared in a space with no cloud configured, and how the
+         add-a-document form stayed visible to somebody who may only read. */
+      #cab-modal [hidden], #cab-grants [hidden] { display: none !important; }
       .cab-ways { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
       .cab-or { color: var(--muted); font-size: calc(12px * var(--ui)); }
       .cab-adder { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
@@ -2864,11 +2870,18 @@
           <select id="cab-add-folder" hidden></select>
           <button type="submit">เพิ่มเข้าตู้</button>
         </form>
-        <div class="cab-ways" id="cab-make-row" hidden>
+        <!-- A drawer is a way of arranging the cabinet and needs no cloud at all,
+             so it does not live in the row that is hidden when there is none.
+             It did, and the result was a space with no cloud configured where
+             nobody could make a drawer — the button was there, inside a hidden
+             parent. -->
+        <div class="cab-ways" id="cab-drawer-row">
           <button type="button" class="cab-mini" id="cab-newfolder" hidden>＋ สร้างโฟลเดอร์</button>
+        </div>
+        <div class="cab-ways" id="cab-make-row" hidden>
           <select id="cab-cloud" class="cab-make" hidden></select>
           <select id="cab-make" class="cab-make"></select>
-          <button type="button" class="cab-mini" id="cab-upload-go">อัปโหลดไฟล์ขึ้น Drive</button>
+          <button type="button" class="cab-mini" id="cab-upload-go">อัปโหลดไฟล์</button>
           <input type="file" id="cab-upload" hidden />
           <button type="button" class="cab-mini" id="cab-upfolder-go">อัปโหลดทั้งโฟลเดอร์</button>
           <!-- webkitdirectory is what makes the file dialog choose a folder. It is
