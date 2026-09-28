@@ -13,6 +13,11 @@
  * set them down on a common canvas, standing on the same floor line.
  *
  *   node apps/web/scripts/fit-sprite.mjs --height 36 --canvas 32x40 a.png b.png
+ *   node apps/web/scripts/fit-sprite.mjs --height native --canvas 32x32 a.png b.png
+ *
+ * "native" trims and re-canvases without scaling anything. Use it when the art
+ * already came back at one scale — resampling art that does not need it only
+ * loses detail, and the floor line is the part that actually has to agree.
  *
  * The scale is a box filter, not nearest-neighbour. These are not hand-pixelled
  * tilesets — they arrive anti-aliased, with no clean block structure (checked:
@@ -33,11 +38,13 @@ const opt = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? args[i + 1] : fallback;
 };
-const HEIGHT = Number(opt("height", 36));
+const asked = String(opt("height", "36"));
+const NATIVE = asked === "native";
+const HEIGHT = NATIVE ? 0 : Number(asked);
 const [CW, CH] = String(opt("canvas", "32x40")).split("x").map(Number);
 const files = args.filter((a) => a.endsWith(".png"));
 
-if (!files.length || !HEIGHT || !CW || !CH) {
+if (!files.length || (!NATIVE && !HEIGHT) || !CW || !CH) {
   console.error("usage: fit-sprite.mjs --height 36 --canvas 32x40 <file.png…>");
   process.exit(1);
 }
@@ -97,10 +104,10 @@ function boxScale(img, box, w, h) {
 for (const file of files) {
   const img = PNG.sync.read(readFileSync(file));
   const box = drawnBox(img);
-  const h = HEIGHT;
-  const w = Math.max(1, Math.round((box.w * h) / box.h));
-  if (w > CW) {
-    console.error(`! ${basename(file)} would be ${w}px wide on a ${CW}px canvas`);
+  const h = NATIVE ? box.h : HEIGHT;
+  const w = NATIVE ? box.w : Math.max(1, Math.round((box.w * h) / box.h));
+  if (w > CW || h > CH) {
+    console.error(`! ${basename(file)} is ${w}x${h} and will not fit a ${CW}x${CH} canvas`);
     process.exit(1);
   }
   const small = boxScale(img, box, w, h);
@@ -116,5 +123,6 @@ for (const file of files) {
     }
   }
   writeFileSync(file, PNG.sync.write(out));
-  console.log(`${basename(file).padEnd(20)} drawn ${box.w}x${box.h} -> ${w}x${h} on ${CW}x${CH}`);
+  console.log(`${basename(file).padEnd(20)} drawn ${box.w}x${box.h} -> ${w}x${h}`
+    + ` on ${CW}x${CH}${NATIVE ? " (not resampled)" : ""}`);
 }

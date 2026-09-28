@@ -310,6 +310,16 @@ export class OfficeScene extends Phaser.Scene {
     }
     // props may name a folder ("office/cs-desk"); bare keys come from furniture/
     const items = new Set(FURNITURE.map((f) => f[0]));
+    /**
+     * The two the map never mentions.
+     *
+     * A desk pedestal is laid out as "desk-cabinet" and swapped to one of these
+     * once the server says whether it is locked or full. Nothing in the map
+     * names them, so nothing loaded them, so the swap silently did nothing and
+     * every cabinet in the room wore the same face — the one state the art was
+     * made to distinguish, never shown.
+     */
+    if (items.has("desk-cabinet")) { items.add("desk-locked"); items.add("desk-full"); }
     const loadProp = (key: string, fallback: string) => {
       const { folder, file } = propPath(key, fallback);
       this.load.image(key, `/assets/${folder}/${file}.png`);
