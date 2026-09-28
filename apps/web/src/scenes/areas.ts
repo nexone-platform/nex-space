@@ -34,9 +34,9 @@ export interface PrivateArea {
 export const AREAS: Record<string, PrivateArea[]> = {
   // walled rooms across the top, plus the two tinted corners downstairs
   classic: [
-    { id: "lounge",  label: "โซนพักผ่อน", x0: 5,  y0: 4,  x1: 11, y1: 9 },
-    { id: "pod",     label: "โซนทีม",     x0: 13, y0: 4,  x1: 18, y1: 9 },
-    { id: "meeting", label: "ห้องประชุม", x0: 20, y0: 4,  x1: 26, y1: 9 },
+    { id: "lounge",  label: "โซนพักผ่อน", x0: 5,  y0: 4,  x1: 10, y1: 9 },
+    { id: "pod",     label: "โซนทีม",     x0: 12, y0: 4,  x1: 19, y1: 9 },
+    { id: "meeting", label: "ห้องประชุม", x0: 21, y0: 4,  x1: 26, y1: 9 },
     { id: "pantry",  label: "ห้องครัว",   x0: 5,  y0: 15, x1: 10, y1: 19 },
     { id: "game",    label: "ห้องเกม",    x0: 21, y0: 15, x1: 26, y1: 19 },
   ],

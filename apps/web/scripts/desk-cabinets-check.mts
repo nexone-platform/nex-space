@@ -1,10 +1,19 @@
 /**
- * Every desk has a cabinet, and every cabinet has somewhere to stand.
+ * Every desk has a cabinet, every cabinet has somewhere to stand, and there is
+ * still a way to walk between them.
  *
- * The pedestal beside a desk is placed by a rule — one tile to the left — not
- * by hand. That is what keeps it right when a desk is added, and also what
- * makes it silent when it is wrong: move a desk against a wall and its cabinet
- * is drawn inside that wall, on a map nobody opens until a customer does.
+ * The pedestal beside a desk is placed by a rule, not by hand. That is what
+ * keeps it right when a desk is added, and also what makes it silent when it is
+ * wrong: move a desk against a wall and its cabinet is drawn inside that wall,
+ * on a map nobody opens until a customer does.
+ *
+ * The aisle is here for a sharper reason. Putting a cabinet beside every desk
+ * is the obvious placement and it closed the pastel pod: six desks, six
+ * pedestals, twelve columns of furniture in a room eight columns wide, and
+ * nothing to walk down. Nothing failed — the map loaded, every cabinet opened,
+ * and the room was simply unusable. So the gap the layout leaves is measured in
+ * tiles and required to stay at least one avatar wide, which is the only part
+ * of this that a future desk can quietly undo.
  *
  * Cheap to check and impossible to notice otherwise, so it is checked.
  *
@@ -22,6 +31,29 @@ g.localStorage = {
 };
 
 const { THEMES } = await import("../src/scenes/mapThemes.js");
+
+/**
+ * How wide the art is, in tiles, measured off the PNGs themselves: the pastel
+ * and department desks are 32px at native size, the CoolSchool desk 96px drawn
+ * at half, and the pedestal 20px. Written down rather than derived because a
+ * theme carries positions, not pixels — and a number that is wrong here fails
+ * this script loudly, which is the whole point of it.
+ */
+const DESK_W: Record<string, number> = { classic: 1, departments: 1, office: 1.5 };
+const CAB_W = 20 / 32;
+
+/** the widest clear run between the leftmost and rightmost thing in a row */
+const widestGap = (spans: [number, number][]): number => {
+  const sorted = [...spans].sort((a, b) => a[0] - b[0]);
+  let reach = sorted[0]?.[1] ?? 0, best = 0;
+  for (const [from, to] of sorted.slice(1)) {
+    best = Math.max(best, from - reach);
+    reach = Math.max(reach, to);
+  }
+  return best;
+};
+
+const overlap = (a: [number, number], b: [number, number]) => a[0] < b[1] && b[0] < a[1];
 
 let pass = 0, fail = 0;
 const ok = (n: string, c: boolean, x = "") => {
@@ -67,6 +99,35 @@ for (const [id, th] of Object.entries(THEMES)) {
   // unreachable, and the pastel pod has exactly one way in.
   ok(`  · all of them walk-through`, props.every((f) => f[3] === false),
     "a pedestal that blocked its tile could seal a pod");
+
+  // ---- and now the room the layout leaves to walk in --------------------------
+  const dw = DESK_W[id] ?? 1;
+  const box = (x: number, w: number): [number, number] => [x - w / 2, x + w / 2];
+  const cabinetOf = (deskId: string) => pedestals.find((p) => p.desk === deskId);
+
+  const sat = new Map<number, typeof desks>();
+  for (const d of desks) sat.set(d.y, [...(sat.get(d.y) ?? []), d]);
+
+  let tightest = Infinity, tightestRow = "";
+  let wedged = "";
+  for (const [row, inRow] of sat) {
+    const deskBoxes = inRow.map((d) => box(d.x, dw));
+    const cabBoxes = inRow.flatMap((d) => {
+      const c = cabinetOf(d.id);
+      return c ? [box(c.x, CAB_W)] : [];
+    });
+    for (const c of cabBoxes) {
+      for (const b of deskBoxes) if (overlap(c, b)) wedged = `row ${row}`;
+    }
+    const gap = widestGap([...deskBoxes, ...cabBoxes]);
+    if (gap < tightest) { tightest = gap; tightestRow = `row ${row}`; }
+  }
+
+  // One tile is one avatar. Anything less is a gap you can see and not use.
+  ok(`  · an aisle left in every desk row`, tightest >= 0.95,
+    `narrowest ${tightest.toFixed(2)} tile(s), ${tightestRow}`);
+  ok(`  · and no pedestal wedged into a desk`, wedged === "",
+    wedged || `${pedestals.length} checked against ${desks.length} desk(s)`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

@@ -26,28 +26,42 @@ export interface Interactive {
   map?: string;
 }
 
-/** a desk players can claim: the desk tile plus the seat to sit on */
-export interface Desk { id: string; x: number; y: number; sx: number; sy: number }
+/**
+ * A desk players can claim: the desk tile, the seat to sit on, and — where the
+ * default will not do — where its own filing pedestal stands.
+ */
+export interface Desk {
+  id: string; x: number; y: number; sx: number; sy: number;
+  /** the pedestal's centre; defaults to the tile on the desk's right */
+  cx?: number; cy?: number;
+}
 
 /**
  * The little cabinet at one desk, and the drawer it opens.
  *
- * Behind the desk rather than beside it. Beside was the obvious place and it
- * cost the room its aisles: with a desk every two columns and a cabinet in
- * every gap, the team pod became six full columns of furniture with nowhere to
- * walk between them. Standing each cabinet behind its own desk gives every
- * other column back as a gangway, and reads correctly too — a filing cabinet
- * against the wall with the desk in front of it is where one actually stands.
+ * Beside the desk, which is where a pedestal belongs and what was asked for
+ * twice. The catch is that "beside" is only half a placement: a desk every two
+ * columns with a cabinet in every gap turns a pod into a solid bank of
+ * furniture with nowhere to walk. So the rule here is paired with room made for
+ * it in each layout — the pastel pod is three columns wider than it was, the
+ * department rows are spaced on a three-tile pitch, and the open plan alternates
+ * sides so two pedestals share one gap and leave the next one empty. The check
+ * script measures the aisle that comes out; a layout that closes it fails there
+ * rather than on a customer's screen.
  *
  * Not solid, deliberately. A pedestal that blocked its tile would narrow the
- * walkway further, and in the pastel office that walkway is the only way into
- * the pod from its door. Furniture that cannot be walked through is worth less
- * than desks that can be reached.
+ * walkway again, and in the pastel office that walkway is the only way into the
+ * pod from its door. Furniture that cannot be walked through is worth less than
+ * desks that can be reached.
  */
-export const deskCabinetProp = (d: Desk): Prop => ["desk-cabinet", d.x, d.y - 1, false];
+export const cabinetAtDeskX = (d: Desk): number => d.cx ?? d.x + 1;
+export const cabinetAtDeskY = (d: Desk): number => d.cy ?? d.y;
+
+export const deskCabinetProp = (d: Desk): Prop =>
+  ["desk-cabinet", cabinetAtDeskX(d), cabinetAtDeskY(d), false];
 
 export const deskCabinetSpot = (d: Desk): Interactive => ({
-  type: "cabinet", x: d.x, y: d.y - 1, desk: d.id,
+  type: "cabinet", x: cabinetAtDeskX(d), y: cabinetAtDeskY(d), desk: d.id,
   label: "เปิดตู้ส่วนตัว", icon: "",
 });
 
@@ -88,12 +102,16 @@ const CLASSIC_BUILD = { x0: 4, y0: 3, x1: 27, y1: 20 };
 // The ids are kept exactly as they were even though every desk moved into the
 // pod: they are what people have claimed, and renaming them would silently
 // drop those claims. Order here is the pod read left-to-right, top row first.
+// Laid out desk, pedestal, aisle — three columns per person, twice over, with
+// the third pedestal against the far wall. Eight columns, which is why the pod
+// borrowed one from the lounge and one from the meeting room: at six it could
+// hold the desks and the cabinets or an aisle, and not both.
 const CLASSIC_DESKS: Desk[] = [
-  { id: "office-1", x: 14, y: 5, sx: 14, sy: 6 },
-  { id: "office-2", x: 16, y: 5, sx: 16, sy: 6 },
+  { id: "office-1", x: 12, y: 5, sx: 12, sy: 6 },
+  { id: "office-2", x: 15, y: 5, sx: 15, sy: 6 },
   { id: "hall-1", x: 18, y: 5, sx: 18, sy: 6 },
-  { id: "hall-2", x: 14, y: 8, sx: 14, sy: 9 },
-  { id: "hall-3", x: 16, y: 8, sx: 16, sy: 9 },
+  { id: "hall-2", x: 12, y: 8, sx: 12, sy: 9 },
+  { id: "hall-3", x: 15, y: 8, sx: 15, sy: 9 },
   { id: "hall-4", x: 18, y: 8, sx: 18, sy: 9 },
 ];
 
@@ -104,15 +122,15 @@ export const classicTheme: MapTheme = {
   cols: 32,
   rows: 25,
   spawn: { x: 15, y: 18 },              // entrance hall, just inside the front door
-  meetingRoom: { x0: 20, x1: 26, y0: 4, y1: 9 },
+  meetingRoom: { x0: 21, x1: 26, y0: 4, y1: 9 },
 
   floorAt(x, y) {
     const inBuild = x >= 5 && x <= 26 && y >= 4 && y <= 19;
     if (x >= 13 && x <= 18 && y >= 21 && y <= 23) return 8; // stone plaza under the fountain
     if (!inBuild) return 1;                                 // grass
-    if (x >= 5 && x <= 11 && y >= 4 && y <= 9) return 3;    // lounge
-    if (x >= 13 && x <= 18 && y >= 4 && y <= 9) return 5;   // private office
-    if (x >= 20 && x <= 26 && y >= 4 && y <= 9) return 4;   // meeting
+    if (x >= 5 && x <= 10 && y >= 4 && y <= 9) return 3;    // lounge
+    if (x >= 12 && x <= 19 && y >= 4 && y <= 9) return 5;   // team pod
+    if (x >= 21 && x <= 26 && y >= 4 && y <= 9) return 4;   // meeting
     if (x >= 5 && x <= 10 && y >= 15 && y <= 19) return 2;  // pantry
     if (x >= 21 && x <= 26 && y >= 15 && y <= 19) return 6; // game room
     return 0;                                               // hall
@@ -123,34 +141,39 @@ export const classicTheme: MapTheme = {
     const add = (x: number, y: number) => w.add(`${x},${y}`);
     rect(add, CLASSIC_BUILD.x0, CLASSIC_BUILD.y0, CLASSIC_BUILD.x1, CLASSIC_BUILD.y1);
     for (let x = 5; x <= 26; x++) add(x, 10);               // hall / rooms partition
-    for (let y = 4; y <= 9; y++) { add(12, y); add(19, y); } // between the three top rooms
-    // doors. The team pod's is at 13,10 rather than the middle: column 13 is its
-    // walkway, so entering in the middle would put you on top of a chair
-    for (const d of ["15,20", "16,20", "8,10", "13,10", "23,10"]) w.delete(d);
+    // The two dividers each moved out one column, into rooms that hold nothing
+    // but soft furniture, so the pod between them could hold desks, pedestals
+    // and a way past both.
+    for (let y = 4; y <= 9; y++) { add(11, y); add(20, y); } // between the three top rooms
+    // doors. The team pod's is at 14,10 rather than the middle: column 14 is one
+    // of its two aisles, so entering in the middle would put you on top of a desk
+    for (const d of ["15,20", "16,20", "8,10", "14,10", "23,10"]) w.delete(d);
     return w;
   },
 
   furniture: [
     // lounge (pink)
     ["sofa-yellow", 6, 5, false], ["sofa-pink", 9, 5, false],
-    ["side-table", 7.5, 6, false], ["floor-lamp", 11, 5, false],
+    ["side-table", 7.5, 6, false], ["floor-lamp", 10, 5, false],
     ["plant-large", 5, 8, true], ["rug-round", 8, 7, false],
-    // team pod (blue) — a proper desk bank: two rows of three facing an aisle at
-    // y=7, with column 13 left clear as the walkway in from the door at 13,10
-    // wall props sit on the gap columns (13, 15, 17) so nothing stands on a desk
-    ["whiteboard", 15, 4, true], ["plant-small", 13, 4, false], ["plant-small", 17, 4, false],
-    ["desk", 14, 5, true], ["chair-12-north", 14, 6, false],
-    ["desk-monitor", 16, 5, true], ["chair-13-north", 16, 6, false],
+    // team pod (blue) — two rows of three facing the cross aisle at y=7. Each
+    // desk has its pedestal on its right (13, 16, 19) and columns 14 and 17 run
+    // clear from the wall to the door at 14,10. The wall props sit above the
+    // desks rather than on the aisles, which is the one place in this room
+    // where standing still is free.
+    ["whiteboard", 15, 4, true], ["plant-small", 12, 4, false], ["plant-small", 18, 4, false],
+    ["desk", 12, 5, true], ["chair-12-north", 12, 6, false],
+    ["desk-monitor", 15, 5, true], ["chair-13-north", 15, 6, false],
     ["desk", 18, 5, true], ["chair-14-north", 18, 6, false],
-    ["desk-monitor", 14, 8, true], ["chair-15-north", 14, 9, false],
-    ["desk", 16, 8, true], ["chair-9-north", 16, 9, false],
+    ["desk-monitor", 12, 8, true], ["chair-15-north", 12, 9, false],
+    ["desk", 15, 8, true], ["chair-9-north", 15, 9, false],
     ["desk-monitor", 18, 8, true], ["chair-11-north", 18, 9, false],
     // meeting room (mint) — one matched executive set
     ["conference-table", 23, 6, true],
     ["chair-10-south", 22, 5, false], ["chair-10-south", 24, 5, false],
     ["chair-10-north", 22, 8, false], ["chair-10-north", 24, 8, false],
     ["chair-10-east", 21, 6, false], ["chair-10-west", 25, 6, false],
-    ["plant-small", 20, 4, false], ["plant-small", 26, 4, false],
+    ["plant-small", 21, 4, false], ["plant-small", 26, 4, false],
     // hall: reception and a walkway. The desks that used to be scattered here in
     // pairs now live in the team pod above, so this reads as an entrance again
     ["reception-desk", 15, 16, true], ["plant", 17, 16, true],
@@ -209,7 +232,7 @@ export const classicTheme: MapTheme = {
     ["window", 4, 8], ["window", 27, 8],
     ["glass-panel", 21, 10], ["glass-panel", 25, 10],
     ["art-landscape", 12, 3], ["art-poster", 6, 10], ["wall-shelf", 10, 10],
-    ["wall-clock", 14, 10], ["corkboard", 17, 10], ["neon-sign", 24, 3],
+    ["wall-clock", 13, 10], ["corkboard", 17, 10], ["neon-sign", 24, 3],
   ],
 
   // The ids are kept exactly as they were even though every desk moved into the
@@ -245,14 +268,15 @@ const DEPT_STATIONS: { id: string; x: number; y: number; desk: string; chair: st
   { id: "eng-2", x: 8, y: 4, desk: "desk-monitor", chair: "chair-13-north" },
   { id: "eng-3", x: 5, y: 7, desk: "desk-monitor", chair: "chair-14-north" },
   { id: "eng-4", x: 8, y: 7, desk: "desk", chair: "chair-15-north" },
-  // design (mint), a row of three
-  { id: "design-1", x: 16, y: 4, desk: "desk", chair: "chair-9-north" },
-  { id: "design-2", x: 18, y: 4, desk: "desk-monitor", chair: "chair-11-north" },
+  // design (mint), a row of three on a three-tile pitch: desk, pedestal, aisle
+  { id: "design-1", x: 14, y: 4, desk: "desk", chair: "chair-9-north" },
+  { id: "design-2", x: 17, y: 4, desk: "desk-monitor", chair: "chair-11-north" },
   { id: "design-3", x: 20, y: 4, desk: "desk", chair: "chair-16-north" },
-  // sales (pink), a row of three downstairs
-  { id: "sales-1", x: 5, y: 16, desk: "desk-monitor", chair: "chair-12-north" },
+  // sales (pink), a row of three downstairs on the same pitch, shifted one off
+  // the west wall so the room keeps a margin on the side its plant stands
+  { id: "sales-1", x: 4, y: 16, desk: "desk-monitor", chair: "chair-12-north" },
   { id: "sales-2", x: 7, y: 16, desk: "desk", chair: "chair-13-north" },
-  { id: "sales-3", x: 9, y: 16, desk: "desk-monitor", chair: "chair-14-north" },
+  { id: "sales-3", x: 10, y: 16, desk: "desk-monitor", chair: "chair-14-north" },
 ];
 
 const DEPT_DESKS: Desk[] = DEPT_STATIONS.map((s) => ({ id: s.id, x: s.x, y: s.y, sx: s.x, sy: s.y + 1 }));
@@ -318,8 +342,9 @@ export const departmentsTheme: MapTheme = {
     // corridor: reception facing the front door, plants along the run
     ["reception-desk", 15, 12, true], ["rug", 15, 13, false],
     ["plant-large", 3, 12, true], ["plant-large", 28, 12, true],
-    // sales
-    ["plant", 3, 20, false], ["plant-small", 11, 15, false],
+    // sales — the small plant moved off the east wall, where the third desk's
+    // pedestal now stands under it
+    ["plant", 3, 20, false], ["plant-small", 3, 15, false],
     // pantry
     // A 68px unit covers three tile rows wherever it sits, so this 5-wide room
     // takes exactly one of them: two put diagonally across each other walled it
@@ -415,12 +440,27 @@ const OFFICE_STATIONS: { id: string; x: number; y: number }[] = [
   { id: "open-9", x: 13, y: 7 }, { id: "open-10", x: 16, y: 7 },
 ];
 
+// How far a pedestal sits from the middle of its desk: half the desk plus half
+// the 20px cabinet, and a hair of daylight so the two are beside each other
+// rather than touching.
+const CAB_OFF = DESK_W / 2 + 10 / 32 + 3 / 32;
+
 // derived from the same helpers station() uses, so the claim target and the
 // seat can never drift from where the sprites actually are
-const OFFICE_DESKS: Desk[] = OFFICE_STATIONS.map((s) => ({
+const OFFICE_DESKS: Desk[] = OFFICE_STATIONS.map((s, i) => ({
   id: s.id,
   x: deskCentre(s.x), y: s.y + DESK_W / 2, // where the nameplate sits
   sx: deskCentre(s.x), sy: seatRow(s.y),   // the chair in front of it
+  /**
+   * Sides alternate along the row. This room is already spaced as tightly as
+   * five desks and a meeting wing allow, so there is nowhere to widen it into;
+   * what there is, is a 1.5-tile gap between every pair of desks. Putting each
+   * pedestal on the side facing its neighbour's fills that gap with two of them
+   * and leaves the next gap completely empty — one clear aisle per pair rather
+   * than five squeezed ones, which is the difference between walking through
+   * and edging past.
+   */
+  cx: deskCentre(s.x) + (i % 5 % 2 === 0 ? CAB_OFF : -CAB_OFF),
 }));
 
 export const officeTheme: MapTheme = {
