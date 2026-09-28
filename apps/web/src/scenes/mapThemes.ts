@@ -30,21 +30,24 @@ export interface Interactive {
 export interface Desk { id: string; x: number; y: number; sx: number; sy: number }
 
 /**
- * The little cabinet beside one desk, and the drawer it opens.
+ * The little cabinet at one desk, and the drawer it opens.
  *
- * One tile to the left, which in all three layouts is the gap between desks
- * rather than a desk, a chair or a wall — checked against each of them, not
- * assumed.
+ * Behind the desk rather than beside it. Beside was the obvious place and it
+ * cost the room its aisles: with a desk every two columns and a cabinet in
+ * every gap, the team pod became six full columns of furniture with nowhere to
+ * walk between them. Standing each cabinet behind its own desk gives every
+ * other column back as a gangway, and reads correctly too — a filing cabinet
+ * against the wall with the desk in front of it is where one actually stands.
  *
  * Not solid, deliberately. A pedestal that blocked its tile would narrow the
- * walkway between desks, and in the pastel office that walkway is the only way
- * into the pod from its door. Furniture that cannot be walked through is worth
- * less than desks that can be reached.
+ * walkway further, and in the pastel office that walkway is the only way into
+ * the pod from its door. Furniture that cannot be walked through is worth less
+ * than desks that can be reached.
  */
-export const deskCabinetProp = (d: Desk): Prop => ["desk-cabinet", d.x - 1, d.y, false];
+export const deskCabinetProp = (d: Desk): Prop => ["desk-cabinet", d.x, d.y - 1, false];
 
 export const deskCabinetSpot = (d: Desk): Interactive => ({
-  type: "cabinet", x: d.x - 1, y: d.y, desk: d.id,
+  type: "cabinet", x: d.x, y: d.y - 1, desk: d.id,
   label: "เปิดตู้ส่วนตัว", icon: "",
 });
 
