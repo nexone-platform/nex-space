@@ -19,6 +19,7 @@ import {
   oneDriveConfig, createFolderInOneDrive, uploadToOneDrive, uploadFolderToOneDrive,
   shareOneDriveByLink, canReachInOneDrive,
 } from "./oneDrive";
+import { pickFromOneDrive } from "./oneDrivePicker";
 
 interface Doc {
   id: string;
@@ -240,9 +241,13 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
     const make = $("cab-make-row");
     if (make) make.hidden = !mayFile || !clouds.length;
     const pickRow = $("cab-add-ways");
-    // The Google picker is Google's; with only OneDrive configured the paste
-    // field is the way in, and a button that cannot work is worse than none.
-    if (pickRow && !pickRow.hidden && $("cab-pick")?.hidden) pickRow.hidden = true;
+    // Shown when either picker can be used; each button hides itself when its
+    // own cloud is not configured, and a button that cannot work is worse than
+    // no button.
+    if (pickRow) {
+      pickRow.hidden = !mayFile
+        || (!!$("cab-pick")?.hidden && !!$("cab-pick-ms")?.hidden);
+    }
     drawFolderChoice();
   };
 
@@ -619,6 +624,61 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
    * returns is posted to the same route a pasted link goes through, so there is
    * one way in and one set of checks on it.
    */
+  /**
+   * File everything a picker handed back.
+   *
+   * Shared by both, because the half after choosing is the same either way —
+   * and it is the half with the counting, the clearing and the message in it.
+   */
+  const fileThePicked = async (picked: {
+    fileId: string; title: string; url: string; mime: string | null; kind: "file" | "folder";
+  }[], from: CloudName) => {
+    if (!picked.length) { say(""); return; }
+    let filed = 0;
+    let refused = "";
+    for (const one of picked) {
+      const said = await ask("POST", `/workspaces/${slug}/cabinets/${cab!.id}/docs`, {
+        title: one.title, url: one.url, provider: from,
+        fileId: one.fileId, mime: one.mime, kind: one.kind,
+        folderId: chosenFolder(),
+      });
+      if (said.status !== 201) { refused = String(said.error ?? ""); continue; }
+      docs.unshift(said.doc);
+      countShift(said.doc.folderId, 1);
+      filed++;
+    }
+    $<HTMLInputElement>("cab-add-title")!.value = "";
+    $<HTMLInputElement>("cab-add-url")!.value = "";
+    draw();
+    if (!filed) { say(refused || t("เพิ่มเอกสารไม่สำเร็จ"), true); return; }
+    say(filed === picked.length
+      ? t("เพิ่ม {n} รายการแล้ว").replace("{n}", String(filed))
+      : t("เพิ่ม {n} จาก {all} รายการ — ที่เหลือไม่สำเร็จ")
+        .replace("{n}", String(filed)).replace("{all}", String(picked.length)),
+      filed !== picked.length);
+  };
+
+  const wireOneDrivePicker = async () => {
+    const button = $<HTMLButtonElement>("cab-pick-ms");
+    if (!button) return;
+    button.hidden = !(await oneDriveConfig()).available;
+    if (button.hidden) return;
+    button.onclick = async () => {
+      button.disabled = true;
+      say(t("กำลังเปิด OneDrive…"));
+      try {
+        await fileThePicked(await pickFromOneDrive(), "microsoft");
+      } catch (e) {
+        // Whatever Microsoft said, rather than a shrug: this is the one path
+        // here that could not be tried against a real account before shipping.
+        say(`${t("เปิด OneDrive ไม่ได้")} — ${(e as Error).message}`, true);
+        console.warn("[onedrive]", e);
+      } finally {
+        button.disabled = false;
+      }
+    };
+  };
+
   const wirePicker = async () => {
     const button = $<HTMLButtonElement>("cab-pick");
     if (!button) return;
@@ -633,34 +693,7 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
       button.disabled = true;
       say(t("กำลังเปิด Google Drive…"));
       try {
-        const picked = await pickFromDrive(driveParent());
-        if (!picked.length) { say(""); return; }
-        let filed = 0;
-        let refused = "";
-        for (const one of picked) {
-          const said = await ask("POST", `/workspaces/${slug}/cabinets/${cab!.id}/docs`, {
-            title: one.title, url: one.url, provider: "google",
-            fileId: one.fileId, mime: one.mime, kind: one.kind,
-            folderId: chosenFolder(),
-          });
-          if (said.status !== 201) { refused = String(said.error ?? ""); continue; }
-          docs.unshift(said.doc);
-          countShift(said.doc.folderId, 1);
-          filed++;
-        }
-        // Whatever was half-typed in the paste fields is gone: the documents are
-        // in, and leaving the other way in loaded invites pressing its button.
-        $<HTMLInputElement>("cab-add-title")!.value = "";
-        $<HTMLInputElement>("cab-add-url")!.value = "";
-        draw();
-        // Said as a count, because several can come back at once now and a bare
-        // "filed" after choosing five would not say which.
-        if (!filed) { say(refused || t("เพิ่มเอกสารไม่สำเร็จ"), true); return; }
-        say(filed === picked.length
-          ? t("เพิ่ม {n} รายการแล้ว").replace("{n}", String(filed))
-          : t("เพิ่ม {n} จาก {all} รายการ — ที่เหลือไม่สำเร็จ")
-            .replace("{n}", String(filed)).replace("{all}", String(picked.length)),
-          filed !== picked.length);
+        await fileThePicked(await pickFromDrive(driveParent()), "google");
       } catch (e) {
         // Google blocked, offline, or the person closed the consent window.
         // One sentence beside the button; the paste field still works.
@@ -1080,6 +1113,7 @@ export function setupCabinetPanel(slug: string): CabinetPanel {
   wireNewFolder();
   wireFolderUpload();
   void wirePicker();
+  void wireOneDrivePicker();
   void wireCloud();
   void wireMake();
 

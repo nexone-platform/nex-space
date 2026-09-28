@@ -51,7 +51,15 @@ const randomish = () => {
   return b64url(b.buffer);
 };
 
-let held: { token: string; until: number } | null = null;
+/**
+ * One held token per audience.
+ *
+ * Graph and the file picker want tokens for different things — the picker is
+ * served by OneDrive or SharePoint and will not take a Graph token — so they
+ * cannot share a slot. Keyed by scope, with a minute shaved off each life so a
+ * call never goes out with one that expires on the way.
+ */
+const held = new Map<string, { token: string; until: number }>();
 
 /**
  * An access token for this person's OneDrive.
@@ -61,7 +69,29 @@ let held: { token: string; until: number } | null = null;
  * folder and then filing it would be two sign-in windows for one action.
  */
 export async function oneDriveToken(): Promise<string> {
-  if (held && held.until > Date.now()) return held.token;
+  const cfg = await oneDriveConfig();
+  return signIn(cfg.scope, cfg.tenant);
+}
+
+/**
+ * A token for the file picker, which wants one for the host serving it.
+ *
+ * A personal account's picker lives on onedrive.live.com and speaks the older
+ * scope names against the consumers authority; a work account's is a
+ * SharePoint host and takes the ordinary .default. Both are documented; neither
+ * is guessed.
+ */
+export async function signInForOneDrive(resource: string): Promise<string> {
+  const cfg = await oneDriveConfig();
+  const consumer = /onedrive\.live\.com|1drv\.ms/.test(resource);
+  return consumer
+    ? signIn("OneDrive.ReadWrite", "consumers")
+    : signIn(`${resource.replace(/\/$/, "")}/.default`, cfg.tenant);
+}
+
+async function signIn(scope: string, authority: string): Promise<string> {
+  const have = held.get(scope);
+  if (have && have.until > Date.now()) return have.token;
   const cfg = await oneDriveConfig();
   if (!cfg.available || !cfg.clientId) throw new Error("OneDrive is not configured");
 
@@ -69,14 +99,14 @@ export async function oneDriveToken(): Promise<string> {
   const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
   const state = randomish();
 
-  const url = new URL(`https://login.microsoftonline.com/${encodeURIComponent(cfg.tenant)}/oauth2/v2.0/authorize`);
+  const url = new URL(`https://login.microsoftonline.com/${encodeURIComponent(authority)}/oauth2/v2.0/authorize`);
   for (const [k, v] of Object.entries({
     client_id: cfg.clientId,
     response_type: "code",
     redirect_uri: cfg.redirectUri,
     // The code comes back in the fragment, which no server ever sees.
     response_mode: "fragment",
-    scope: cfg.scope,
+    scope,
     state,
     code_challenge: challenge,
     code_challenge_method: "S256",
@@ -84,7 +114,7 @@ export async function oneDriveToken(): Promise<string> {
 
   const code = await throughAPopup(url.toString(), state);
 
-  const r = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(cfg.tenant)}/oauth2/v2.0/token`, {
+  const r = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(authority)}/oauth2/v2.0/token`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -99,7 +129,10 @@ export async function oneDriveToken(): Promise<string> {
   if (!r.ok || !said.access_token) {
     throw new Error(said.error_description || said.error || `Microsoft answered ${r.status}`);
   }
-  held = { token: said.access_token, until: Date.now() + (Number(said.expires_in) || 3600) * 1000 - 60_000 };
+  held.set(scope, {
+    token: said.access_token,
+    until: Date.now() + (Number(said.expires_in) || 3600) * 1000 - 60_000,
+  });
   return said.access_token;
 }
 
