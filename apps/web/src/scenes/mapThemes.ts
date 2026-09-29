@@ -157,6 +157,15 @@ const CLASSIC_BUILD = { x0: 4, y0: 3, x1: 27, y1: 20 };
 // the third pedestal against the far wall. Eight columns, which is why the pod
 // borrowed one from the lounge and one from the meeting room: at six it could
 // hold the desks and the cabinets or an aisle, and not both.
+//
+// Six of these are in the pod and four are in the hall below it, and the split
+// is not an aesthetic choice. This layout is offered to teams of up to ten and
+// seated six, which is the bug; the pod is boxed in on three sides and cannot
+// grow, and the six desks in it are what six people have already claimed.
+// Moving any of them to make a tidier arrangement would drop those claims
+// silently, so the four new ones go where there is room: the open band of hall
+// directly under the pod, on the same three-column pitch, which is how the
+// bigger layouts are arranged throughout.
 const CLASSIC_DESKS: Desk[] = [
   { id: "office-1", x: 12, y: 5, sx: 12, sy: 6 },
   { id: "office-2", x: 15, y: 5, sx: 15, sy: 6 },
@@ -164,6 +173,11 @@ const CLASSIC_DESKS: Desk[] = [
   { id: "hall-2", x: 12, y: 8, sx: 12, sy: 9 },
   { id: "hall-3", x: 15, y: 8, sx: 15, sy: 9 },
   { id: "hall-4", x: 18, y: 8, sx: 18, sy: 9 },
+  // and the open band of hall below the pod
+  { id: "hall-5", x: 13, y: 11, sx: 13, sy: 12 },
+  { id: "hall-6", x: 16, y: 11, sx: 16, sy: 12 },
+  { id: "hall-7", x: 13, y: 14, sx: 13, sy: 15 },
+  { id: "hall-8", x: 16, y: 14, sx: 16, sy: 15 },
 ];
 
 export const classicTheme: MapTheme = {
@@ -225,8 +239,13 @@ export const classicTheme: MapTheme = {
     ["chair-10-north", 22, 8, false], ["chair-10-north", 24, 8, false],
     ["chair-10-east", 21, 6, false], ["chair-10-west", 25, 6, false],
     ["plant-small", 21, 4, false], ["plant-small", 26, 4, false],
-    // hall: reception and a walkway. The desks that used to be scattered here in
-    // pairs now live in the team pod above, so this reads as an entrance again
+    // hall: four more desks under the pod, then reception and the way in. The
+    // desks are on the pod's own pitch — desk, pedestal, aisle — so columns 15
+    // and 18 stay clear from the pod door at 14,10 down to the front door.
+    ["desk", 13, 11, true], ["chair-16-north", 13, 12, false],
+    ["desk-monitor", 16, 11, true], ["chair-10-north", 16, 12, false],
+    ["desk-monitor", 13, 14, true], ["chair-11-north", 13, 15, false],
+    ["desk", 16, 14, true], ["chair-12-north", 16, 15, false],
     ["reception-desk", 15, 16, true], ["plant", 17, 16, true],
     // The filing cabinet, in the open where people walk past it. Half size:
     // the art is 64x96, and at full size a three-tile cabinet beside a

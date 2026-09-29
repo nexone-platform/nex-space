@@ -42,6 +42,20 @@ for (const size of SIZES) {
       : `the largest is ${layouts[layouts.length - 1].id} with ${layouts[layouts.length - 1].desks}`);
 }
 
+/**
+ * And no layout at all is too small for the smallest team.
+ *
+ * Asking only whether SOME office fits each bracket was the weaker half of the
+ * question, and it passed while the pastel office — the first card on the
+ * screen, and the one every early space is on — seated six against a smallest
+ * bracket of ten. A layout nobody can offer to anybody is not a layout.
+ */
+const smallest = Math.min(...SIZES.map((s) => s.seats));
+for (const l of layouts) {
+  ok(`${l.id} seats the smallest team on offer`, l.desks >= smallest,
+    `${l.desks} desks against a smallest bracket of ${smallest}`);
+}
+
 ok("an answer nobody recognises asks for nothing", seatsFor("some other thing") === 0,
   "an old account, or a hand-edited profile — better no filter than the wrong one");
 ok("  · and so does no answer at all", seatsFor(undefined) === 0 && seatsFor(null) === 0);
