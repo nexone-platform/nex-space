@@ -201,6 +201,14 @@ export class OfficeScene extends Phaser.Scene {
   private meetPanelAt = 0;
   private walkable: boolean[][] = [];           // tiles with no wall and no solid prop
   private path: { x: number; y: number }[] = []; // remaining click-to-move waypoints
+  /**
+   * What to do on arriving, for a walk that was going somewhere for a reason.
+   *
+   * Dropped by anything that ends the walk early — a key press, a new
+   * destination, a door that turned you away — because the reason was to arrive,
+   * and sitting down somewhere you did not reach is worse than not sitting.
+   */
+  private afterWalk?: () => void;
   private moveMarker?: Phaser.GameObjects.Arc;
   private myUserId = "";                        // "" while a guest, or before the roster arrives
   private dmOpen = "";                          // the account whose thread is on screen
@@ -3295,10 +3303,16 @@ export class OfficeScene extends Phaser.Scene {
    * The button says walk, so it walks — but a person on the far side of a wall
    * the pathfinder cannot get around would otherwise be a button that does
    * nothing, which is worse than arriving in an unexplained way.
+   *
+   * `then` runs on arrival either way. The fade is the slower of the two, so
+   * the wait is measured from it: 140ms of fading out, and the move happens at
+   * the end of that.
    */
-  private walkOrJump(x: number, y: number) {
+  private walkOrJump(x: number, y: number, then?: () => void) {
     this.walkTo(x, y);
-    if (!this.path.length) this.goTo(x, y);
+    if (this.path.length) { this.afterWalk = then; return; }
+    this.goTo(x, y);
+    if (then) this.time.delayedCall(220, then);
   }
 
   private async openDeviceMenu(kind: "mic" | "cam", anchor: HTMLElement) {
@@ -3847,7 +3861,7 @@ export class OfficeScene extends Phaser.Scene {
     if (this.lastAllowed) {
       this.player.setPosition(this.lastAllowed.x, this.lastAllowed.y);
       this.player.body?.reset(this.lastAllowed.x, this.lastAllowed.y);
-      this.path.length = 0; // a walk that ends inside a locked room is over
+      this.clearPath(); // a walk that ends inside a locked room is over, marker and all
     }
     if (this.atDoor?.id === barred.id) return;
     this.atDoor = barred;
@@ -4454,22 +4468,30 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  /** teleport to my desk's seat and sit down */
+  /**
+   * Walk to my desk and sit down.
+   *
+   * It used to fade out and put you there, which is quicker and reads as a bug:
+   * the room is a place people are standing in, and a colleague who blinks out
+   * of the doorway and reappears in a chair has not gone anywhere that anybody
+   * watching can follow. Walking is also what everything else in this room does
+   * when you tell it where to go.
+   *
+   * The fade is still there for a desk the pathfinder cannot reach — a chair
+   * boxed in by furniture, or a map somebody has edited into two halves. A
+   * button that silently does nothing is worse than one that arrives oddly.
+   */
   private goToMyDesk() {
     if (!this.myDesk) { this.toast(t("ยังไม่ได้เลือกโต๊ะ — คลิกที่โต๊ะเพื่อจอง"), "info"); return; }
     const d = DESKS.find((x) => x.id === this.myDesk);
     if (!d) return;
     const tx = d.sx * TILE + TILE / 2, ty = d.sy * TILE + TILE / 2;
-    const cam = this.cameras.main;
-    cam.fadeOut(120);
-    cam.once("camerafadeoutcomplete", () => {
-      if (this.sitting) this.standUp();
-      this.player.setPosition(tx, ty);
-      this.player.body!.reset(tx, ty);
-      cam.fadeIn(150);
-      cam.startFollow(this.player, true, 0.12, 0.12);
-      this.time.delayedCall(90, () => { if (!this.sitting) this.toggleSit(); });
-    });
+    const sit = () => { if (!this.sitting) this.toggleSit(); };
+    // Already standing on it: there is nothing to walk, and a pathfinder asked
+    // to route from a tile to itself returns nothing, which would have made the
+    // button fade you a few pixels sideways.
+    if (Math.hypot(this.player.x - tx, this.player.y - ty) < TILE) { sit(); return; }
+    this.walkOrJump(tx, ty, sit);
   }
 
   /** brief screen-anchored message */
@@ -4600,6 +4622,7 @@ export class OfficeScene extends Phaser.Scene {
 
   private clearPath() {
     this.path = [];
+    this.afterWalk = undefined;
     this.moveMarker?.destroy();
     this.moveMarker = undefined;
   }
@@ -4655,7 +4678,13 @@ export class OfficeScene extends Phaser.Scene {
       const dx = wp.x - this.player.x, dy = wp.y - this.player.y;
       if (Math.hypot(dx, dy) < 4) {
         this.path.shift();
-        if (!this.path.length) this.clearPath(); // arrived
+        if (!this.path.length) {
+          // Taken before clearPath, which drops it: this is the one ending that
+          // earned it.
+          const arrived = this.afterWalk;
+          this.clearPath();
+          arrived?.();
+        }
       } else {
         // step in one of the eight directions, exactly as the keys would, so the
         // walk animation and facing come out the same as manual movement
