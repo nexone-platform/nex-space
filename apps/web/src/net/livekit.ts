@@ -168,10 +168,16 @@ export class LiveKitManager implements MediaManager {
     // first; whether to pull down their picture is still proximity, because a
     // broadcast is an announcement and not a face in everybody's sidebar.
     const audible = hearAnyway?.size ? new Set([...nearby, ...hearAnyway]) : nearby;
+    const was = this.subscribed;
     this.subscribed = audible;
     this.room.remoteParticipants.forEach((p) => {
       const near = nearby.has(p.identity);
       const hear = audible.has(p.identity);
+      // Said once, when it changes. "I could not hear them" is the one bug
+      // report in this app that carries no evidence with it at all.
+      if (hear !== was.has(p.identity)) {
+        console.log(`[nexspace] ${hear ? "now hearing" : "no longer hearing"} ${p.identity}${hear && !near ? " — broadcast" : ""}`);
+      }
       p.getTrackPublication(Track.Source.Microphone)?.setSubscribed(hear);
       p.getTrackPublication(Track.Source.Camera)?.setSubscribed(near);
       if (!near) this.removeCamTile(p.identity);

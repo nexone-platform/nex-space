@@ -72,9 +72,15 @@ interface Remote {
   ring?: Phaser.GameObjects.Arc;
   deskId?: string;
   status?: string;
-  /** speaking to the whole map: heard wherever you are standing */
-  onAir?: boolean;
-  /** the marker over their head while they are */
+  /**
+   * The marker over their head while they are broadcasting.
+   *
+   * Whether they ARE is deliberately not kept here. It used to be, and the two
+   * copies of that one fact disagreed: the bar at the top of the screen read
+   * the room's state and was right, the audio read this field and was empty, so
+   * an announcement showed a name and a countdown and routed no sound at all.
+   * Everything now reads onAirBy.
+   */
   airMark?: Phaser.GameObjects.Text;
 }
 
@@ -893,9 +899,8 @@ export class OfficeScene extends Phaser.Scene {
               this.refreshDeskPlates(); // their desk plate mirrors their status
               this.refreshRoster();
             }
-            // The flag, not the message, is what the earshot loop reads. The
-            // message may have arrived before this player did.
-            if (!!player.onAir !== !!r.onAir) { r.onAir = !!player.onAir; this.readAirFromState(); }
+            // Who is on air is read off the room every frame, in update — not
+            // mirrored onto this record, which is how it came to be wrong.
           });
         }
         this.readAirFromState();
@@ -2757,11 +2762,19 @@ export class OfficeScene extends Phaser.Scene {
         if (p.onAir) { by = sid; name = p.name ?? ""; until = p.onAirUntil ?? 0; break; }
       }
     }
+    // Cheap enough to ask every frame, which is the point — the answer then
+    // cannot be stale, and nothing has to remember to call this. Repainting
+    // every frame would not be cheap, and would restart the countdown's timer
+    // sixty times a second, so the work below happens only on a change.
+    if (by === this.onAirBy && name === this.onAirName && until === this.onAirUntil) return;
     // Silencing one announcement is not silencing the next one.
     if (by !== this.onAirBy) this.airMuted = false;
     this.onAirBy = by;
     this.onAirName = name;
     this.onAirUntil = until;
+    // A voice arriving from nowhere is the hardest thing in this app to
+    // diagnose from a bug report, and this line costs nothing.
+    console.log(`[nexspace] on air: ${by ? `${name} (${by})` : "nobody"}`);
     this.paintAirBar();
   }
 
@@ -4295,10 +4308,6 @@ export class OfficeScene extends Phaser.Scene {
     this.remotes.set(sessionId, {
       sprite, label, name, status, tx: player.x, ty: player.y,
       dir: player.dir, moving: player.moving, avatar: av,
-      // Read from state on arrival, not only from the message. Somebody who
-      // walks in through a portal halfway through a broadcast would otherwise
-      // hear nothing until the speaker happened to stop and start again.
-      onAir: !!player.onAir,
     });
 
     // Point at somebody and their card comes up, which is the gesture people
@@ -4709,6 +4718,9 @@ export class OfficeScene extends Phaser.Scene {
     // Whoever is speaking to the whole map — audible through distance and walls
     // both. Collected here and handed to the media layer below.
     const hearAnyway = new Set<string>();
+    // Asked of the room, here, once a frame. Every other answer to "who is on
+    // air" in this file is this one.
+    this.readAirFromState();
     const duck = this.onAirBy && this.onAirBy !== this.mySessionId && !this.airMuted ? DUCK : 1;
     // The same people the audio rule picked, kept in order, for the panel and
     // the ring. Deriving them a second time is how the two would come to
@@ -4730,10 +4742,11 @@ export class OfficeScene extends Phaser.Scene {
       // The bar at the top of the screen says who is announcing; this says
       // which of the people in the room that is. A voice with a name but no
       // body in it is a strange thing to be in a room with.
-      if (r.onAir && !r.airMark) {
+      const theyAreOnAir = id === this.onAirBy;
+      if (theyAreOnAir && !r.airMark) {
         r.airMark = this.add.text(0, 0, "📢", { fontSize: "12px", resolution: 3 })
           .setOrigin(0.5).setDepth(100001);
-      } else if (!r.onAir && r.airMark) {
+      } else if (!theyAreOnAir && r.airMark) {
         r.airMark.destroy();
         r.airMark = undefined;
       }
@@ -4744,7 +4757,7 @@ export class OfficeScene extends Phaser.Scene {
       const connected = !!this.webrtc?.hasPeer(id);
       const heard = hearing(
         { area: mine, dnd: this.dnd, muted: this.airMuted },
-        { area: theirs, dist: Math.hypot(dx, dy), onAir: !!r.onAir, connected },
+        { area: theirs, dist: Math.hypot(dx, dy), onAir: theyAreOnAir, connected },
       );
 
       if (heard.hearAnyway) hearAnyway.add(id);
