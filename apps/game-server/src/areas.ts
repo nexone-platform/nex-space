@@ -49,6 +49,17 @@ export const AREAS: Record<string, PrivateArea[]> = {
     { id: "pantry",  label: "ห้องครัว",     x0: 18, y0: 15, x1: 22, y1: 20 },
     { id: "lounge",  label: "โซนพักผ่อน",   x0: 24, y0: 15, x1: 28, y1: 20 },
   ],
+  // The desk floors are deliberately not areas, for the same reason the office
+  // theme's open plan is not one: a floor of fifty people that muted everyone
+  // outside it would be a map with no public space at all.
+  openplan: [
+    { id: "meeting", label: "ห้องประชุม",  x0: 3,  y0: 20, x1: 11, y1: 26 },
+    { id: "lounge",  label: "โซนพักผ่อน",  x0: 28, y0: 20, x1: 36, y1: 26 },
+  ],
+  campus: [
+    { id: "meeting", label: "ห้องประชุม",  x0: 3,  y0: 30, x1: 11, y1: 34 },
+    { id: "lounge",  label: "โซนพักผ่อน",  x0: 28, y0: 30, x1: 36, y1: 34 },
+  ],
   // the open plan is deliberately not one: it is the floor everybody shares,
   // and making it private would mean the map has no public space left
   office: [

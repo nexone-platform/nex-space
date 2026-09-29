@@ -524,6 +524,31 @@ let INSIDE = "";
     { title: "ของส่วนตัว", url: "https://example.test/mine" }, staff.token);
   ok("  · and files into it", filed.status === 201, String(filed.status));
 
+  /**
+   * A pedestal does not have to stand on a whole tile.
+   *
+   * Some layouts cannot put it on one: where two pedestals share the gap
+   * between a pair of desks, each sits half a tile off centre. This route used
+   * to require whole numbers, so in that office every personal cabinet answered
+   * "bad desk" — ten of them, silently, because a cabinet that will not open
+   * looks exactly like one nobody has tried. The desk is the name; the tile is
+   * only where to draw it.
+   */
+  const offGrid = await get(`${W}/cabinets/desk/main/office-1?x=5.90625&y=3.75`, staff.token);
+  ok("  · a pedestal on a half tile opens just the same", offGrid.status === 200,
+    String(offGrid.status));
+  ok("    · and it is the same cabinet, not a second one",
+    offGrid.cabinet?.id === first.cabinet.id, `${offGrid.cabinet?.id} vs ${first.cabinet.id}`);
+  ok("    · with what was filed in it still there", (offGrid.docs ?? []).length === 1,
+    `${(offGrid.docs ?? []).length} document(s)`);
+
+  // A cabinet standing in a room is the other way round: the tile IS the name,
+  // so half a tile names nothing and has to be refused rather than rounded into
+  // somebody else's cabinet.
+  const roomOffGrid = await get(`${W}/cabinets/at/main/11/12.5`, staff.token);
+  ok("  · but a room cabinet on a half tile is still refused", roomOffGrid.status === 400,
+    String(roomOffGrid.status));
+
   const neighbour = await D(hr.token);
   ok("the person at the next desk is told there is nothing there",
     neighbour.status === 404, String(neighbour.status));

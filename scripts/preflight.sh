@@ -87,7 +87,12 @@ else
 fi
 
 # a layout the API would refuse can never be created, so the two lists must agree
-web_themes=$(grep -oE '^  (classic|departments|office):' apps/web/src/scenes/mapThemes.ts | tr -d ' :' | sort | xargs)
+# Read out of the THEMES record itself rather than matched against a list of
+# names written here. Spelled out, this check could only ever notice the three
+# layouts it already knew about — a fourth missing from the API would have been
+# exactly as invisible as the thing it exists to catch.
+web_themes=$(sed -n '/^export const THEMES: Record<string, MapTheme> = {/,/^};/p' apps/web/src/scenes/mapThemes.ts \
+  | grep -oE '^  [a-z]+:' | tr -d ' :' | sort | xargs)
 api_themes=$(grep -oE 'const THEMES = \[[^]]*\]' apps/api/src/index.ts | grep -oE '"[a-z]+"' | tr -d '"' | sort | xargs)
 if [ "$web_themes" = "$api_themes" ]; then
   ok "theme whitelists agree ($web_themes)"
@@ -147,6 +152,27 @@ fi
 # Who hears whom, how loudly, and who has to stay connected. Hearing and
 # connecting look like one question and are two, which is how a broadcast
 # came out silent with nothing thrown and nothing logged.
+# A desk nobody can walk to is a desk that only fails for the person who booked
+# it. The floors are walked here, from the spawn point, with every prop's
+# footprint read off its own PNG.
+say "Floors"
+if out=$(npm run --silent check:reach -w @nexspace/web 2>&1); then
+  ok "everywhere reachable — $(echo "$out" | grep -oE "[0-9]+ passed, [0-9]+ failed" | tail -1)"
+else
+  bad "somewhere on a map cannot be walked to"
+  echo "$out" | grep -E "^! FAIL" | head -6 | sed "s/^/        /" >&2
+fi
+
+# The wizard asks how big the team is. Every answer it offers has to have an
+# office behind it that can seat them.
+say "Team sizes"
+if out=$(npm run --silent check:sizes -w @nexspace/web 2>&1); then
+  ok "every size has a floor — $(echo "$out" | grep -oE "[0-9]+ passed, [0-9]+ failed" | tail -1)"
+else
+  bad "a team size the wizard offers has no office big enough"
+  echo "$out" | grep -E "^! FAIL" | head -6 | sed "s/^/        /" >&2
+fi
+
 say "Earshot"
 if out=$(npm run --silent check:earshot -w @nexspace/web 2>&1); then
   ok "earshot — $(echo "$out" | grep -oE "[0-9]+ passed, [0-9]+ failed" | tail -1)"

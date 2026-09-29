@@ -332,6 +332,11 @@ const EN: Record<string, string> = {
     "Five minutes is the limit — the announcement microphone was turned off for you",
   "คนในแมพมากเกินกว่าจะประกาศแบบ P2P ได้ — ต้องเปิด LiveKit ก่อน":
     "Too many people here to announce peer-to-peer — this needs LiveKit turned on",
+  // ---- how big the office is ----
+  "ออฟฟิศโล่ง (ทีมกลาง)": "Open plan (mid-size team)",
+  "ออฟฟิศใหญ่ (หลายทีม)": "Large office (several teams)",
+  "โต๊ะ {n} ตัว": "{n} desks",
+  "โต๊ะ {n} ตัว — ไม่พอสำหรับทีมขนาดนี้": "{n} desks — not enough for a team this size",
   "โฟลเดอร์": "Folder",
   "ชื่อโฟลเดอร์": "Folder name",
   "＋ สร้างโฟลเดอร์": "＋ New folder",

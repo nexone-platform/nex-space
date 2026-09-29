@@ -65,6 +65,57 @@ export const deskCabinetSpot = (d: Desk): Interactive => ({
   label: "เปิดตู้ส่วนตัว", icon: "",
 });
 
+/**
+ * A bank of desks, generated rather than typed out.
+ *
+ * Fifty desks written by hand is a hundred coordinates, each of them a chance
+ * to put a chair inside a wall or two pedestals on one tile — and the three
+ * layouts that existed were all small enough that hand-placing them was
+ * reasonable. At this size it stops being reasonable. One function, checked
+ * once, beats fifty lines checked never.
+ *
+ * The spacing is the arrangement the pastel pod arrived at the hard way: desk,
+ * pedestal, aisle across; desk, chair, aisle down. Three tiles per person in
+ * each direction, so every desk has somewhere to put its papers and every
+ * column and row between them is somewhere to walk. A bank `across` wide and
+ * `down` deep therefore occupies 3·across−1 columns and 3·down−1 rows.
+ */
+interface Bank {
+  /** ids run `${id}-1` upward in reading order */
+  id: string;
+  /** the first desk's tile — the bank grows right and down from here */
+  x: number; y: number;
+  across: number; down: number;
+  /** where the numbering starts, so two banks can share one series */
+  from?: number;
+}
+
+// Cycled rather than random: a layout has to come out the same in every
+// browser, and a desk that is a different colour on somebody else's screen is
+// a bug report nobody can reproduce.
+const DESK_ART = ["desk", "desk-monitor"];
+const CHAIR_ART = [
+  "chair-9-north", "chair-11-north", "chair-12-north", "chair-13-north",
+  "chair-14-north", "chair-15-north", "chair-16-north",
+];
+
+function deskBank(b: Bank): { desks: Desk[]; props: Prop[] } {
+  const desks: Desk[] = [];
+  const props: Prop[] = [];
+  let n = b.from ?? 1;
+  for (let row = 0; row < b.down; row++) {
+    for (let col = 0; col < b.across; col++) {
+      const x = b.x + col * 3;
+      const y = b.y + row * 3;
+      desks.push({ id: `${b.id}-${n}`, x, y, sx: x, sy: y + 1 });
+      props.push([DESK_ART[(row + col) % DESK_ART.length], x, y, true]);
+      props.push([CHAIR_ART[n % CHAIR_ART.length], x, y + 1, false]);
+      n++;
+    }
+  }
+  return { desks, props };
+}
+
 export interface MapTheme {
   id: string;
   label: string;
@@ -180,7 +231,16 @@ export const classicTheme: MapTheme = {
     // The filing cabinet, in the open where people walk past it. Half size:
     // the art is 64x96, and at full size a three-tile cabinet beside a
     // one-tile person reads as a wardrobe.
-    ["office/cabinet", 11, 12, true, 0.5],
+    //
+    // Not solid — see the note on the desk pedestals. Drawn at half size it is
+    // still 48px tall, so it covers three rows of the walk grid, and those were
+    // the only three rows joining the west end of the hall to the rest of it:
+    // the pantry counter closed the rows below, the partition the row above,
+    // and the lounge door at 8,10 was behind it. Moving it would have been the
+    // other fix, and a worse one — a cabinet is found by where it stands, so
+    // every document already filed in this one would have been left at an
+    // address nothing asks for any more.
+    ["office/cabinet", 11, 12, false, 0.5],
     ...CLASSIC_DESKS.map(deskCabinetProp),
     ["rug", 15, 13, false],
     ["plant-large", 11, 17, true], ["plant-large", 20, 17, true],
@@ -328,7 +388,11 @@ export const departmentsTheme: MapTheme = {
     ...DEPT_STATIONS.flatMap((s) => seat(s.desk, s.chair, s.x, s.y)),
     // engineering
     ["whiteboard", 11, 3, true], ["bookshelf", 11.5, 9.5, true], ["plant", 3, 10, false],
-    ["office/cabinet", 13, 9.5, true, 0.5],
+    // Whole numbers, and it matters: a room cabinet is addressed by the tile it
+    // stands on, and the API refuses an address that is not a whole tile. At
+    // 13,9.5 this one answered 400 to every attempt to open it, for as long as
+    // it has existed.
+    ["office/cabinet", 13, 9, false, 0.5],
     ...DEPT_DESKS.map(deskCabinetProp),
     // design
     ["plant-large", 14, 3, true], ["plant", 21, 10, false],
@@ -390,7 +454,7 @@ export const departmentsTheme: MapTheme = {
   interactives: [
     { type: "whiteboard", x: 11, y: 3, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
     { type: "screen", x: 25.5, y: 3, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
-    { type: "cabinet", x: 13, y: 9.5, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
+    { type: "cabinet", x: 13, y: 9, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
     ...DEPT_DESKS.map(deskCabinetSpot),
   ],
 };
@@ -510,24 +574,40 @@ export const officeTheme: MapTheme = {
     ["furniture/chair-10-north", 22.8, 7.38, false], ["furniture/chair-10-north", 24.2, 7.38, false],
     ["furniture/chair-10-east", 21.78, 6.5, false], ["furniture/chair-10-west", 25.19, 6.5, false],
     ["furniture/plant-small", 26.5, 2.5, false], ["furniture/plant-small", 26.5, 9.5, false],
+    /**
+     * Everything solid in this hall stands on rows 12 and 13, and nothing
+     * stands under a doorway.
+     *
+     * Those two rules are the whole arrangement, and it had neither. The
+     * counter, the credenza, the copier and the mailboxes between them covered
+     * rows 12 to 16 from wall to wall, and the three doors off the corridor —
+     * 6, 15 and 23 — each had a solid object directly beneath it. The result
+     * was an entrance hall you could not leave: ten desks, a meeting room, a
+     * pantry and a lounge, none of them reachable on foot from the front door.
+     *
+     * It went unnoticed for the same reason the pastel lounge did. A click that
+     * cannot be routed fades across instead, and the desk button used to
+     * teleport, so nothing ever reported a failure.
+     *
+     * Row 14 is now clear from wall to wall, and columns 6, 15 and 23 are clear
+     * on 12 and 13. reachable-check walks it.
+     */
     // pantry — the CoolSchool counter is halved like the desks it sits beside
-    ["office/cs-counter", 4.6, 13, true, 0.5],
-    // clear of row 12 under the pantry door at 6,11 — parked there it sealed
-    // the whole west side off
-    ["office/coffee-maker", 7.5, 13, true], ["office/water-cooler", 8.5, 13, true],
+    ["office/cs-counter", 4.1, 12.5, true, 0.5],
+    ["office/coffee-maker", 7.5, 12.5, true], ["office/water-cooler", 8.5, 12.5, true],
     ["office/bin-2", 3.5, 15.5, false],
     // lounge. The TV hangs on the corridor wall, so it is not solid — left solid
-    // it stacked with the table and blocked every row of the room's middle.
-    ["office/tv", 23.5, 12.4, false], ["office/table-dark", 23.5, 15, true],
+    // it stacked with the table and blocked every row of the room's middle. The
+    // table sits a row lower than it did, off row 14, which is the hall's only
+    // way from one end to the other.
+    ["office/tv", 23.5, 12.4, false], ["office/table-dark", 23.5, 15.5, true],
     ["furniture/armchair", 22, 13.6, false], ["furniture/armchair", 25, 13.6, false],
     ["office/bin-3", 26.5, 12.5, false],
-    // hall: the wider entrance takes the credenza again, kept off the column
-    // under the corridor door so the way in from the front stays clear. The
-    // copier and mailboxes moved here out of the meeting room, where they made
-    // it read as a store cupboard with a table in it.
-    ["office/credenza", 12.5, 12.6, true],
-    ["office/copier", 17.5, 12.6, true], ["office/mailboxes", 18.5, 15.5, true],
-    ["office/cabinet", 15, 12.6, true, 0.5],
+    // hall: the credenza, the copier and the mailboxes, all up on rows 12-13
+    // and all clear of columns 6, 15 and 23
+    ["office/credenza", 11.5, 12.5, true],
+    ["office/copier", 18.5, 12.5, true], ["office/mailboxes", 21.5, 12.5, true],
+    ["office/cabinet", 16, 12, false, 0.5],
     ...OFFICE_DESKS.map(deskCabinetProp),
   ],
 
@@ -564,8 +644,211 @@ export const officeTheme: MapTheme = {
   interactives: [
     { type: "screen", x: 23, y: 3, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
     { type: "whiteboard", x: 18, y: 2, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
-    { type: "cabinet", x: 15, y: 12.6, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
+    { type: "cabinet", x: 16, y: 12, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
     ...OFFICE_DESKS.map(deskCabinetSpot),
+  ],
+};
+
+// --------------------------------------------------------------- open plan ---
+// Fifty desks, for the 11-50 bracket. One floor plate rather than rooms off a
+// corridor: at this size a corridor layout is mostly corridor, and the thing a
+// team of forty actually needs is to be able to see each other.
+//
+// The whole bank is generated. Everything written by hand below it stands at
+// row 20 or lower, which is why none of it can land on a desk or a pedestal —
+// the bank ends at row 17 and its last aisle is row 18.
+const OPEN_BUILD = { x0: 2, y0: 2, x1: 37, y1: 27 };
+const OPEN_BANK = deskBank({ id: "openplan", x: 4, y: 4, across: 10, down: 5 });
+
+export const openPlanTheme: MapTheme = {
+  id: "openplan",
+  areas: AREAS.openplan,
+  label: "ออฟฟิศโล่ง (ทีมกลาง)",
+  cols: 40,
+  rows: 30,
+  spawn: { x: 19, y: 25 },
+  meetingRoom: { x0: 3, x1: 11, y0: 20, y1: 26 },
+
+  floorAt(x, y) {
+    const inBuild = x >= 3 && x <= 36 && y >= 3 && y <= 26;
+    if (x >= 17 && x <= 22 && y >= 28) return 8;   // stone at the front door
+    if (!inBuild) return 1;                        // grass
+    if (y <= 18) return 5;                         // the open floor
+    if (x <= 11) return 4;                         // meeting
+    if (x >= 28) return 6;                         // pantry and lounge
+    return 0;                                      // entrance hall
+  },
+
+  walls() {
+    const w = new Set<string>();
+    const add = (x: number, y: number) => w.add(`${x},${y}`);
+    rect(add, OPEN_BUILD.x0, OPEN_BUILD.y0, OPEN_BUILD.x1, OPEN_BUILD.y1);
+    for (let x = 3; x <= 36; x++) add(x, 19);              // floor / rooms partition
+    for (let y = 20; y <= 26; y++) { add(12, y); add(27, y); } // either side of the hall
+    // Two ways up onto the floor rather than one: fifty people through a single
+    // doorway is a queue, and both of them open onto an aisle between desks
+    // (columns 15 and 24) rather than onto a desk.
+    for (const d of ["15,19", "24,19", "12,23", "27,23", "19,27", "20,27"]) w.delete(d);
+    return w;
+  },
+
+  furniture: [
+    ...OPEN_BANK.props,
+    ...OPEN_BANK.desks.map(deskCabinetProp),
+    // meeting room
+    ["conference-table", 7, 22, true],
+    ["chair-10-south", 6, 21, false], ["chair-10-south", 8, 21, false],
+    ["chair-10-north", 6, 24, false], ["chair-10-north", 8, 24, false],
+    ["chair-10-east", 5, 22, false], ["chair-10-west", 9, 22, false],
+    ["plant-small", 3, 20, false], ["plant-small", 11, 26, false],
+    // Pantry and lounge share the east room, with the counters along the top
+    // wall. A 68px unit covers three columns and three rows wherever it sits,
+    // and put beside the door it covered the doorway: column 28 is the lane in
+    // from 27,23 and nothing solid stands in it.
+    ["kitchen-counter", 30, 20.5, true], ["coffee-machine", 28, 20, true],
+    ["beverage-cooler", 33, 20.5, true],
+    ["lounge-sofa", 29, 25, false], ["lounge-coffee-table", 30.5, 25, false],
+    ["armchair", 33, 25, false], ["plant-large", 36, 24, true],
+    // entrance hall
+    ["reception-desk", 19, 21, true], ["rug", 19, 23, false],
+    ["office/cabinet", 15, 21, false, 0.5],
+    ["plant-large", 13, 26, true], ["plant-large", 26, 26, true],
+    ["plant", 13, 20, false], ["plant", 26, 20, false],
+  ],
+
+  outdoor: [
+    ["fountain", 19.5, 28.5, true],
+    ["tree", 0.8, 6, true], ["tree-oval", 0.8, 14, true], ["pine", 0.8, 22, true],
+    ["tree-oval", 38.5, 6, true], ["tree", 38.5, 14, true], ["pine", 38.5, 22, true],
+    ["pine", 6, 0.8, true], ["tree", 14, 0.8, true], ["tree-oval", 25, 0.8, true],
+    ["tree", 33, 0.8, true],
+    ["shrub", 10, 0.8, false], ["shrub", 29, 0.8, false],
+    ["bench", 12, 28.8, false], ["bench", 27, 28.8, false],
+    ["lamp-post", 9, 28.2, true], ["lamp-post", 30, 28.2, true],
+    ["sign-welcome", 15, 28.4, false], ["sign-team", 24, 28.4, false],
+  ],
+
+  decals: [
+    ["flower-yellow", 1, 4], ["clover", 1, 11], ["flower-mixed", 1, 18], ["flower-pink", 1, 25],
+    ["clover", 38, 4], ["flower-yellow", 38, 11], ["flower-mixed", 38, 18], ["flower-pink", 38, 25],
+    ["bush-blob", 3, 0.6], ["bush-blob", 36, 0.6], ["rocks", 8, 29.4], ["rocks", 31, 29.4],
+  ],
+
+  decor: [
+    ["arched-window", 8, 2], ["arched-window", 16, 2], ["arched-window", 24, 2], ["arched-window", 32, 2],
+    ["window", 2, 10], ["window", 37, 10],
+    ["art-landscape", 8, 19], ["wall-clock", 19, 19], ["corkboard", 31, 19],
+    ["glass-panel", 5, 19], ["glass-panel", 34, 19],
+  ],
+
+  desks: OPEN_BANK.desks,
+
+  interactives: [
+    { type: "whiteboard", x: 10, y: 19, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
+    { type: "screen", x: 20, y: 19, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
+    { type: "cabinet", x: 15, y: 21, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
+    ...OPEN_BANK.desks.map(deskCabinetSpot),
+  ],
+};
+
+// ------------------------------------------------------------------ campus ---
+// Eighty desks, for 51+. Two banks with a wide corridor between them rather
+// than one slab: eight rows of desks in an unbroken run is a warehouse, and the
+// corridor is where the building's own traffic goes.
+const CAMPUS_BUILD = { x0: 2, y0: 2, x1: 37, y1: 35 };
+const CAMPUS_NORTH = deskBank({ id: "campus", x: 4, y: 4, across: 10, down: 5 });
+const CAMPUS_SOUTH = deskBank({ id: "campus", x: 4, y: 20, across: 10, down: 3, from: 51 });
+const CAMPUS_DESKS = [...CAMPUS_NORTH.desks, ...CAMPUS_SOUTH.desks];
+
+export const campusTheme: MapTheme = {
+  id: "campus",
+  areas: AREAS.campus,
+  label: "ออฟฟิศใหญ่ (หลายทีม)",
+  cols: 40,
+  rows: 38,
+  spawn: { x: 19, y: 33 },
+  meetingRoom: { x0: 3, x1: 11, y0: 30, y1: 34 },
+
+  floorAt(x, y) {
+    const inBuild = x >= 3 && x <= 36 && y >= 3 && y <= 34;
+    if (x >= 17 && x <= 22 && y >= 36) return 8;   // stone at the front door
+    if (!inBuild) return 1;                        // grass
+    // Plank, not the outdoor path tile it started on: a gravel track down the
+    // middle of a building reads as a hole in the roof.
+    if (y === 18 || y === 19) return 2;            // the corridor between the banks
+    if (y <= 28) return 5;                         // both desk floors
+    if (x <= 11) return 4;                         // meeting
+    if (x >= 28) return 6;                         // pantry and lounge
+    return 0;                                      // entrance hall
+  },
+
+  walls() {
+    const w = new Set<string>();
+    const add = (x: number, y: number) => w.add(`${x},${y}`);
+    rect(add, CAMPUS_BUILD.x0, CAMPUS_BUILD.y0, CAMPUS_BUILD.x1, CAMPUS_BUILD.y1);
+    for (let x = 3; x <= 36; x++) add(x, 29);              // floors / rooms partition
+    for (let y = 30; y <= 34; y++) { add(12, y); add(27, y); }
+    for (const d of ["15,29", "24,29", "12,32", "27,32", "19,35", "20,35"]) w.delete(d);
+    return w;
+  },
+
+  furniture: [
+    ...CAMPUS_NORTH.props, ...CAMPUS_SOUTH.props,
+    ...CAMPUS_DESKS.map(deskCabinetProp),
+    // the corridor between the two floors of desks — one-tile plants only, since
+    // anything wider here would close an aisle between the banks
+    ["plant-large", 3, 18, true], ["plant-large", 36, 18, true],
+    // meeting room
+    ["conference-table", 7, 32, true],
+    ["chair-10-south", 6, 31, false], ["chair-10-south", 8, 31, false],
+    ["chair-10-north", 6, 33, false], ["chair-10-north", 8, 33, false],
+    ["chair-10-east", 5, 32, false], ["chair-10-west", 9, 32, false],
+    ["plant-small", 3, 30, false], ["plant-small", 11, 34, false],
+    // pantry and lounge, along the top wall so column 28 stays the lane in
+    // from the door at 27,32
+    ["kitchen-counter", 30, 30.5, true], ["coffee-machine", 28, 30, true],
+    ["beverage-cooler", 33, 30.5, true],
+    ["lounge-sofa", 29, 34, false], ["lounge-coffee-table", 30.5, 34, false],
+    ["armchair", 33, 34, false], ["plant-large", 36, 33, true],
+    // entrance hall
+    ["reception-desk", 19, 31, true], ["rug", 19, 33, false],
+    ["office/cabinet", 15, 31, false, 0.5],
+    ["plant-large", 13, 34, true], ["plant-large", 26, 34, true],
+    ["plant", 13, 30, false], ["plant", 26, 30, false],
+  ],
+
+  outdoor: [
+    ["fountain", 19.5, 36.5, true],
+    ["tree", 0.8, 6, true], ["tree-oval", 0.8, 16, true], ["pine", 0.8, 26, true],
+    ["tree-oval", 38.5, 6, true], ["tree", 38.5, 16, true], ["pine", 38.5, 26, true],
+    ["pine", 6, 0.8, true], ["tree", 14, 0.8, true], ["tree-oval", 25, 0.8, true],
+    ["tree", 33, 0.8, true],
+    ["shrub", 10, 0.8, false], ["shrub", 29, 0.8, false],
+    ["bench", 12, 36.8, false], ["bench", 27, 36.8, false],
+    ["lamp-post", 9, 36.2, true], ["lamp-post", 30, 36.2, true],
+    ["sign-welcome", 15, 36.4, false], ["sign-team", 24, 36.4, false],
+  ],
+
+  decals: [
+    ["flower-yellow", 1, 5], ["clover", 1, 14], ["flower-mixed", 1, 23], ["flower-pink", 1, 32],
+    ["clover", 38, 5], ["flower-yellow", 38, 14], ["flower-mixed", 38, 23], ["flower-pink", 38, 32],
+    ["bush-blob", 3, 0.6], ["bush-blob", 36, 0.6], ["rocks", 8, 37.4], ["rocks", 31, 37.4],
+  ],
+
+  decor: [
+    ["arched-window", 8, 2], ["arched-window", 16, 2], ["arched-window", 24, 2], ["arched-window", 32, 2],
+    ["window", 2, 12], ["window", 37, 12], ["window", 2, 24], ["window", 37, 24],
+    ["art-landscape", 8, 29], ["wall-clock", 19, 29], ["corkboard", 31, 29],
+    ["glass-panel", 5, 29], ["glass-panel", 34, 29],
+  ],
+
+  desks: CAMPUS_DESKS,
+
+  interactives: [
+    { type: "whiteboard", x: 10, y: 29, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
+    { type: "screen", x: 20, y: 29, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
+    { type: "cabinet", x: 15, y: 31, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
+    ...CAMPUS_DESKS.map(deskCabinetSpot),
   ],
 };
 
@@ -573,6 +856,8 @@ export const THEMES: Record<string, MapTheme> = {
   classic: classicTheme,
   departments: departmentsTheme,
   office: officeTheme,
+  openplan: openPlanTheme,
+  campus: campusTheme,
 };
 
 /**

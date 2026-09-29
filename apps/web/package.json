@@ -10,7 +10,9 @@
     "credits": "node scripts/build-credits.mjs",
     "i18n": "node scripts/i18n-coverage.mjs",
     "check:desks": "tsx scripts/desk-cabinets-check.mts",
-    "check:earshot": "tsx scripts/earshot-check.mts"
+    "check:earshot": "tsx scripts/earshot-check.mts",
+    "check:reach": "tsx scripts/reachable-check.mts",
+    "check:sizes": "tsx scripts/sizes-check.mts"
   },
   "dependencies": {
     "colyseus.js": "^0.16.22",

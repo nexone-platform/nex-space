@@ -100,6 +100,21 @@ for (const [id, th] of Object.entries(THEMES)) {
   ok(`  · all of them walk-through`, props.every((f) => f[3] === false),
     "a pedestal that blocked its tile could seal a pod");
 
+  /**
+   * A cabinet standing in a room is addressed by its tile, and the API refuses
+   * an address that is not a whole tile.
+   *
+   * Two of the three original layouts put one on a half tile — 13,9.5 and
+   * 15,12.6 — so both answered 400 to every attempt to open them, for as long
+   * as they had existed. Nothing said so: a cabinet that will not open looks
+   * exactly like a cabinet nobody has tried. A desk cabinet is exempt, because
+   * it is found by its desk and the tile is only a note of where to draw it.
+   */
+  const roomCabs = th.interactives.filter((i) => i.type === "cabinet" && !i.desk);
+  const offGrid = roomCabs.filter((i) => !Number.isInteger(i.x) || !Number.isInteger(i.y));
+  ok(`  · room cabinets stand on whole tiles`, offGrid.length === 0,
+    offGrid.map((i) => `${i.x},${i.y}`).join(" ") || `${roomCabs.length} of them`);
+
   // ---- and now the room the layout leaves to walk in --------------------------
   const dw = DESK_W[id] ?? 1;
   const box = (x: number, w: number): [number, number] => [x - w / 2, x + w / 2];

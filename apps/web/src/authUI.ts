@@ -8,6 +8,7 @@ import { WORKSPACE, HAS_WORKSPACE_PARAM, JOIN_CODE, INVITE_TOKEN, gotoWorkspace,
 import { API, TOKEN_KEY, authToken as token, authHeaders } from "./api";
 import { mountMemberPanel, roleLabel, type PanelMember } from "./memberPanel";
 import { THEMES } from "./scenes/mapThemes";
+import { SIZES, seatsFor } from "./spaceSize";
 import { renderThemePreview } from "./themePreview";
 import { t } from "./i18n";
 
@@ -433,7 +434,11 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     { key: "role", q: t("บทบาทของคุณตรงกับข้อไหนมากที่สุด?"),
       opts: [t("ผู้ก่อตั้ง"), t("ผู้บริหาร"), t("ผู้อำนวยการ"), t("ผู้จัดการ"), t("สมาชิกทีม")] },
     { key: "companySize", q: t("บริษัทของคุณมีขนาดเท่าไหร่?"),
-      opts: ["1 - 10", "11 - 50", "51+"] },
+      // From spaceSize.ts, which also says how many desks each of them needs.
+      // Typed out here once and read there once, the two drifted the moment the
+      // layouts stopped matching: this screen went on asking a question whose
+      // answer nothing could satisfy.
+      opts: SIZES.map((s) => s.label) },
     { key: "useCase", q: t("คุณจะใช้ออฟฟิศเสมือนนี้เป็นหลักอย่างไร?"), other: true,
       opts: [t("พื้นที่ทำงานประจำวันของทีม"), t("พื้นที่ทำงานสัปดาห์ละ 1-2 ครั้ง"),
              t("อีเวนต์ครั้งเดียว (เช่น Hackathon)"), t("อีเวนต์ประจำ (เช่น Workshop)"), t("อื่น ๆ (ระบุ)")] },
@@ -489,20 +494,40 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
     e.other.value = "";
 
     if (step.key === "theme") {
+      /**
+       * Layouts, biggest-fitting first, with the number of desks on each.
+       *
+       * The size question two screens back used to go nowhere: every layout on
+       * offer seated ten people, so a company that answered "51+" was shown
+       * four offices, none of which could hold them, and nothing said so. The
+       * count is on the card now because it is the fact being chosen between,
+       * and the ones too small for the answer given are marked rather than
+       * hidden — a team of sixty may still want a small room, and a picker that
+       * silently drops options is its own kind of wrong.
+       */
+      const seats = seatsFor(answers.companySize);
+      const fits = (th: { desks: unknown[] }) => th.desks.length >= seats;
+      const order = Object.entries(THEMES).sort((a, b) =>
+        (fits(b[1]) ? 1 : 0) - (fits(a[1]) ? 1 : 0) || a[1].desks.length - b[1].desks.length);
       // defaulted at render, not in startWizard: pre-answering it there would
       // make the skip-what-is-already-answered loop jump straight past this step
-      if (!answers.theme) answers.theme = "classic";
+      if (!answers.theme) answers.theme = (order.find(([, th]) => fits(th)) ?? order[0])[0];
       e.next.textContent = t("ถัดไป →");
       const row = document.createElement("div");
       row.className = "wiz-themes";
-      for (const [id, theme] of Object.entries(THEMES)) {
+      for (const [id, theme] of order) {
         const card = document.createElement("button");
         card.className = "wiz-theme" + (answers.theme === id ? " on" : "");
         const shot = document.createElement("span");
         shot.className = "wiz-shot";     // shimmering until the preview is drawn
         const name = document.createElement("b");
         name.textContent = t(theme.label);
-        card.append(shot, name);
+        const desks = document.createElement("small");
+        desks.className = "wiz-seats" + (fits(theme) ? "" : " short");
+        desks.textContent = fits(theme)
+          ? t("โต๊ะ {n} ตัว").replace("{n}", String(theme.desks.length))
+          : t("โต๊ะ {n} ตัว — ไม่พอสำหรับทีมขนาดนี้").replace("{n}", String(theme.desks.length));
+        card.append(shot, name, desks);
         card.onclick = () => {
           answers.theme = id;
           row.querySelectorAll(".wiz-theme").forEach((x) => x.classList.remove("on"));

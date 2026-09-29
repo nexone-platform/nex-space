@@ -903,7 +903,7 @@ const canInvite = (role?: string) => role === "owner" || role === "admin" || rol
 
 // map layouts the client can render — mirrors THEMES in apps/web/src/scenes/mapThemes.ts.
 // Validated here so a bad value can never reach everyone's map loader.
-const THEMES = ["classic", "departments", "office"];
+const THEMES = ["classic", "departments", "office", "openplan", "campus"];
 
 // A stored map is handed to every browser that opens the space, so its size is
 // everyone's page load, not just a row in a table. The three built-in layouts
@@ -3410,8 +3410,19 @@ app.get("/workspaces/:slug/cabinets/desk/:map/:deskId", async (req, res) => {
   if (!can) return res.status(403).json({ error: "forbidden" });
 
   const deskId = String(req.params.deskId).slice(0, 32);
-  const x = Number(req.query.x), y = Number(req.query.y);
-  if (!deskId || !Number.isInteger(x) || !Number.isInteger(y)) {
+  /**
+   * Rounded, not refused.
+   *
+   * A cabinet in a room is found BY its tile, so that address has to be exact
+   * and a fractional one is a mistake worth a 400. A desk cabinet is found by
+   * its desk; the tile is only a note of where it stands, for drawing. Holding
+   * it to the same rule meant a layout whose pedestals sit half a tile off — as
+   * they must, where two of them share the gap between a pair of desks — could
+   * not open a single one of them. Every personal cabinet in that office
+   * answered "bad desk" and no other layout noticed.
+   */
+  const x = Math.round(Number(req.query.x)), y = Math.round(Number(req.query.y));
+  if (!deskId || !Number.isFinite(x) || !Number.isFinite(y)) {
     return res.status(400).json({ error: "bad desk" });
   }
   const c = await cabinetAtDesk(w.id, String(req.params.map), deskId, x, y, can.me.id);
