@@ -19,7 +19,8 @@ import { setupPrefsModal } from "../prefsModal";
 import { roleLabel } from "../memberPanel";
 import { propPath, type Interactive } from "./mapThemes";
 import { currentTheme, currentMapSlug, loadMapList, mapList } from "./mapSource";
-import { canHear, type PrivateArea } from "./areas";
+import { type PrivateArea } from "./areas";
+import { hearing, mustReachEveryone, DUCK } from "./earshot";
 import { canvasStack } from "../typeface";
 import { setupCabinetPanel } from "../cabinetPanel";
 
@@ -312,7 +313,6 @@ export class OfficeScene extends Phaser.Scene {
   private atDoor?: PrivateArea;
   private lastSent = 0;
   private lastState = { x: 0, y: 0, dir: "", moving: false };
-  private readonly NEAR = 5 * TILE; // proximity radius (must match server)
   private bubbles = new Map<string, Phaser.GameObjects.Text>();
   private localRing!: Phaser.GameObjects.Arc;
   private webrtc?: MediaManager;
@@ -4699,10 +4699,8 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // --- interpolate + animate remotes, and compute proximity ("in conversation") ---
-    const near2 = this.NEAR * this.NEAR;
-    // a connection already open is kept until they are clearly out of range
-    const keep2 = (this.NEAR * 1.4) * (this.NEAR * 1.4);
-    const FULL = 2 * TILE; // distance for full audio volume
+    // Who hears whom, how loudly and who must stay connected is decided in
+    // earshot.ts, which is checked. This loop draws the answer.
     this.holdTheDoor();
     this.updateArea();
     const mine = this.myArea;
@@ -4711,7 +4709,7 @@ export class OfficeScene extends Phaser.Scene {
     // Whoever is speaking to the whole map — audible through distance and walls
     // both. Collected here and handed to the media layer below.
     const hearAnyway = new Set<string>();
-    const duck = this.onAirBy && this.onAirBy !== this.mySessionId && !this.airMuted ? 0.25 : 1;
+    const duck = this.onAirBy && this.onAirBy !== this.mySessionId && !this.airMuted ? DUCK : 1;
     // The same people the audio rule picked, kept in order, for the panel and
     // the ring. Deriving them a second time is how the two would come to
     // disagree about who is in the conversation.
@@ -4742,28 +4740,18 @@ export class OfficeScene extends Phaser.Scene {
       r.airMark?.setPosition(r.sprite.x, r.sprite.y - 48);
 
       const dx = r.sprite.x - this.player.x, dy = r.sprite.y - this.player.y;
-      const d2 = dx * dx + dy * dy;
       const theirs = this.areaOf(r.sprite.x, r.sprite.y);
-      // Inside an area, distance stops counting in both directions. Outside, it
-      // is the radius — and anyone standing in an area is out of earshot of it.
-      const near = canHear(mine, theirs, d2 <= near2);
-      /**
-       * Heard from anywhere, through any wall — one way.
-       *
-       * Laid over canHear rather than folded into it, on purpose. The rule for
-       * who can hear whom is untouched, so a meeting room is still sealed:
-       * everybody subscribes to the broadcaster, and the broadcaster subscribes
-       * to nobody. Widening canHear itself would have opened it in both
-       * directions and made a private room listenable.
-       */
-      const onAir = !!r.onAir && !this.airMuted;
-      if (onAir) hearAnyway.add(id);
-      if (near) {
+      const connected = !!this.webrtc?.hasPeer(id);
+      const heard = hearing(
+        { area: mine, dnd: this.dnd, muted: this.airMuted },
+        { area: theirs, dist: Math.hypot(dx, dy), onAir: !!r.onAir, connected },
+      );
+
+      if (heard.hearAnyway) hearAnyway.add(id);
+      if (heard.connect) nearbyIds.add(id);
+      if (heard.inConversation) talking.push(id);
+      if (heard.near) {
         anyNear = true;
-        // A broadcaster is not in your conversation, however loudly you can
-        // hear them. Counting them would put a ring round the pair of you and
-        // tell you both you were talking.
-        if (!r.onAir) talking.push(id);
         heads.push({ x: r.sprite.x, y: r.sprite.y });
       }
       // Whoever cannot hear you is drawn faded, so "who is in this conversation"
@@ -4771,50 +4759,19 @@ export class OfficeScene extends Phaser.Scene {
       const dim = !!mine && theirs?.id !== mine.id ? 0.4 : 1;
       r.sprite.setAlpha(dim);
       r.label.setAlpha(dim);
-      // Hysteresis on the media connection only — the ring and the volume still
-      // follow the real radius. syncPeers runs every frame, so a single radius
-      // meant standing on the line rebuilt the peer connection frame after
-      // frame, and audio spends the first seconds of a connection catching up.
-      //
-      // "Already connected" is asked of the media manager, not remembered here. A
-      // connection can also begin with the other side's offer, and one this pass
-      // had not asked for would be dropped on the very next frame — which is a
-      // connection built and destroyed forever, in the band between the two radii.
-      // The hysteresis is for the radius only. An area boundary is a hard edge,
-      // and softening it would leak the room for the seconds a connection takes
-      // to wind down.
-      const onFloor = !mine && !theirs;
-      if (near || (onFloor && d2 <= keep2 && !!this.webrtc?.hasPeer(id))) nearbyIds.add(id);
       // The ring used to be one per head, which said "this person can hear you"
       // once for every person. drawConvoRing draws one around the group instead,
       // which is the thing somebody glancing at the map wants to know.
       if (r.ring) { r.ring.destroy(); r.ring = undefined; }
 
-      // Spatial audio: loudest close by, fading to silence at the proximity edge.
-      // Applied to anyone we hold a connection to, not only those inside the
-      // radius — a peer kept open by the hysteresis above would otherwise still be
-      // playing at whatever volume they had when they crossed the line.
-      if (near || onAir || this.webrtc?.hasPeer(id)) {
-        const dist = Math.sqrt(d2);
-        // The connection stays up while silenced, so turning it off is instant
-        // and the other person is never told they were muted — which is a
-        // thing about them, not about us.
-        // Sharing an area is a conversation, not a soundscape: the far end of the
-        // meeting room is as loud as the near end, which is the whole point of
-        // standing in one.
-        //
-        // A broadcast is full volume from anywhere and is not silenced by
-        // do-not-disturb: that switch means "do not start a conversation with
-        // me", and an announcement to the whole office that quietly did not
-        // arrive is worse than one you can turn off — which the bar it puts on
-        // screen lets you do, for that broadcast alone.
-        const vol = onAir ? 1
-          : this.dnd ? 0
-          : (near && mine) ? 1
-          : dist <= FULL ? 1 : 1 - (dist - FULL) / (this.NEAR - FULL);
-        // and everything else steps back under it, so the announcement can be
-        // made out over the conversation you were already having
-        this.webrtc?.setPeerVolume(id, Math.max(0, Math.min(1, vol * (onAir ? 1 : duck))));
+      // Applied to anyone we hold a connection to, not only those we can hear: a
+      // peer kept open by the slack past the radius, or held open so a broadcast
+      // can reach them, would otherwise still be playing at whatever volume they
+      // had when they crossed the line.
+      if (heard.connect || heard.hearAnyway || connected) {
+        // Everything but the announcement steps back under it, so the
+        // announcement can be made out over the conversation already happening.
+        this.webrtc?.setPeerVolume(id, heard.volume * (heard.hearAnyway ? 1 : duck));
       }
     }
     // My own ring stays: it is the one that says "you are audible", which is
@@ -4824,10 +4781,18 @@ export class OfficeScene extends Phaser.Scene {
     this.drawConvoRing(anyNear ? heads : []);
     this.refreshConvo(talking);
 
-    // connect/disconnect P2P media by proximity, PLUS a room-wide set for screen
-    // sharing: if I'm presenting, connect to everyone; also connect to any presenter.
+    // Connect by proximity, plus everybody at once when something of mine has to
+    // reach people who cannot hear me.
+    //
+    // Presenting was here. Announcing was not, and that is what made the first
+    // broadcast silent: a mesh connection needs both ends to want it, the
+    // listener opened one, and my very next frame closed it again because
+    // nothing here said they should be reachable. Both are the same shape, so
+    // they are now one question — see mustReachEveryone.
     const forced = new Set<string>();
-    if (this.webrtc?.screenOn) for (const id of this.remotes.keys()) forced.add(id);
+    if (mustReachEveryone({ onAir: this.onAirBy === this.mySessionId, presenting: !!this.webrtc?.screenOn })) {
+      for (const id of this.remotes.keys()) forced.add(id);
+    }
     for (const pid of this.screenPresenter.values()) if (this.remotes.has(pid)) forced.add(pid);
     this.webrtc?.syncPeers(nearbyIds, forced, hearAnyway);
 

@@ -144,6 +144,17 @@ fi
 # A microphone that reaches every room in the building is the one that must
 # never be left open by accident. The rule, the queue and the five-minute
 # cut-off are all checked against a clock this suite moves by hand.
+# Who hears whom, how loudly, and who has to stay connected. Hearing and
+# connecting look like one question and are two, which is how a broadcast
+# came out silent with nothing thrown and nothing logged.
+say "Earshot"
+if out=$(npm run --silent check:earshot -w @nexspace/web 2>&1); then
+  ok "earshot — $(echo "$out" | grep -oE "[0-9]+ passed, [0-9]+ failed" | tail -1)"
+else
+  bad "the audio rule does not behave"
+  echo "$out" | grep -E "^! FAIL" | head -6 | sed "s/^/        /" >&2
+fi
+
 say "Broadcast"
 if out=$(npm run --silent check:onair -w @nexspace/game-server 2>&1); then
   ok "the floor — $(echo "$out" | grep -oE "[0-9]+ passed, [0-9]+ failed" | tail -1)"

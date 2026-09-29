@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "credits": "node scripts/build-credits.mjs",
     "i18n": "node scripts/i18n-coverage.mjs",
-    "check:desks": "tsx scripts/desk-cabinets-check.mts"
+    "check:desks": "tsx scripts/desk-cabinets-check.mts",
+    "check:earshot": "tsx scripts/earshot-check.mts"
   },
   "dependencies": {
     "colyseus.js": "^0.16.22",
