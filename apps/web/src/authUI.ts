@@ -8,7 +8,7 @@ import { WORKSPACE, HAS_WORKSPACE_PARAM, JOIN_CODE, INVITE_TOKEN, gotoWorkspace,
 import { API, TOKEN_KEY, authToken as token, authHeaders } from "./api";
 import { mountMemberPanel, roleLabel, type PanelMember } from "./memberPanel";
 import { THEMES } from "./scenes/mapThemes";
-import { SIZES, seatsFor } from "./spaceSize";
+import { SIZES, seatsFor, layoutsFor } from "./spaceSize";
 import { renderThemePreview } from "./themePreview";
 import { t } from "./i18n";
 
@@ -426,12 +426,17 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
 
   // ------------------------------------------------------ create-space wizard
   type Step =
-    | { key: "role" | "companySize" | "useCase"; q: string; opts: string[]; other?: boolean }
+    | { key: "role" | "companySize" | "useCase"; q: string; opts: string[]; other?: boolean;
+        /** answered once for the account and never asked again */
+        onceEver?: boolean }
     | { key: "theme"; q: string }
     | { key: "name"; q: string };
 
   const STEPS: Step[] = [
-    { key: "role", q: t("บทบาทของคุณตรงกับข้อไหนมากที่สุด?"),
+    // The only question that is true of the person rather than of the space, and
+    // so the only one worth not asking twice.
+    { key: "role", onceEver: true,
+      q: t("บทบาทของคุณตรงกับข้อไหนมากที่สุด?"),
       opts: [t("ผู้ก่อตั้ง"), t("ผู้บริหาร"), t("ผู้อำนวยการ"), t("ผู้จัดการ"), t("สมาชิกทีม")] },
     { key: "companySize", q: t("บริษัทของคุณมีขนาดเท่าไหร่?"),
       // From spaceSize.ts, which also says how many desks each of them needs.
@@ -462,14 +467,31 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
 
   const startWizard = (presetName = "") => {
     stepIx = 0;
+    // Everything from a previous run goes, or a second space quietly inherits
+    // the first one's layout along with everything else.
+    for (const k of Object.keys(answers)) delete answers[k];
     answers.name = presetName;
-    // questions about the person are asked once — reuse what the account already knows
+    // questions about the person are asked once — reuse what the account knows
     if (user?.role) answers.role = user.role;
+    /**
+     * The team's size is filled in and still asked.
+     *
+     * It used to be treated like the role — remembered and skipped — and that
+     * is the bug: how many people this SPACE is for is a fact about the space,
+     * not about the account that made it. Somebody whose first space was for
+     * ten was never asked again, so their second space was laid out for ten
+     * however big the team actually was, and nothing on screen ever said what
+     * the answer had been taken to be.
+     */
     if (user?.companySize) answers.companySize = user.companySize;
     if (spaces) spaces.style.display = "none";
     wizEls().overlay.style.display = "flex";
-    // skip straight past any question already answered
-    while (stepIx < STEPS.length - 1 && answers[STEPS[stepIx].key]) stepIx++;
+    // skip past what is answered AND asked only once — never past a question
+    // about this space, however well it could be guessed
+    while (stepIx < STEPS.length - 1
+      && STEPS[stepIx].key !== "theme" && STEPS[stepIx].key !== "name"
+      && (STEPS[stepIx] as { onceEver?: boolean }).onceEver
+      && answers[STEPS[stepIx].key]) stepIx++;
     renderStep();
   };
 
@@ -506,25 +528,31 @@ export function runAuthFlow(onReady: (s: StartInfo) => void) {
        * silently drops options is its own kind of wrong.
        */
       const seats = seatsFor(answers.companySize);
-      const fits = (th: { desks: unknown[] }) => th.desks.length >= seats;
-      const order = Object.entries(THEMES).sort((a, b) =>
-        (fits(b[1]) ? 1 : 0) - (fits(a[1]) ? 1 : 0) || a[1].desks.length - b[1].desks.length);
-      // defaulted at render, not in startWizard: pre-answering it there would
-      // make the skip-what-is-already-answered loop jump straight past this step
-      if (!answers.theme) answers.theme = (order.find(([, th]) => fits(th)) ?? order[0])[0];
+      const plan = layoutsFor(seats,
+        Object.entries(THEMES).map(([id, th]) => ({ id, desks: th.desks.length, theme: th })));
+      const order = plan.ranked;
+      // Defaulted at render, not in startWizard — and re-defaulted whenever what
+      // is chosen no longer fits, because Back to the size question and a
+      // different answer has to be able to change this.
+      if (!answers.theme || !plan.seatsThem(order.find((l) => l.id === answers.theme) ?? order[0])) {
+        answers.theme = plan.best;
+      }
       e.next.textContent = t("ถัดไป →");
       const row = document.createElement("div");
       row.className = "wiz-themes";
-      for (const [id, theme] of order) {
+      for (const entry of order) {
+        const { id, theme } = entry;
+        const roomy = plan.seatsThem(entry);
         const card = document.createElement("button");
         card.className = "wiz-theme" + (answers.theme === id ? " on" : "");
+        card.disabled = !roomy;
         const shot = document.createElement("span");
         shot.className = "wiz-shot";     // shimmering until the preview is drawn
         const name = document.createElement("b");
         name.textContent = t(theme.label);
         const desks = document.createElement("small");
-        desks.className = "wiz-seats" + (fits(theme) ? "" : " short");
-        desks.textContent = fits(theme)
+        desks.className = "wiz-seats" + (roomy ? "" : " short");
+        desks.textContent = roomy
           ? t("โต๊ะ {n} ตัว").replace("{n}", String(theme.desks.length))
           : t("โต๊ะ {n} ตัว — ไม่พอสำหรับทีมขนาดนี้").replace("{n}", String(theme.desks.length));
         card.append(shot, name, desks);

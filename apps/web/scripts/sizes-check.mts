@@ -15,7 +15,7 @@ g.location = { search: "", href: "http://localhost/", pathname: "/" };
 g.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {}, clear: () => {} };
 
 const { THEMES } = await import("../src/scenes/mapThemes.js");
-const { SIZES, seatsFor } = await import("../src/spaceSize.js");
+const { SIZES, seatsFor, layoutsFor } = await import("../src/spaceSize.js");
 
 let pass = 0, fail = 0;
 const ok = (n: string, c: boolean, x = "") => {
@@ -54,6 +54,43 @@ const smallest = Math.min(...SIZES.map((s) => s.seats));
 for (const l of layouts) {
   ok(`${l.id} seats the smallest team on offer`, l.desks >= smallest,
     `${l.desks} desks against a smallest bracket of ${smallest}`);
+}
+
+/**
+ * What the wizard actually offers, for each answer it accepts.
+ *
+ * The two bugs behind this were both about the answer going nowhere. First it
+ * decided nothing at all; then it decided the order of the cards and left the
+ * small ones clickable; and in between, a second space never asked the question
+ * and reused whatever the first one said. What has to be true is simply this:
+ * whichever bracket somebody picks, everything they can choose seats them, and
+ * there is something to choose.
+ */
+for (const size of SIZES) {
+  const seats = seatsFor(size.label);
+  const plan = layoutsFor(seats, layouts);
+  const offered = plan.ranked.filter(plan.seatsThem);
+
+  ok(`"${size.label}" has something to offer`, offered.length > 0,
+    offered.map((l) => `${l.id} (${l.desks})`).join(", ") || "nothing");
+  ok(`  · and nothing on offer is too small`, offered.every((l) => l.desks >= seats),
+    `smallest offered is ${Math.min(...offered.map((l) => l.desks))} against ${seats}`);
+  ok(`  · it starts them on one that fits`,
+    (layouts.find((l) => l.id === plan.best)?.desks ?? 0) >= seats, plan.best);
+  ok(`  · and on the smallest one that does`,
+    plan.best === offered[0]?.id,
+    `${plan.best} vs ${offered[0]?.id} — a team of twelve should not be started in a warehouse`);
+  ok(`  · the ones it will not offer are the ones that are too small`,
+    plan.ranked.filter((l) => !plan.seatsThem(l)).every((l) => l.desks < seats),
+    plan.ranked.filter((l) => !plan.seatsThem(l)).map((l) => l.id).join(" ") || "none");
+}
+
+// Nothing recognised means nothing ruled out: an older account should see the
+// whole catalogue rather than an empty screen.
+{
+  const plan = layoutsFor(seatsFor(undefined), layouts);
+  ok("an unknown answer rules nothing out", plan.ranked.every(plan.seatsThem),
+    `${plan.ranked.filter(plan.seatsThem).length} of ${layouts.length} offered`);
 }
 
 ok("an answer nobody recognises asks for nothing", seatsFor("some other thing") === 0,

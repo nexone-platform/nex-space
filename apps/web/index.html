@@ -1673,6 +1673,11 @@
          and the one the size question two screens back was asked in aid of. */
       .wiz-seats { display: block; font-size: calc(11.5px * var(--ui)); color: var(--text-3); line-height: 1.45; }
       .wiz-seats.short { color: var(--danger-ink); }
+      /* Shown, and not on offer. Greyed rather than removed: "this exists and
+         is too small for you" is worth knowing, and a list that quietly gets
+         shorter is its own kind of lie. */
+      .wiz-theme:disabled { opacity: .5; cursor: not-allowed; }
+      .wiz-theme:disabled:hover { border-color: var(--border-2); }
       #wiz-other { width: 100%; box-sizing: border-box; margin-top: 12px; padding: 10px 12px;
         border: 1px solid var(--border-2); border-radius: 10px; font-size: calc(14px * var(--ui)); outline: none; }
       #wiz-other:focus { border-color: var(--accent); }
