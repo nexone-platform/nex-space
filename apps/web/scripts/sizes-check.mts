@@ -97,6 +97,40 @@ ok("an answer nobody recognises asks for nothing", seatsFor("some other thing") 
   "an old account, or a hand-edited profile — better no filter than the wrong one");
 ok("  · and so does no answer at all", seatsFor(undefined) === 0 && seatsFor(null) === 0);
 
+// ---- somewhere for those people to actually meet -------------------------------------
+/**
+ * Desks were the first half of "how big is this office" and the only half that
+ * was checked. A floor of fifty came with one meeting room seating six, which
+ * is one table for a company that runs several meetings at once — and eighty
+ * had the same one.
+ *
+ * A meeting seat is a chair standing inside a room that says it is a meeting
+ * room, which is the same thing a person sees. One seat per four desks is the
+ * low end of what an office is built with, and a second room is what lets two
+ * meetings happen at once; below either, a team is queueing for the table.
+ */
+const SEATS_PER_DESK = 1 / 4;
+const DESKS_PER_ROOM = 40;
+
+for (const [id, th] of Object.entries(THEMES)) {
+  const rooms = th.areas.filter((a) => a.meeting);
+  const inside = (a: { x0: number; y0: number; x1: number; y1: number }, x: number, y: number) =>
+    x >= a.x0 - 0.5 && x <= a.x1 + 0.5 && y >= a.y0 - 0.5 && y <= a.y1 + 0.5;
+  const seats = th.furniture.filter((f) =>
+    String(f[0]).includes("chair") && rooms.some((r) => inside(r, f[1] as number, f[2] as number)));
+
+  const wantSeats = Math.ceil(th.desks.length * SEATS_PER_DESK);
+  const wantRooms = Math.ceil(th.desks.length / DESKS_PER_ROOM);
+
+  ok(`${id}: ${th.desks.length} desks have somewhere to meet`, rooms.length >= wantRooms,
+    `${rooms.length} room(s), wanted ${wantRooms}`);
+  ok(`  · and enough seats in them`, seats.length >= wantSeats,
+    `${seats.length} seat(s), wanted ${wantSeats}`);
+  ok(`  · every one of which is a room somebody can book`,
+    rooms.every((r) => !!r.id && !!r.label),
+    rooms.map((r) => `${r.id} (${r.label})`).join(", "));
+}
+
 // ---- and the layouts themselves hold together ---------------------------------------
 for (const [id, th] of Object.entries(THEMES)) {
   const ids = th.desks.map((d) => d.id);

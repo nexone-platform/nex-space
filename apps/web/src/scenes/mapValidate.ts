@@ -101,7 +101,8 @@ const isInteractive = (v: any) =>
 const isArea = (v: any) =>
   !!v && typeof v.id === "string" && v.id.length <= 64
   && typeof v.label === "string" && v.label.length <= 60 && isRect(v)
-  && (v.locked === undefined || typeof v.locked === "boolean");
+  && (v.locked === undefined || typeof v.locked === "boolean")
+  && (v.meeting === undefined || typeof v.meeting === "boolean");
 
 const every = (v: unknown, check: (x: any) => boolean, max: number) =>
   Array.isArray(v) && v.length <= max && v.every(check);

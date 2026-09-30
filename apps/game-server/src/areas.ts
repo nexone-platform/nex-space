@@ -29,6 +29,16 @@ export interface PrivateArea {
    * room refuses you is a surprise, and locking is something a space decides.
    */
   locked?: boolean;
+  /**
+   * Standing in here counts as being in a meeting.
+   *
+   * A map also carries one `meetingRoom` rectangle, which is where this used to
+   * be answered — and a layout may only have one of those. An office with three
+   * meeting rooms had two of them where a booked meeting did not show you as
+   * being in one, so the roster said you were free while you were sitting in
+   * it. The rectangle is still read, for maps that predate this.
+   */
+  meeting?: boolean;
 }
 
 export const AREAS: Record<string, PrivateArea[]> = {
@@ -36,7 +46,7 @@ export const AREAS: Record<string, PrivateArea[]> = {
   classic: [
     { id: "lounge",  label: "โซนพักผ่อน", x0: 5,  y0: 4,  x1: 10, y1: 9 },
     { id: "pod",     label: "โซนทีม",     x0: 12, y0: 4,  x1: 19, y1: 9 },
-    { id: "meeting", label: "ห้องประชุม", x0: 21, y0: 4,  x1: 26, y1: 9 },
+    { id: "meeting", label: "ห้องประชุม", meeting: true, x0: 21, y0: 4,  x1: 26, y1: 9 },
     { id: "pantry",  label: "ห้องครัว",   x0: 5,  y0: 15, x1: 10, y1: 19 },
     { id: "game",    label: "ห้องเกม",    x0: 21, y0: 15, x1: 26, y1: 19 },
   ],
@@ -44,7 +54,7 @@ export const AREAS: Record<string, PrivateArea[]> = {
   departments: [
     { id: "eng",     label: "ฝ่ายวิศวกรรม", x0: 3,  y0: 3,  x1: 12, y1: 10 },
     { id: "design",  label: "ฝ่ายออกแบบ",   x0: 14, y0: 3,  x1: 21, y1: 10 },
-    { id: "meeting", label: "ห้องประชุม",   x0: 23, y0: 3,  x1: 28, y1: 10 },
+    { id: "meeting", label: "ห้องประชุม", meeting: true, x0: 23, y0: 3,  x1: 28, y1: 10 },
     { id: "sales",   label: "ฝ่ายขาย",      x0: 3,  y0: 15, x1: 11, y1: 20 },
     { id: "pantry",  label: "ห้องครัว",     x0: 18, y0: 15, x1: 22, y1: 20 },
     { id: "lounge",  label: "โซนพักผ่อน",   x0: 24, y0: 15, x1: 28, y1: 20 },
@@ -52,18 +62,28 @@ export const AREAS: Record<string, PrivateArea[]> = {
   // The desk floors are deliberately not areas, for the same reason the office
   // theme's open plan is not one: a floor of fifty people that muted everyone
   // outside it would be a map with no public space at all.
+  //
+  // Three meeting rooms rather than one, because fifty people cannot share a
+  // table of six and eighty certainly cannot. Three also means three meetings
+  // can run at once, which is the part a bigger single room would not have
+  // fixed. Each is its own area, so each is bookable and each is its own
+  // conversation.
   openplan: [
-    { id: "meeting", label: "ห้องประชุม",  x0: 3,  y0: 20, x1: 11, y1: 26 },
-    { id: "lounge",  label: "โซนพักผ่อน",  x0: 28, y0: 20, x1: 36, y1: 26 },
+    { id: "meeting", label: "ห้องประชุมใหญ่", meeting: true, x0: 3,  y0: 20, x1: 11, y1: 26 },
+    { id: "meeting-2", label: "ห้องประชุมกลาง", meeting: true, x0: 13, y0: 20, x1: 18, y1: 26 },
+    { id: "meeting-3", label: "ห้องประชุมเล็ก", meeting: true, x0: 27, y0: 20, x1: 31, y1: 26 },
+    { id: "lounge",  label: "โซนพักผ่อน",  x0: 33, y0: 20, x1: 36, y1: 26 },
   ],
   campus: [
-    { id: "meeting", label: "ห้องประชุม",  x0: 3,  y0: 30, x1: 11, y1: 34 },
-    { id: "lounge",  label: "โซนพักผ่อน",  x0: 28, y0: 30, x1: 36, y1: 34 },
+    { id: "meeting", label: "ห้องประชุมใหญ่", meeting: true, x0: 3,  y0: 30, x1: 11, y1: 37 },
+    { id: "meeting-2", label: "ห้องประชุมกลาง", meeting: true, x0: 13, y0: 30, x1: 19, y1: 37 },
+    { id: "meeting-3", label: "ห้องประชุมเล็ก", meeting: true, x0: 28, y0: 30, x1: 31, y1: 37 },
+    { id: "lounge",  label: "โซนพักผ่อน",  x0: 33, y0: 30, x1: 36, y1: 37 },
   ],
   // the open plan is deliberately not one: it is the floor everybody shares,
   // and making it private would mean the map has no public space left
   office: [
-    { id: "meeting", label: "ห้องประชุม",  x0: 20, y0: 2,  x1: 27, y1: 10 },
+    { id: "meeting", label: "ห้องประชุม", meeting: true, x0: 20, y0: 2,  x1: 27, y1: 10 },
     { id: "pantry",  label: "ห้องครัว",    x0: 3,  y0: 12, x1: 10, y1: 16 },
     { id: "lounge",  label: "โซนพักผ่อน",  x0: 20, y0: 12, x1: 27, y1: 16 },
   ],

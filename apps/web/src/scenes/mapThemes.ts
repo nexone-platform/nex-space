@@ -695,7 +695,9 @@ export const openPlanTheme: MapTheme = {
   label: "ออฟฟิศโล่ง (ทีมกลาง)",
   cols: 40,
   rows: 30,
-  spawn: { x: 19, y: 25 },
+  spawn: { x: 22, y: 25 },
+  // The status rectangle can only name one room, so it names the big one. Which
+  // rooms count as meetings is answered by the areas — see PrivateArea.meeting.
   meetingRoom: { x0: 3, x1: 11, y0: 20, y1: 26 },
 
   floorAt(x, y) {
@@ -703,8 +705,10 @@ export const openPlanTheme: MapTheme = {
     if (x >= 17 && x <= 22 && y >= 28) return 8;   // stone at the front door
     if (!inBuild) return 1;                        // grass
     if (y <= 18) return 5;                         // the open floor
-    if (x <= 11) return 4;                         // meeting
-    if (x >= 28) return 6;                         // pantry and lounge
+    if (x <= 11) return 4;                         // the boardroom
+    if (x <= 18) return 4;                         // and the other two
+    if (x >= 33) return 6;                         // the kitchen corner
+    if (x >= 27 && x <= 31) return 4;
     return 0;                                      // entrance hall
   },
 
@@ -713,48 +717,67 @@ export const openPlanTheme: MapTheme = {
     const add = (x: number, y: number) => w.add(`${x},${y}`);
     rect(add, OPEN_BUILD.x0, OPEN_BUILD.y0, OPEN_BUILD.x1, OPEN_BUILD.y1);
     for (let x = 3; x <= 36; x++) add(x, 19);              // floor / rooms partition
-    for (let y = 20; y <= 26; y++) { add(12, y); add(27, y); } // either side of the hall
-    // Two ways up onto the floor rather than one: fifty people through a single
-    // doorway is a queue, and both of them open onto an aisle between desks
-    // (columns 15 and 24) rather than onto a desk.
-    for (const d of ["15,19", "24,19", "12,23", "27,23", "19,27", "20,27"]) w.delete(d);
+    // Four walls, five rooms along the bottom: a boardroom, two smaller meeting
+    // rooms, the entrance hall and a kitchen corner. Every one of them opens
+    // straight onto the desk floor through the partition rather than off a
+    // corridor, which is how a floor plate this shape is actually built — and
+    // it means no room is reached by walking through another.
+    for (let y = 20; y <= 26; y++) { add(12, y); add(19, y); add(26, y); add(32, y); }
+    for (const d of [
+      "7,19",    // the boardroom
+      "15,19",   // the middle meeting room
+      "22,19", "23,19", // the hall, two tiles wide: fifty people through one is a queue
+      "29,19",   // the small meeting room
+      "33,19",   // the kitchen corner
+      "22,27", "23,27", // the front door
+    ]) w.delete(d);
     return w;
   },
 
   furniture: [
     ...OPEN_BANK.props,
     ...OPEN_BANK.desks.map(deskCabinetProp),
-    // meeting room
-    ["conference-table", 7, 22, true],
-    ["chair-10-south", 6, 21, false], ["chair-10-south", 8, 21, false],
-    ["chair-10-north", 6, 24, false], ["chair-10-north", 8, 24, false],
-    ["chair-10-east", 5, 22, false], ["chair-10-west", 9, 22, false],
-    ["plant-small", 3, 20, false], ["plant-small", 11, 26, false],
-    // Pantry and lounge share the east room, with the counters along the top
-    // wall. A 68px unit covers three columns and three rows wherever it sits,
-    // and put beside the door it covered the doorway: column 28 is the lane in
-    // from 27,23 and nothing solid stands in it.
-    ["kitchen-counter", 30, 20.5, true], ["coffee-machine", 28, 20, true],
-    ["beverage-cooler", 33, 20.5, true],
-    ["lounge-sofa", 29, 25, false], ["lounge-coffee-table", 30.5, 25, false],
-    ["armchair", 33, 25, false], ["plant-large", 36, 24, true],
+    // ห้องประชุมใหญ่ — ten round one table
+    ["conference-table", 5.5, 22.5, true],
+    ["conference-table", 7.5, 22.5, true],
+    ["chair-10-south", 5, 21, false], ["chair-10-south", 6, 21, false], ["chair-10-south", 7, 21, false], ["chair-10-south", 8, 21, false],
+    ["chair-10-north", 5, 24, false], ["chair-10-north", 6, 24, false], ["chair-10-north", 7, 24, false], ["chair-10-north", 8, 24, false],
+    ["chair-10-east", 4, 22, false], ["chair-10-west", 9, 22, false],
+    ["plant-small", 3, 26, false], ["plant-small", 11, 26, false],
+    // ห้องประชุมกลาง — six
+    ["conference-table", 15.5, 22.5, true],
+    ["chair-10-south", 15, 21, false], ["chair-10-south", 16, 21, false],
+    ["chair-10-north", 15, 24, false], ["chair-10-north", 16, 24, false],
+    ["chair-10-east", 14, 22, false], ["chair-10-west", 17, 22, false],
+    // ห้องประชุมเล็ก — six
+    ["conference-table", 28.5, 22.5, true],
+    ["chair-10-south", 28, 21, false], ["chair-10-south", 29, 21, false],
+    ["chair-10-north", 28, 24, false], ["chair-10-north", 29, 24, false],
+    ["chair-10-east", 27, 22, false], ["chair-10-west", 30, 22, false],
+    // The kitchen corner. A 68px unit covers three columns wherever it sits and
+    // this room is four wide, so the units go against the east wall and column
+    // 33 is the whole of the lane in from the door at 33,19. Nothing solid
+    // stands in it — the first arrangement put the counter across the doorway
+    // and sealed the room, which is what reachable-check is for.
+    ["kitchen-counter", 35.5, 21, true], ["beverage-cooler", 35.5, 24, true],
+    ["bean-bag", 34, 26, false], ["plant-large", 36, 26, true],
     // entrance hall
-    ["reception-desk", 19, 21, true], ["rug", 19, 23, false],
-    ["office/cabinet", 15, 21, false, 0.5],
-    ["plant-large", 13, 26, true], ["plant-large", 26, 26, true],
-    ["plant", 13, 20, false], ["plant", 26, 20, false],
+    ["reception-desk", 22, 21, true], ["rug", 22, 25, false],
+    ["office/cabinet", 24, 21, false, 0.5],
+    ["plant-large", 20, 26, true], ["plant-large", 25, 26, true],
+    ["plant", 20, 20, false], ["plant", 25, 20, false],
   ],
 
   outdoor: [
-    ["fountain", 19.5, 28.5, true],
+    ["fountain", 22.5, 28.5, true],
     ["tree", 0.8, 6, true], ["tree-oval", 0.8, 14, true], ["pine", 0.8, 22, true],
     ["tree-oval", 38.5, 6, true], ["tree", 38.5, 14, true], ["pine", 38.5, 22, true],
     ["pine", 6, 0.8, true], ["tree", 14, 0.8, true], ["tree-oval", 25, 0.8, true],
     ["tree", 33, 0.8, true],
     ["shrub", 10, 0.8, false], ["shrub", 29, 0.8, false],
-    ["bench", 12, 28.8, false], ["bench", 27, 28.8, false],
-    ["lamp-post", 9, 28.2, true], ["lamp-post", 30, 28.2, true],
-    ["sign-welcome", 15, 28.4, false], ["sign-team", 24, 28.4, false],
+    ["bench", 15, 28.8, false], ["bench", 30, 28.8, false],
+    ["lamp-post", 12, 28.2, true], ["lamp-post", 33, 28.2, true],
+    ["sign-welcome", 18, 28.4, false], ["sign-team", 27, 28.4, false],
   ],
 
   decals: [
@@ -766,16 +789,16 @@ export const openPlanTheme: MapTheme = {
   decor: [
     ["arched-window", 8, 2], ["arched-window", 16, 2], ["arched-window", 24, 2], ["arched-window", 32, 2],
     ["window", 2, 10], ["window", 37, 10],
-    ["art-landscape", 8, 19], ["wall-clock", 19, 19], ["corkboard", 31, 19],
-    ["glass-panel", 5, 19], ["glass-panel", 34, 19],
+    ["art-landscape", 10, 19], ["wall-clock", 21, 19], ["corkboard", 30, 19],
+    ["glass-panel", 5, 19], ["glass-panel", 17, 19],
   ],
 
   desks: OPEN_BANK.desks,
 
   interactives: [
-    { type: "whiteboard", x: 10, y: 19, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
-    { type: "screen", x: 20, y: 19, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
-    { type: "cabinet", x: 15, y: 21, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
+    { type: "whiteboard", x: 9, y: 19, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
+    { type: "screen", x: 4, y: 19, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
+    { type: "cabinet", x: 24, y: 21, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
     ...OPEN_BANK.desks.map(deskCabinetSpot),
   ],
 };
@@ -784,7 +807,11 @@ export const openPlanTheme: MapTheme = {
 // Eighty desks, for 51+. Two banks with a wide corridor between them rather
 // than one slab: eight rows of desks in an unbroken run is a warehouse, and the
 // corridor is where the building's own traffic goes.
-const CAMPUS_BUILD = { x0: 2, y0: 2, x1: 37, y1: 35 };
+// Three rows taller than the floor above needs, and the three are all in the
+// room band. A meeting table with chairs on both sides wants four rows before
+// anybody sits at the ends of it, and five rows left exactly one table of six
+// for eighty people.
+const CAMPUS_BUILD = { x0: 2, y0: 2, x1: 37, y1: 38 };
 const CAMPUS_NORTH = deskBank({ id: "campus", x: 4, y: 4, across: 10, down: 5 });
 const CAMPUS_SOUTH = deskBank({ id: "campus", x: 4, y: 20, across: 10, down: 3, from: 51 });
 const CAMPUS_DESKS = [...CAMPUS_NORTH.desks, ...CAMPUS_SOUTH.desks];
@@ -794,20 +821,22 @@ export const campusTheme: MapTheme = {
   areas: AREAS.campus,
   label: "ออฟฟิศใหญ่ (หลายทีม)",
   cols: 40,
-  rows: 38,
-  spawn: { x: 19, y: 33 },
-  meetingRoom: { x0: 3, x1: 11, y0: 30, y1: 34 },
+  rows: 41,
+  spawn: { x: 23, y: 36 },
+  // Names the big one; which rooms count as meetings is on the areas.
+  meetingRoom: { x0: 3, x1: 11, y0: 30, y1: 37 },
 
   floorAt(x, y) {
-    const inBuild = x >= 3 && x <= 36 && y >= 3 && y <= 34;
-    if (x >= 17 && x <= 22 && y >= 36) return 8;   // stone at the front door
+    const inBuild = x >= 3 && x <= 36 && y >= 3 && y <= 37;
+    if (x >= 21 && x <= 26 && y >= 39) return 8;   // stone at the front door
     if (!inBuild) return 1;                        // grass
     // Plank, not the outdoor path tile it started on: a gravel track down the
     // middle of a building reads as a hole in the roof.
     if (y === 18 || y === 19) return 2;            // the corridor between the banks
     if (y <= 28) return 5;                         // both desk floors
-    if (x <= 11) return 4;                         // meeting
-    if (x >= 28) return 6;                         // pantry and lounge
+    if (x <= 19) return 4;                         // the boardroom and the middle room
+    if (x >= 33) return 6;                         // the kitchen corner
+    if (x >= 28 && x <= 31) return 4;              // the small room
     return 0;                                      // entrance hall
   },
 
@@ -816,8 +845,17 @@ export const campusTheme: MapTheme = {
     const add = (x: number, y: number) => w.add(`${x},${y}`);
     rect(add, CAMPUS_BUILD.x0, CAMPUS_BUILD.y0, CAMPUS_BUILD.x1, CAMPUS_BUILD.y1);
     for (let x = 3; x <= 36; x++) add(x, 29);              // floors / rooms partition
-    for (let y = 30; y <= 34; y++) { add(12, y); add(27, y); }
-    for (const d of ["15,29", "24,29", "12,32", "27,32", "19,35", "20,35"]) w.delete(d);
+    // Same five rooms as the smaller floor, and for the same reason: each opens
+    // straight onto the desk floor, so none is reached through another.
+    for (let y = 30; y <= 37; y++) { add(12, y); add(20, y); add(27, y); add(32, y); }
+    for (const d of [
+      "7,29",    // the boardroom
+      "16,29",   // the middle meeting room
+      "23,29", "24,29", // the hall
+      "30,29",   // the small meeting room
+      "33,29",   // the kitchen corner
+      "23,38", "24,38", // the front door
+    ]) w.delete(d);
     return w;
   },
 
@@ -827,56 +865,67 @@ export const campusTheme: MapTheme = {
     // the corridor between the two floors of desks — one-tile plants only, since
     // anything wider here would close an aisle between the banks
     ["plant-large", 3, 18, true], ["plant-large", 36, 18, true],
-    // meeting room
-    ["conference-table", 7, 32, true],
-    ["chair-10-south", 6, 31, false], ["chair-10-south", 8, 31, false],
-    ["chair-10-north", 6, 33, false], ["chair-10-north", 8, 33, false],
-    ["chair-10-east", 5, 32, false], ["chair-10-west", 9, 32, false],
-    ["plant-small", 3, 30, false], ["plant-small", 11, 34, false],
-    // pantry and lounge, along the top wall so column 28 stays the lane in
-    // from the door at 27,32
-    ["kitchen-counter", 30, 30.5, true], ["coffee-machine", 28, 30, true],
-    ["beverage-cooler", 33, 30.5, true],
-    ["lounge-sofa", 29, 34, false], ["lounge-coffee-table", 30.5, 34, false],
-    ["armchair", 33, 34, false], ["plant-large", 36, 33, true],
+    // ห้องประชุมใหญ่ — fourteen round one table
+    ["conference-table", 4.5, 33.5, true],
+    ["conference-table", 6.5, 33.5, true],
+    ["conference-table", 8.5, 33.5, true],
+    ["chair-10-south", 4, 32, false], ["chair-10-south", 5, 32, false], ["chair-10-south", 6, 32, false], ["chair-10-south", 7, 32, false], ["chair-10-south", 8, 32, false], ["chair-10-south", 9, 32, false],
+    ["chair-10-north", 4, 35, false], ["chair-10-north", 5, 35, false], ["chair-10-north", 6, 35, false], ["chair-10-north", 7, 35, false], ["chair-10-north", 8, 35, false], ["chair-10-north", 9, 35, false],
+    ["chair-10-east", 3, 33, false], ["chair-10-west", 10, 33, false],
+    ["plant-small", 3, 37, false], ["plant-small", 11, 37, false],
+    // ห้องประชุมกลาง — ten
+    ["conference-table", 14.5, 33.5, true],
+    ["conference-table", 16.5, 33.5, true],
+    ["chair-10-south", 14, 32, false], ["chair-10-south", 15, 32, false], ["chair-10-south", 16, 32, false], ["chair-10-south", 17, 32, false],
+    ["chair-10-north", 14, 35, false], ["chair-10-north", 15, 35, false], ["chair-10-north", 16, 35, false], ["chair-10-north", 17, 35, false],
+    ["chair-10-east", 13, 33, false], ["chair-10-west", 18, 33, false],
+    // ห้องประชุมเล็ก — six
+    ["conference-table", 29.5, 33.5, true],
+    ["chair-10-south", 29, 32, false], ["chair-10-south", 30, 32, false],
+    ["chair-10-north", 29, 35, false], ["chair-10-north", 30, 35, false],
+    ["chair-10-east", 28, 33, false], ["chair-10-west", 31, 33, false],
+    // the kitchen corner, its units against the east wall so column 34 is the
+    // whole lane in from the door at 34,29
+    ["kitchen-counter", 35.5, 31, true], ["beverage-cooler", 35.5, 34, true],
+    ["bean-bag", 34, 37, false], ["plant-large", 36, 37, true],
     // entrance hall
-    ["reception-desk", 19, 31, true], ["rug", 19, 33, false],
-    ["office/cabinet", 15, 31, false, 0.5],
-    ["plant-large", 13, 34, true], ["plant-large", 26, 34, true],
-    ["plant", 13, 30, false], ["plant", 26, 30, false],
+    ["reception-desk", 23, 31, true], ["rug", 23, 36, false],
+    ["office/cabinet", 25, 31, false, 0.5],
+    ["plant-large", 21, 37, true], ["plant-large", 26, 37, true],
+    ["plant", 21, 30, false], ["plant", 26, 30, false],
   ],
 
   outdoor: [
-    ["fountain", 19.5, 36.5, true],
-    ["tree", 0.8, 6, true], ["tree-oval", 0.8, 16, true], ["pine", 0.8, 26, true],
-    ["tree-oval", 38.5, 6, true], ["tree", 38.5, 16, true], ["pine", 38.5, 26, true],
+    ["fountain", 23.5, 39.5, true],
+    ["tree", 0.8, 6, true], ["tree-oval", 0.8, 18, true], ["pine", 0.8, 30, true],
+    ["tree-oval", 38.5, 6, true], ["tree", 38.5, 18, true], ["pine", 38.5, 30, true],
     ["pine", 6, 0.8, true], ["tree", 14, 0.8, true], ["tree-oval", 25, 0.8, true],
     ["tree", 33, 0.8, true],
     ["shrub", 10, 0.8, false], ["shrub", 29, 0.8, false],
-    ["bench", 12, 36.8, false], ["bench", 27, 36.8, false],
-    ["lamp-post", 9, 36.2, true], ["lamp-post", 30, 36.2, true],
-    ["sign-welcome", 15, 36.4, false], ["sign-team", 24, 36.4, false],
+    ["bench", 16, 39.8, false], ["bench", 31, 39.8, false],
+    ["lamp-post", 13, 39.2, true], ["lamp-post", 34, 39.2, true],
+    ["sign-welcome", 19, 39.4, false], ["sign-team", 28, 39.4, false],
   ],
 
   decals: [
-    ["flower-yellow", 1, 5], ["clover", 1, 14], ["flower-mixed", 1, 23], ["flower-pink", 1, 32],
-    ["clover", 38, 5], ["flower-yellow", 38, 14], ["flower-mixed", 38, 23], ["flower-pink", 38, 32],
-    ["bush-blob", 3, 0.6], ["bush-blob", 36, 0.6], ["rocks", 8, 37.4], ["rocks", 31, 37.4],
+    ["flower-yellow", 1, 5], ["clover", 1, 15], ["flower-mixed", 1, 25], ["flower-pink", 1, 35],
+    ["clover", 38, 5], ["flower-yellow", 38, 15], ["flower-mixed", 38, 25], ["flower-pink", 38, 35],
+    ["bush-blob", 3, 0.6], ["bush-blob", 36, 0.6], ["rocks", 9, 40.4], ["rocks", 32, 40.4],
   ],
 
   decor: [
     ["arched-window", 8, 2], ["arched-window", 16, 2], ["arched-window", 24, 2], ["arched-window", 32, 2],
     ["window", 2, 12], ["window", 37, 12], ["window", 2, 24], ["window", 37, 24],
-    ["art-landscape", 8, 29], ["wall-clock", 19, 29], ["corkboard", 31, 29],
-    ["glass-panel", 5, 29], ["glass-panel", 34, 29],
+    ["art-landscape", 10, 29], ["wall-clock", 22, 29], ["corkboard", 31, 29],
+    ["glass-panel", 5, 29], ["glass-panel", 18, 29],
   ],
 
   desks: CAMPUS_DESKS,
 
   interactives: [
-    { type: "whiteboard", x: 10, y: 29, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
-    { type: "screen", x: 20, y: 29, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
-    { type: "cabinet", x: 15, y: 31, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
+    { type: "whiteboard", x: 9, y: 29, label: "เปิดไวท์บอร์ด Excalidraw", icon: "", url: "https://excalidraw.com" },
+    { type: "screen", x: 4, y: 29, label: "แชร์จอขึ้นจอนำเสนอ", icon: "" },
+    { type: "cabinet", x: 25, y: 31, label: "เปิดตู้เก็บเอกสาร", icon: "🗄" },
     ...CAMPUS_DESKS.map(deskCabinetSpot),
   ],
 };

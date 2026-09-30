@@ -3917,11 +3917,20 @@ export class OfficeScene extends Phaser.Scene {
     if (now) this.toast(t("เข้า {area} — คุยกันเฉพาะคนในโซนนี้").replace("{area}", t(now.label)), "info");
   }
 
-  /** the same test for anyone, so the panel and the status dot cannot disagree */
+  /**
+   * The same test for anyone, so the panel and the status dot cannot disagree.
+   *
+   * Any room that says it is a meeting room, or the map's single meetingRoom
+   * rectangle. The rectangle came first and a map may only have one; an office
+   * with three meeting rooms had two of them where sitting through a booked
+   * meeting left you showing as free.
+   */
   private isInMeeting(x: number, y: number): boolean {
     const tx = x / TILE, ty = y / TILE;
-    return tx >= MEETING_ROOM.x0 && tx <= MEETING_ROOM.x1 + 1
-        && ty >= MEETING_ROOM.y0 && ty <= MEETING_ROOM.y1 + 1;
+    if (tx >= MEETING_ROOM.x0 && tx <= MEETING_ROOM.x1 + 1
+      && ty >= MEETING_ROOM.y0 && ty <= MEETING_ROOM.y1 + 1) return true;
+    return PRIVATE_AREAS.some((a) => a.meeting
+      && tx >= a.x0 && tx <= a.x1 + 1 && ty >= a.y0 && ty <= a.y1 + 1);
   }
 
   private inMeetingRoom(): boolean {

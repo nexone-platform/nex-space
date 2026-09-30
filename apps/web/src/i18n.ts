@@ -1008,6 +1008,12 @@ const EN: Record<string, string> = {
   "ธีมสำเร็จรูปเลือกได้ตอนสร้าง Space เท่านั้น — ทุกคนต้องอยู่บนแผนผังเดียวกัน การเปลี่ยนภายหลังจะยกเลิกโต๊ะที่ทุกคนจองไว้": "A stock theme is chosen when the space is created — everyone has to be on the same layout, and changing it later would cancel every desk the team has claimed",
   "✎ แก้ไขแผนที่เอง": "✎ Edit the map yourself",
   // private-area names (see scenes/areas.ts) and the chip that names the one you are in
+  // Room names live in areas.ts as data, so the coverage scanner never sees
+  // them — they are still put through t() when a room is drawn, named in a
+  // booking or shown on the "you are in …" chip.
+  "ห้องประชุมใหญ่": "Boardroom",
+  "ห้องประชุมกลาง": "Meeting room",
+  "ห้องประชุมเล็ก": "Huddle room",
   "โซนพักผ่อน": "Lounge",
   "โซนทีม": "Team pod",
   "ห้องครัว": "Pantry",
