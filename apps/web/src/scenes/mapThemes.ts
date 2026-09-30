@@ -158,26 +158,32 @@ const CLASSIC_BUILD = { x0: 4, y0: 3, x1: 27, y1: 20 };
 // borrowed one from the lounge and one from the meeting room: at six it could
 // hold the desks and the cabinets or an aisle, and not both.
 //
-// Six of these are in the pod and four are in the hall below it, and the split
-// is not an aesthetic choice. This layout is offered to teams of up to ten and
-// seated six, which is the bug; the pod is boxed in on three sides and cannot
-// grow, and the six desks in it are what six people have already claimed.
-// Moving any of them to make a tidier arrangement would drop those claims
-// silently, so the four new ones go where there is room: the open band of hall
-// directly under the pod, on the same three-column pitch, which is how the
-// bigger layouts are arranged throughout.
+// Six in the pod and four in the hall below it, because the pod is walled in on
+// three sides and eight columns will not hold ten desks however they are
+// turned. What makes that read as one office rather than two is that all ten
+// stand on the same three columns — 12, 15 and 18, with the hall's fourth
+// carrying on at 21 — so the two banks line up through the partition, and the
+// aisles at 14 and 17 run from the top wall of the pod to the front door.
+//
+// The ids never change. They are what people have claimed, and a claim survives
+// its desk being moved but not being renamed.
+//
+// The pod's two rows face each other across the aisle at row 7 rather than both
+// facing the same way: the bottom row's desks are against the partition with
+// its chairs above them. Three desks in a line all facing north is a classroom.
 const CLASSIC_DESKS: Desk[] = [
   { id: "office-1", x: 12, y: 5, sx: 12, sy: 6 },
   { id: "office-2", x: 15, y: 5, sx: 15, sy: 6 },
   { id: "hall-1", x: 18, y: 5, sx: 18, sy: 6 },
-  { id: "hall-2", x: 12, y: 8, sx: 12, sy: 9 },
-  { id: "hall-3", x: 15, y: 8, sx: 15, sy: 9 },
-  { id: "hall-4", x: 18, y: 8, sx: 18, sy: 9 },
-  // and the open band of hall below the pod
-  { id: "hall-5", x: 13, y: 11, sx: 13, sy: 12 },
-  { id: "hall-6", x: 16, y: 11, sx: 16, sy: 12 },
-  { id: "hall-7", x: 13, y: 14, sx: 13, sy: 15 },
-  { id: "hall-8", x: 16, y: 14, sx: 16, sy: 15 },
+  // facing back up the room, so the seat is above the desk
+  { id: "hall-2", x: 12, y: 9, sx: 12, sy: 8 },
+  { id: "hall-3", x: 15, y: 9, sx: 15, sy: 8 },
+  { id: "hall-4", x: 18, y: 9, sx: 18, sy: 8 },
+  // and one run along the hall's top wall, on the pod's own columns
+  { id: "hall-5", x: 12, y: 11, sx: 12, sy: 12 },
+  { id: "hall-6", x: 15, y: 11, sx: 15, sy: 12 },
+  { id: "hall-7", x: 18, y: 11, sx: 18, sy: 12 },
+  { id: "hall-8", x: 21, y: 11, sx: 21, sy: 12 },
 ];
 
 export const classicTheme: MapTheme = {
@@ -230,22 +236,24 @@ export const classicTheme: MapTheme = {
     ["desk", 12, 5, true], ["chair-12-north", 12, 6, false],
     ["desk-monitor", 15, 5, true], ["chair-13-north", 15, 6, false],
     ["desk", 18, 5, true], ["chair-14-north", 18, 6, false],
-    ["desk-monitor", 12, 8, true], ["chair-15-north", 12, 9, false],
-    ["desk", 15, 8, true], ["chair-9-north", 15, 9, false],
-    ["desk-monitor", 18, 8, true], ["chair-11-north", 18, 9, false],
+    // and the far row turned to face them
+    ["chair-15-south", 12, 8, false], ["desk-monitor", 12, 9, true],
+    ["chair-9-south", 15, 8, false], ["desk", 15, 9, true],
+    ["chair-11-south", 18, 8, false], ["desk-monitor", 18, 9, true],
     // meeting room (mint) — one matched executive set
     ["conference-table", 23, 6, true],
     ["chair-10-south", 22, 5, false], ["chair-10-south", 24, 5, false],
     ["chair-10-north", 22, 8, false], ["chair-10-north", 24, 8, false],
     ["chair-10-east", 21, 6, false], ["chair-10-west", 25, 6, false],
     ["plant-small", 21, 4, false], ["plant-small", 26, 4, false],
-    // hall: four more desks under the pod, then reception and the way in. The
-    // desks are on the pod's own pitch — desk, pedestal, aisle — so columns 15
-    // and 18 stay clear from the pod door at 14,10 down to the front door.
-    ["desk", 13, 11, true], ["chair-16-north", 13, 12, false],
-    ["desk-monitor", 16, 11, true], ["chair-10-north", 16, 12, false],
-    ["desk-monitor", 13, 14, true], ["chair-11-north", 13, 15, false],
-    ["desk", 16, 14, true], ["chair-12-north", 16, 15, false],
+    // Hall: one run of four along the top wall, on the pod's own columns, then
+    // reception and the way in. Along the wall rather than out in the middle —
+    // four desks standing in open floor with nothing behind them read as
+    // furniture nobody had found a place for, which is what they were.
+    ["desk", 12, 11, true], ["chair-16-north", 12, 12, false],
+    ["desk-monitor", 15, 11, true], ["chair-10-north", 15, 12, false],
+    ["desk", 18, 11, true], ["chair-11-north", 18, 12, false],
+    ["desk-monitor", 21, 11, true], ["chair-12-north", 21, 12, false],
     ["reception-desk", 15, 16, true], ["plant", 17, 16, true],
     // The filing cabinet, in the open where people walk past it. Half size:
     // the art is 64x96, and at full size a three-tile cabinet beside a
@@ -261,7 +269,9 @@ export const classicTheme: MapTheme = {
     // address nothing asks for any more.
     ["office/cabinet", 11, 12, false, 0.5],
     ...CLASSIC_DESKS.map(deskCabinetProp),
-    ["rug", 15, 13, false],
+    // down by the door, where it is a mat somebody walks in onto, rather than
+    // at 15,13 where the new desk run puts a chair on top of it
+    ["rug", 15, 17, false],
     ["plant-large", 11, 17, true], ["plant-large", 20, 17, true],
     ["plant", 5, 11, false], ["plant", 26, 11, false],
     ["plant", 5, 13, false], ["plant", 26, 13, false],
