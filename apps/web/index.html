@@ -381,6 +381,11 @@
         background: transparent; color: #e6e9ee; display: grid; place-items: center; transition: background .15s, color .15s; }
       #av-bar .ctl:hover { background: #ffffff1a; }
       #av-bar .ctl.off { color: #ff6b6b; }
+      /* The second or so before the media backend is up. Dimmed rather than
+         hidden: the bar is the same shape from the first frame, and a button
+         that is visibly not ready yet beats a hole where one belongs. */
+      #av-bar .ctl:disabled, #av-bar .chev:disabled { opacity: .35; cursor: default; }
+      #av-bar .ctl:disabled:hover, #av-bar .chev:disabled:hover { background: transparent; }
       #av-bar .ctl.active { background: var(--teal); color: #fff; }
       /* do-not-disturb is not an activity, it is a refusal — it gets the colour
          the mic uses when it is off rather than the one the others use when on */

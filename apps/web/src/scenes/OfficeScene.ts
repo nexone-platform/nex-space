@@ -330,6 +330,8 @@ export class OfficeScene extends Phaser.Scene {
   private bubbles = new Map<string, Phaser.GameObjects.Text>();
   private localRing!: Phaser.GameObjects.Arc;
   private webrtc?: MediaManager;
+  /** repaint the bottom bar from whatever media backend there is, if any */
+  private avRefresh?: () => void;
   private myName = "Guest";
   private myAvatar = "1";
   private created = false;
@@ -640,6 +642,13 @@ export class OfficeScene extends Phaser.Scene {
     this.setupChat();
     this.setupSidebar();
     this.setupTopHeader();
+    // Before anything is awaited. These buttons used to be drawn after the
+    // media backend had connected — a fetch for its configuration, a token, and
+    // an SFU handshake — so for the whole of that the bar had five empty holes
+    // in it where the microphone, camera, emoji and screen buttons belong.
+    // Nothing about drawing them needs the connection; only their on/off state
+    // does, and off is the truthful state until it arrives.
+    this.wireAvButtons();
     this.created = true;
     if (this.pendingStart) void this.connectMultiplayer(); // login already completed
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.webrtc?.dispose(); this.room?.leave(); });
@@ -1092,7 +1101,10 @@ export class OfficeScene extends Phaser.Scene {
         });
         document.getElementById("cw-recordings")
           ?.addEventListener("click", () => void this.recView?.open());
-        this.wireAvButtons();
+        // The bar is already on screen; this is only the moment its buttons
+        // start working.
+        this.webrtc.onState = this.avRefresh;
+        this.avRefresh?.();
         // a device that will not open used to fail into console.warn, so the
         // button simply stayed dark and nobody knew why
         this.webrtc.onError = (msg) => this.toast(msg, "warn");
@@ -1133,8 +1145,16 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * The bar along the bottom: icons, clicks and the popover behind the smiley.
+   *
+   * Written to run before there is a media backend, because it does. Every
+   * reference to the manager is read at the moment of the click rather than
+   * captured here, and the buttons that cannot work without one say so by being
+   * disabled until `mediaReady` enables them — a button that looks ordinary and
+   * does nothing is worse than one that admits it is not ready.
+   */
   private wireAvButtons() {
-    const w = this.webrtc!;
     const sv = (inner: string, w2 = "2.4") =>
       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w2}" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
     const I = {
@@ -1157,19 +1177,27 @@ export class OfficeScene extends Phaser.Scene {
     if (micMenu) micMenu.innerHTML = I.chev;
     if (camMenu) camMenu.innerHTML = I.chev;
 
-    if (mic) mic.onclick = () => void w.toggleMic();
-    if (cam) cam.onclick = () => void w.toggleCam();
+    // Dark until the backend is up, which is a second at most and honest while
+    // it lasts: there is no microphone to turn on yet.
+    for (const b of [mic, cam, scr, micMenu, camMenu]) if (b) b.disabled = !this.webrtc;
+
+    if (mic) mic.onclick = () => void this.webrtc?.toggleMic();
+    if (cam) cam.onclick = () => void this.webrtc?.toggleCam();
     // AV-bar "share screen" -> present onto the big in-scene screen, room-wide
     if (scr) scr.onclick = () => { const it = this.presentationScreen(); if (it) void this.activateScreen(it); };
     if (micMenu) micMenu.onclick = () => void this.openDeviceMenu("mic", micMenu);
     if (camMenu) camMenu.onclick = () => void this.openDeviceMenu("cam", camMenu);
 
     const refresh = () => {
-      if (mic) { mic.innerHTML = w.micOn ? I.mic : I.micOff; mic.classList.toggle("off", !w.micOn); mic.classList.toggle("active", w.micOn); }
-      if (cam) { cam.innerHTML = w.camOn ? I.cam : I.camOff; cam.classList.toggle("off", !w.camOn); cam.classList.toggle("active", w.camOn); }
-      if (scr) scr.classList.toggle("active", w.screenOn);
+      const w = this.webrtc;
+      const micOn = !!w?.micOn, camOn = !!w?.camOn;
+      for (const b of [mic, cam, scr, micMenu, camMenu]) if (b) b.disabled = !w;
+      if (mic) { mic.innerHTML = micOn ? I.mic : I.micOff; mic.classList.toggle("off", !micOn); mic.classList.toggle("active", micOn); }
+      if (cam) { cam.innerHTML = camOn ? I.cam : I.camOff; cam.classList.toggle("off", !camOn); cam.classList.toggle("active", camOn); }
+      if (scr) scr.classList.toggle("active", !!w?.screenOn);
     };
-    w.onState = refresh;
+    // Kept so the backend can ask for a repaint the moment it exists.
+    this.avRefresh = refresh;
     refresh();
 
     // Three things that look alike and are not: something you SAY, something
