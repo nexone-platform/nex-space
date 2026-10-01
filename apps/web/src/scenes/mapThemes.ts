@@ -66,6 +66,21 @@ export const deskCabinetSpot = (d: Desk): Interactive => ({
 });
 
 /**
+ * The two walkways that cut a bank of desks into quarters.
+ *
+ * A floor of fifty identical desks on one unbroken colour is hard to look at
+ * and harder to find anything in: there is nothing to say where you are, so
+ * every part of it looks like every other part. These are aisles the bank
+ * already leaves — no desk moves, nothing is blocked — painted in the hall's
+ * own floor so they read as the way through rather than as more office.
+ *
+ * Which aisle: the one nearest the middle, in each direction. A bank `across`
+ * wide has its desks on a three-tile pitch from `x`, so the aisle after desk n
+ * is at x + 3n + 2, and the middle one is the one after half of them.
+ */
+const midAisle = (start: number, count: number) => start + 3 * Math.floor(count / 2) - 1;
+
+/**
  * A bank of desks, generated rather than typed out.
  *
  * Fifty desks written by hand is a hundred coordinates, each of them a chance
@@ -688,6 +703,7 @@ export const officeTheme: MapTheme = {
 // the bank ends at row 17 and its last aisle is row 18.
 const OPEN_BUILD = { x0: 2, y0: 2, x1: 37, y1: 27 };
 const OPEN_BANK = deskBank({ id: "openplan", x: 4, y: 4, across: 10, down: 5 });
+const OPEN_AISLE = { x: midAisle(4, 10), y: midAisle(4, 5) };
 
 export const openPlanTheme: MapTheme = {
   id: "openplan",
@@ -702,9 +718,14 @@ export const openPlanTheme: MapTheme = {
 
   floorAt(x, y) {
     const inBuild = x >= 3 && x <= 36 && y >= 3 && y <= 26;
-    if (x >= 17 && x <= 22 && y >= 28) return 8;   // stone at the front door
+    if (x >= 21 && x <= 26 && y >= 28) return 8;   // stone at the front door
     if (!inBuild) return 1;                        // grass
-    if (y <= 18) return 5;                         // the open floor
+    if (y <= 18) {
+      // The two walkways, in the hall's own colour: one down the middle and one
+      // across it, quartering fifty desks into four banks you can tell apart.
+      if (x === OPEN_AISLE.x || y === OPEN_AISLE.y) return 0;
+      return 5;                                    // the open floor
+    }
     if (x <= 11) return 4;                         // the boardroom
     if (x <= 18) return 4;                         // and the other two
     if (x >= 33) return 6;                         // the kitchen corner
@@ -737,6 +758,12 @@ export const openPlanTheme: MapTheme = {
   furniture: [
     ...OPEN_BANK.props,
     ...OPEN_BANK.desks.map(deskCabinetProp),
+    // Planters where the two walkways meet and at their four ends. Not solid:
+    // these are here to be looked at, and an aisle is the last place to put
+    // something somebody has to walk around.
+    ["plant-large", OPEN_AISLE.x, OPEN_AISLE.y, false],
+    ["plant-small", OPEN_AISLE.x, 4, false], ["plant-small", OPEN_AISLE.x, 17, false],
+    ["plant-small", 4, OPEN_AISLE.y, false], ["plant-small", 31, OPEN_AISLE.y, false],
     // ห้องประชุมใหญ่ — ten round one table
     ["conference-table", 5.5, 22.5, true],
     ["conference-table", 7.5, 22.5, true],
@@ -814,6 +841,9 @@ export const openPlanTheme: MapTheme = {
 const CAMPUS_BUILD = { x0: 2, y0: 2, x1: 37, y1: 38 };
 const CAMPUS_NORTH = deskBank({ id: "campus", x: 4, y: 4, across: 10, down: 5 });
 const CAMPUS_SOUTH = deskBank({ id: "campus", x: 4, y: 20, across: 10, down: 3, from: 51 });
+// The plank corridor already halves this floor the short way, so it wants only
+// the one walkway, down the middle of both banks.
+const CAMPUS_AISLE = { x: midAisle(4, 10), north: midAisle(4, 5), south: midAisle(20, 3) };
 const CAMPUS_DESKS = [...CAMPUS_NORTH.desks, ...CAMPUS_SOUTH.desks];
 
 export const campusTheme: MapTheme = {
@@ -833,7 +863,12 @@ export const campusTheme: MapTheme = {
     // Plank, not the outdoor path tile it started on: a gravel track down the
     // middle of a building reads as a hole in the roof.
     if (y === 18 || y === 19) return 2;            // the corridor between the banks
-    if (y <= 28) return 5;                         // both desk floors
+    if (y <= 28) {
+      // One walkway down the middle of both banks, in the hall's colour. The
+      // corridor above already does the other direction.
+      if (x === CAMPUS_AISLE.x || y === CAMPUS_AISLE.north || y === CAMPUS_AISLE.south) return 0;
+      return 5;                                    // both desk floors
+    }
     if (x <= 19) return 4;                         // the boardroom and the middle room
     if (x >= 33) return 6;                         // the kitchen corner
     if (x >= 28 && x <= 31) return 4;              // the small room
@@ -862,6 +897,10 @@ export const campusTheme: MapTheme = {
   furniture: [
     ...CAMPUS_NORTH.props, ...CAMPUS_SOUTH.props,
     ...CAMPUS_DESKS.map(deskCabinetProp),
+    // planters where the walkways cross, none of them solid
+    ["plant-large", CAMPUS_AISLE.x, CAMPUS_AISLE.north, false],
+    ["plant-large", CAMPUS_AISLE.x, CAMPUS_AISLE.south, false],
+    ["plant-small", CAMPUS_AISLE.x, 4, false], ["plant-small", CAMPUS_AISLE.x, 28, false],
     // the corridor between the two floors of desks — one-tile plants only, since
     // anything wider here would close an aisle between the banks
     ["plant-large", 3, 18, true], ["plant-large", 36, 18, true],
