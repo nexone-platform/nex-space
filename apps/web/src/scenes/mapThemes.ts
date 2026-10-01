@@ -758,12 +758,14 @@ export const openPlanTheme: MapTheme = {
   furniture: [
     ...OPEN_BANK.props,
     ...OPEN_BANK.desks.map(deskCabinetProp),
-    // Planters where the two walkways meet and at their four ends. Not solid:
-    // these are here to be looked at, and an aisle is the last place to put
-    // something somebody has to walk around.
-    ["plant-large", OPEN_AISLE.x, OPEN_AISLE.y, false],
-    ["plant-small", OPEN_AISLE.x, 4, false], ["plant-small", OPEN_AISLE.x, 17, false],
-    ["plant-small", 4, OPEN_AISLE.y, false], ["plant-small", 31, OPEN_AISLE.y, false],
+    // Planters down the two side strips, which are the only columns of this
+    // floor that are neither desk nor aisle. They stood at the ends of the
+    // walkways and in the middle of the crossing first, to mark them — and a
+    // planter standing in a corridor reads as something in the way whether or
+    // not you can walk through it. The walkway is painted now; it does not need
+    // pointing at.
+    ["plant-large", 3, 6, false], ["plant-small", 3, 15, false],
+    ["plant-large", 35, 6, false], ["plant-small", 35, 15, false],
     // ห้องประชุมใหญ่ — ten round one table
     ["conference-table", 5.5, 22.5, true],
     ["conference-table", 7.5, 22.5, true],
@@ -897,10 +899,9 @@ export const campusTheme: MapTheme = {
   furniture: [
     ...CAMPUS_NORTH.props, ...CAMPUS_SOUTH.props,
     ...CAMPUS_DESKS.map(deskCabinetProp),
-    // planters where the walkways cross, none of them solid
-    ["plant-large", CAMPUS_AISLE.x, CAMPUS_AISLE.north, false],
-    ["plant-large", CAMPUS_AISLE.x, CAMPUS_AISLE.south, false],
-    ["plant-small", CAMPUS_AISLE.x, 4, false], ["plant-small", CAMPUS_AISLE.x, 28, false],
+    // and the same down the side strips here, clear of every lane
+    ["plant-large", 3, 6, false], ["plant-small", 3, 25, false],
+    ["plant-large", 35, 6, false], ["plant-small", 35, 25, false],
     // the corridor between the two floors of desks — one-tile plants only, since
     // anything wider here would close an aisle between the banks
     ["plant-large", 3, 18, true], ["plant-large", 36, 18, true],
